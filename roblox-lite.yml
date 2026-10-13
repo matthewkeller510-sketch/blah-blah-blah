@@ -1,0 +1,23 @@
+# Minimal Roblox globals for selene when the full generated Roblox std is unavailable offline.
+# Prefer `selene generate-roblox-std` + std = "roblox" when network access allows.
+base: luau
+globals:
+  game: { any: true }
+  workspace: { any: true }
+  script: { any: true }
+  Instance: { any: true }
+  Vector3: { any: true }
+  Vector2: { any: true }
+  CFrame: { any: true }
+  Color3: { any: true }
+  UDim: { any: true }
+  UDim2: { any: true }
+  Enum: { any: true }
+  RaycastParams: { any: true }
+  TweenInfo: { any: true }
+  Random: { any: true }
+  warn: { args: [{ type: "..." }] }
+  typeof: { args: [{ type: any }] }
+  task: { any: true }
+  bit32: { any: true }
+  utf8: { any: true }

@@ -1,0 +1,2 @@
+-- Replaces Roblox's default character "Health" regeneration script.
+-- Health is server-authoritative in PlayerService/Vitals: passive recovery stops at half maximum health (F18).
