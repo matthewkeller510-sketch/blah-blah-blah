@@ -37,6 +37,7 @@ export type Session = {
 	dirtyState: boolean,
 	lastSent: number,
 	alive: boolean,
+	lastCondition: string,
 }
 
 local sessions: { [Player]: Session } = {}
@@ -552,7 +553,7 @@ end
 
 -- Logout / disconnect (F17). Moves unbanked expedition loot to a logout bag at the last valid grounded location,
 -- unless the player is inside a shelter (banking already happened there).
-local departed: { [Player]: boolean } = {}
+local departed: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 function PlayerService.handleDeparture(player: Player)
 	if departed[player] then
 		return
@@ -568,15 +569,16 @@ function PlayerService.handleDeparture(player: Player)
 	if s.carriedBy then
 		PlayerService.dropCarry(s.carriedBy)
 	end
+	-- Create the bag while the party still exists so present members are authorized (proposal D03).
+	if not s.insideShelterId then
+		local pos = s.lastGrounded or PlayerService.position(player)
+		services.RecoveryService.createLogoutBag(player, pos, "logout:" .. s.sessionId)
+	end
 	if services.MissionService then
 		services.MissionService.onPlayerLeft(player)
 	end
 	if services.PartyService then
 		services.PartyService.onPlayerLeft(player)
-	end
-	if not s.insideShelterId then
-		local pos = s.lastGrounded or PlayerService.position(player)
-		services.RecoveryService.createLogoutBag(player, pos, "logout:" .. s.sessionId)
 	end
 	services.SaveService.release(player)
 	sessions[player] = nil
@@ -584,6 +586,11 @@ end
 
 local function onPlayerAdded(player: Player)
 	local profile, err = services.SaveService.load(player)
+	if profile and (not player.Parent or departed[player]) then
+		-- Left while the profile was loading: release the lock instead of leaving an orphan session.
+		services.SaveService.release(player)
+		return
+	end
 	if not profile then
 		player:Kick("Your expedition record could not be loaded safely (" .. tostring(err) .. "). Please rejoin in a moment.")
 		return
@@ -609,6 +616,7 @@ local function onPlayerAdded(player: Player)
 		dirtyState = true,
 		lastSent = 0,
 		alive = false,
+		lastCondition = "healthy",
 	}
 	sessions[player] = s
 	-- Crash reconciliation (section 20): a previous session that ended without a clean departure leaves
@@ -695,6 +703,11 @@ function PlayerService.start()
 					s.dirtyState = true
 				end
 				syncHumanoidHealth(s)
+				-- Any condition change (damage, revive, bleed-out) refreshes the light: a downed player's goes out.
+				if s.lastCondition ~= s.vitals.condition then
+					s.lastCondition = s.vitals.condition
+					refreshLight(s)
+				end
 				-- light drain
 				if s.lightOn and lightDef(s) and s.profile.lightCharge > 0 then
 					local d = lightDef(s)

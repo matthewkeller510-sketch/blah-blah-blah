@@ -21,6 +21,7 @@ type Entry = {
 	dirty: boolean,
 	saving: boolean,
 	lastStatus: string,
+	released: boolean,
 }
 
 local entries: { [Player]: Entry } = {}
@@ -86,6 +87,7 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 			local blocked = false
 			local ok, res = withRetry(function()
 				return (store :: DataStore):UpdateAsync(key, function(old)
+					blocked = false -- UpdateAsync may call the transform more than once
 					old = old or { data = nil, lock = nil }
 					local lock = old.lock
 					if lock and lock.id ~= LOCK and (os.time() - (lock.time or 0)) < Config.Save.sessionLockStaleSeconds then
@@ -118,7 +120,7 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 	if not prof then
 		return nil, perr
 	end
-	entries[player] = { profile = prof, loaded = true, dirty = false, saving = false, lastStatus = "loaded" }
+	entries[player] = { profile = prof, loaded = true, dirty = false, saving = false, lastStatus = "loaded", released = false }
 	setStatus(player, if available then "loaded" else "offline", if available then nil else "Saving unavailable in this session")
 	return prof, nil
 end
@@ -148,6 +150,13 @@ function SaveService.commit(player: Player, release: boolean?): boolean
 	end
 	while e.saving do
 		task.wait(0.1)
+	end
+	-- A commit queued behind release() must not write (it would re-lock a departed player's profile).
+	if e.released or entries[player] ~= e then
+		return false
+	end
+	if release then
+		e.released = true
 	end
 	e.saving = true
 	setStatus(player, "saving")
@@ -179,12 +188,18 @@ function SaveService.release(player: Player)
 	entries[player] = nil
 end
 
+-- True while a profile entry exists (used to wait for in-flight departures on shutdown).
+function SaveService.hasPending(): boolean
+	return next(entries) ~= nil
+end
+
 function SaveService.start()
 	task.spawn(function()
 		while true do
 			task.wait(Config.Save.autosaveSeconds)
 			for player, e in entries do
-				if e.dirty and player.Parent then
+				-- Commit even when clean so the session lock's timestamp never looks stale to other servers.
+				if player.Parent and not e.released then
 					task.spawn(SaveService.commit, player)
 				end
 			end
@@ -195,18 +210,16 @@ function SaveService.start()
 		if RunService:IsStudio() and not available then
 			return
 		end
-		local pending = 0
 		for player in entries do
-			pending += 1
 			task.spawn(function()
 				if services.PlayerService then
 					services.PlayerService.handleDeparture(player)
 				end
-				pending -= 1
 			end)
 		end
+		-- Wait on the real state: departures already started by PlayerRemoving are still in flight.
 		local t = os.clock()
-		while pending > 0 and os.clock() - t < 25 do
+		while next(entries) ~= nil and os.clock() - t < 25 do
 			task.wait(0.2)
 		end
 	end)

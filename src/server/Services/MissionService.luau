@@ -297,7 +297,7 @@ function MissionService.interact(player: Player, m: Mission)
 		carry.Name = "CarryPrompt"
 		carry.ActionText = "Carry (slower)"
 		carry.ObjectText = npc.Name
-		carry.KeyboardKeyCode = Enum.KeyCode.F
+		carry.KeyboardKeyCode = Enum.KeyCode.V
 		carry.UIOffset = Vector2.new(0, 60)
 		carry.HoldDuration = 0.5
 		carry.MaxActivationDistance = 8
@@ -336,8 +336,17 @@ function MissionService.escort(player: Player, m: Mission)
 					local wps = path:GetWaypoints()
 					for i = 2, math.min(#wps, 4) do
 						h:MoveTo(wps[i].Position)
-						h.MoveToFinished:Wait()
-						if m.state ~= "escort" then
+						-- Bounded wait: MoveToFinished never fires if the survivor is destroyed mid-move.
+						local t0 = os.clock()
+						while
+							m.state == "escort"
+							and npc.Parent
+							and (root.Position - wps[i].Position).Magnitude > 3
+							and os.clock() - t0 < 2
+						do
+							task.wait(0.1)
+						end
+						if m.state ~= "escort" or not npc.Parent then
 							break
 						end
 					end
@@ -363,6 +372,11 @@ function MissionService.carry(player: Player, m: Mission)
 	local pr = services.PlayerService.rootPart(player)
 	local root = npc:FindFirstChild("HumanoidRootPart") :: BasePart
 	if not pr or (pr.Position - root.Position).Magnitude > 9 then
+		return
+	end
+	local sess = services.PlayerService.get(player)
+	if not sess or sess.carrying or sess.vitals.condition == "downed" then
+		services.PlayerService.notify(player, "Your hands are already full.", "warn")
 		return
 	end
 	local h = npc:FindFirstChildOfClass("Humanoid") :: Humanoid

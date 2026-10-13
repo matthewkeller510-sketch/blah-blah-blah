@@ -159,6 +159,10 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 	if not services.PlayerService.hold(requester, 1.5) then
 		return
 	end
+	-- The owner may have left, or the bag been replaced, during the hold.
+	if services.PlayerService.get(owner) ~= os_ or os_.profile.bags[kind] ~= bag then
+		return
+	end
 	local ctx = { ownerOnline = true, ownerPartyMemberIds = partyIdsOf(owner) }
 	local res = RecoveryBags.recover(os_.profile, kind :: any, requester.UserId, ctx)
 	if not res.ok then
