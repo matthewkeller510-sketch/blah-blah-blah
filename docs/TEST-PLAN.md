@@ -32,3 +32,41 @@ Run these in a **private published test experience** with API services enabled. 
 | 26 | New shelters | Register at the Inspection Office and the Pump Platform; die; rejoin | Respawn and login happen at the last registered shelter. Each interior shows its own theme and entrances. |
 | 27 | M02 and M07 | Accept each with a friend in your party | M02: each of you opens your own copy of the case. M07: completes when the named creature's research rises, then pays out at a shelter. |
 
+
+## Milestone 3 (docs/MILESTONE-3.md)
+
+Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickly. Use two accounts for party rows.
+
+| # | Scenario (spec ref) | Steps | Expected |
+| --- | --- | --- | --- |
+| 28 | Survey station and crossroads build | Walk Sluice → Station Hall, every R04 room, Map Room → R05 anchors | Region folders populated; three doors on the Room of Three Doors' north wall; S04 and S05 doors work; slopes have no gaps |
+| 29 | Pocket telegraph (F08) | Stand in the Measured Crossing more than 6 studs from a mouth | `pocket_shift` captions at both mouths, plates glow, dust (no flicker with Reduce flashes); after 20 s the passage changes and `pocket_settled` shows |
+| 30 | Pocket abort and blockers | Walk in during a telegraph; or stand, lie downed, hide, be carried inside; or leave your rope or death bag inside while online | The change aborts or never starts; nothing rebuilds under anyone |
+| 31 | Every pocket version passable | Force each version of PK1–PK3 and walk mouth to mouth, also carrying a teammate | Passable standing; the low gallery needs no crouch |
+| 32 | P06 impossible doorway | Watch from the observation step for 12 s with two clients; walk through the ● door | False-door lamps pulse in sync for both, the ● lamp is steady; ● reaches the junction; `anchor_verified` and a notebook line; false doors loop back |
+| 33 | Marker migration online (T18) | Place chalk in PK1, step out, wait for a change | Notice names the South Survey Anchor; the mark lies there labelled "moved"; notebook lists it |
+| 34 | Marker and bag migration offline (T17, T18) | Place chalk, sign, rope in PK2 and die in PK1; log out; rejoin after a change (also on another server) | Records and bag at the anchor chamber, never under the floor; one notice; rope coiled; units recoverable |
+| 35 | Dry route and scavenging remainder | Walk Silt Works → Drain Gallery → Vault Stair → Overflow Vault; search a site with a full stack, then partial room | No splash noise on the route; "No room" without a cooldown; partial grant leaves the rest for you |
+| 36 | Borrowed Miner (C02) | Listen in the Station Hall without looking; then look at it; then ping near it | Rhythm captions every ~4.5 s; it walks to the Collapsed Adit and fades; a ping makes it fade at once; it never answers a ping |
+| 37 | Wick Moth (C03) | Torch on in the Battery Store; then light off 3 s / shield a lantern / light a flare / walk out | Flutter caption, flecks around your light and a shorter beam, no extra drain; each counter disperses it |
+| 38 | Chalk Hand (C04) | Place chalk in R05 and wait nearby; inspect the fake; compare | Scratch caption, a reversed arrow beside your mark; "not in your notebook"; compare confirms with your own mark; nothing new in your marker list |
+| 39 | Lantern Thief before the note (C08, D47) | Lit torch in R04 without reading Elise's note | Rattle captions with direction; it can be sighted; it never strikes |
+| 40 | Lantern Thief after the note | Read the note, run low on supplies, walk lit | Essential rattle, approach from outside view; strike: −20 health, light off, charge unchanged; flare diverts it; breaking sight 4 s loses it; stun repels; the bar is ineffective |
+| 41 | Never two damaging threats | Thief and a Scrabbler near one player | Never both damaging the same victim at once |
+| 42 | P03 fuse bridge | Try with no roll/fuse; fit the wrong box; trace and fit the right one; leave after 20 min | Notice names organic sources; wrong box costs time and returns the fuse; R04 lamps on, `power_restored`; trips only once the room is empty |
+| 43 | P04 weight and pulley | Load three stones, latch, cross, release; stand under the grate when it should drop; pull the inner lever | Grate rises and stays latched; never drops on anyone; inner lever always opens |
+| 44 | P05 echo sequence | With sound off, tune the radio and enter the pattern; then restore power and tune again | Pattern readable as • and —; `radio_locked`; without power, "no power"; with power, Elise's log plays and the station tape is granted once |
+| 45 | W05 sluice gates and M05 | Read both plates, turn wheels in the wrong then right order; take the cache; return to a shelter | "n of 3", wrong order resets; each turn can draw the Wader; corridor drains; own cache copy; +25 at a shelter |
+| 46 | S04 / S05 and M04 | Register both; in S04 fix the breaker (wrong then right) | Family looks; +20 experience once each; wrong breaker costs time; lights on, station power granted, +50 once; panel shows why station power cannot be bought |
+| 47 | Upgrade inheritance (T10) | Repair the breaker, then a newcomer joins the party and leaves | Newcomer keeps station power permanently; no inventory changes |
+| 48 | Depot characters | Walk the depot | Mara, Moreau, Ines, Amadou visible with Talk prompts; Noah hidden for a new account; rays and markers pass through them |
+| 49 | Act II spine (sec 05) | Finish Act I; talk to Moreau; rescue Noah; take the waterworks log; register S04; power + radio; compare at the map table; report to Mara | Each step advances in order with journal lines; +80 coins once at the end; works solo |
+| 50 | Elise's note | Read it in a party | Text panel; partner gains the discovery and the text; the thief's strike gate opens for both |
+| 51 | M03 Medical Delivery | Accept with nothing, then with two bandages | Text names rooms with supplies (never a store); +30 coins; the worker walks off |
+| 52 | M09 and M11 | Establish a shelter; die, accept M11, recover the bag | +40 once; M11 pays experience only and fails if a newer bag replaces it |
+| 53 | Lantern and flares | Equip the lantern, toggle shield (V); place flares (N) three times; try in a shelter | Omni light seen by others; range 9 shielded; two flares land, the third is refused; refused in shelters and at the depot |
+| 54 | Injury and splint | Take an injuring hit, sprint, then apply a splint | Sprint about 14.5, walk 11; HUD injury line; splint clears it |
+| 55 | Field experience (F24, T23) | Explore past 50 experience; rejoin an older profile | Rank-up notice, max health and stamina +2, no free heal; one back-fill notice for older profiles and no second payment on rejoin |
+| 56 | Touch and gamepad | Phone landscape; gamepad | 4 × 4 grid clear of the thumbstick, 52 px buttons; Sprint never sticks; shoulder and D-pad bindings work |
+| 57 | Notebook after rejoin | Rejoin | Discoveries and research listed, sorted, with no notice burst |
+| 58 | Schema 2 rollout | Join a schema-2 profile on an old (schema-1) server, then a new one | Old server refuses with a clear message and releases the lock; the new server loads at once |
