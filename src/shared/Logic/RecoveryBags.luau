@@ -5,13 +5,17 @@
 -- PROPOSED delegation policy (section 14): owner access is unconditional; a delegate needs a saved authorization,
 -- and while the owner is online and grouped the delegate must also be in the owner's current party.
 -- Delegate recovery moves contents into the owner's escrow, never into the delegate's inventory.
+-- Variable pockets (section 04, F08): a bag dropped inside a pocket records the pocket and version. When that
+-- version no longer exists on a server the bag migrates (never deletes) to the pocket's documented anchor chamber.
 -- Pure module: records are plain tables persisted inside the player profile.
 
 export type Contents = { [string]: number }
 
 export type Anchor = {
 	regionId: string,
-	pocketVersion: number,
+	-- pocket version id inside a variable pocket; 1 for stable chambers (keeps records saved before pockets valid)
+	pocketVersion: number | string,
+	pocketId: string?, -- set only when the bag lies inside a variable pocket
 	anchorId: string,
 	offset: { x: number, y: number, z: number },
 }
@@ -27,6 +31,7 @@ export type Bag = {
 	createdAt: number,
 	opId: string,
 	authorized: { [string]: boolean }, -- string user IDs (DataStore-safe keys)
+	migratedFrom: { pocketId: string, version: string }?, -- set when a pocket change moved the bag
 }
 
 export type BagProfile = {
@@ -64,6 +69,28 @@ local function isEmpty(c: Contents): boolean
 	return true
 end
 
+-- Anchors are copied, never shared: the expedition checkpoint passed as a crash-bag anchor must not move with the
+-- bag (or the bag with the checkpoint) when either is updated in place.
+function RecoveryBags.cloneAnchor(a: Anchor): Anchor
+	return {
+		regionId = a.regionId,
+		pocketVersion = a.pocketVersion,
+		pocketId = a.pocketId,
+		anchorId = a.anchorId,
+		offset = { x = a.offset.x, y = a.offset.y, z = a.offset.z },
+	}
+end
+
+-- A deep copy for read-only callers (missions, notebook).
+function RecoveryBags.copy(b: Bag): Bag
+	local c = table.clone(b)
+	c.contents = table.clone(b.contents)
+	c.anchor = RecoveryBags.cloneAnchor(b.anchor)
+	c.authorized = table.clone(b.authorized)
+	c.migratedFrom = if b.migratedFrom then table.clone(b.migratedFrom) else nil
+	return c
+end
+
 -- Creates a bag of `kind`, replacing only the previous bag of the same kind.
 -- Returns (newBag, replacedBag). Empty contents create no bag (section 15). Replaying the same opId is a no-op.
 function RecoveryBags.create(
@@ -96,10 +123,11 @@ function RecoveryBags.create(
 		kind = kind,
 		ownerId = ownerId,
 		contents = table.clone(contents),
-		anchor = anchor,
+		anchor = RecoveryBags.cloneAnchor(anchor),
 		createdAt = now,
 		opId = opId,
 		authorized = auth,
+		migratedFrom = nil,
 	}
 	local replaced = p.bags[kind]
 	p.bags[kind] = bag
@@ -160,7 +188,43 @@ function RecoveryBags.restoreLeftover(p: BagProfile, original: Bag, leftover: Co
 	end
 	local b = table.clone(original)
 	b.contents = leftover
+	b.anchor = RecoveryBags.cloneAnchor(original.anchor)
 	p.bags[original.kind] = b
+end
+
+export type MigrationTarget = {
+	regionId: string,
+	anchorId: string, -- the pocket's documented migration anchor (a stable chamber)
+	offsetFor: (kind: BagKind) -> { x: number, y: number, z: number }, -- offset from that chamber's centre
+}
+
+-- Pocket migration (docs/MILESTONE-3.md section 3 rules 5-6): every bag of THIS pocket whose version differs from
+-- the pocket's current version moves to the migration anchor with a fresh anchor table. Contents, owner, id,
+-- authorization and creation time are kept; migratedFrom records the pocket and version. Never deletes;
+-- idempotent (a moved bag no longer belongs to the pocket). Returns the moved bags (death first).
+function RecoveryBags.migratePocket(
+	p: BagProfile,
+	pocketId: string,
+	currentVersion: number | string,
+	target: MigrationTarget
+): { Bag }
+	local moved: { Bag } = {}
+	for _, kind: BagKind in { "death", "logout" } :: { BagKind } do
+		local bag = p.bags[kind]
+		if bag and bag.anchor.pocketId == pocketId and bag.anchor.pocketVersion ~= currentVersion then
+			local o = target.offsetFor(kind)
+			bag.migratedFrom = { pocketId = pocketId, version = tostring(bag.anchor.pocketVersion) }
+			bag.anchor = {
+				regionId = target.regionId,
+				pocketVersion = 1,
+				pocketId = nil,
+				anchorId = target.anchorId,
+				offset = { x = o.x, y = o.y, z = o.z },
+			}
+			table.insert(moved, bag)
+		end
+	end
+	return moved
 end
 
 function RecoveryBags.revoke(p: BagProfile, kind: BagKind, userId: number): boolean

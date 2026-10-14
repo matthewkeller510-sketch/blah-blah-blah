@@ -1,6 +1,10 @@
 --!strict
 -- Chalk, signs and ropes (sections 09, 16; owner rules F09, F21). Records persist in the owner's profile until
 -- retrieved. Only the owner and the owner's current party receive the records; clients render nearby ones.
+-- Variable pockets (section 04, F08): a record placed inside a pocket carries the pocket and its version. When this
+-- server shows a different version, the record migrates to the pocket's documented anchor (never deleted) and the
+-- owner is told where it went. Online owners migrate when the pocket changes; offline owners migrate lazily the
+-- next time their records are sent from a server whose version differs.
 
 local Players = game:GetService("Players")
 
@@ -10,6 +14,8 @@ local ItemDefs = require(Shared.Data.ItemDefs)
 local Inventory = require(Shared.Logic.Inventory)
 local NavRecords = require(Shared.Logic.NavRecords)
 local WorldDefs = require(Shared.Data.WorldDefs)
+local Pockets = require(Shared.Logic.Pockets)
+Pockets.bind(WorldDefs)
 
 local NavigationService = {}
 local services: any
@@ -36,13 +42,18 @@ local function surfaceCheck(origin: Vector3, target: Vector3): RaycastResult?
 	return workspace:Raycast(origin, dir.Unit * (dir.Magnitude + 1), params)
 end
 
+-- Current version of a pocket on this server (nil until PocketService runs: nothing migrates then).
+local function versionOf(pocketId: string): string?
+	return services.PocketService.versionOf(pocketId)
+end
+
 function NavigationService.place(player: Player, payload: any)
 	local s = services.PlayerService.get(player)
 	if not s or type(payload) ~= "table" then
 		return
 	end
 	local kind = payload.kind
-	local itemId = KIND_ITEM[kind]
+	local itemId = if type(kind) == "string" then KIND_ITEM[kind] else nil
 	if not itemId or type(payload.content) ~= "string" or not isFiniteVector(payload.position) then
 		return
 	end
@@ -83,18 +94,24 @@ function NavigationService.place(player: Player, payload: any)
 		return
 	end
 	local anchorId = services.WorldBuilder.anchorFor(pos)
-	local pocketVersion = 1 -- no variable pockets exist yet (R05); records still carry the field
+	-- Inside a variable pocket the record keeps the pocket and its current version; elsewhere the static default.
+	local tagAt = { tbl(hit.Position) }
+	if endPos then
+		table.insert(tagAt, tbl(endPos))
+	end
+	local pocketId, pocketVersion = Pockets.tagFor(tagAt, versionOf)
 	local rec, err = NavRecords.place(s.profile.nav, {
 		ownerId = player.UserId,
 		kind = kind,
 		itemId = itemId,
 		regionId = regionId,
+		pocketId = pocketId,
 		pocketVersion = pocketVersion,
 		anchorId = anchorId,
 		position = tbl(hit.Position),
 		facing = tbl(hit.Normal),
 		endPosition = endPos and tbl(endPos) or nil,
-		routeId = if type(payload.routeId) == "string" and #payload.routeId <= 12 then payload.routeId else nil,
+		routeId = if NavRecords.isRouteId(payload.routeId) then payload.routeId else nil,
 		content = payload.content,
 		units = 1,
 	}, Config.Navigation.maxPlacedPerPlayer)
@@ -103,7 +120,7 @@ function NavigationService.place(player: Player, payload: any)
 			player,
 			if err == "placement_limit"
 				then string.format(
-					"You have %d markers placed. Pick some up from your notebook list to place more.",
+					"You have %d markers placed. Pick some up to place more; your notebook lists where they are.",
 					Config.Navigation.maxPlacedPerPlayer
 				)
 				else "That marker cannot be placed.",
@@ -126,10 +143,10 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 	if not os_ or not owner then
 		return
 	end
-	local regionId, page, rec = nil, nil, nil
+	local regionId, rec = nil, nil
 	for rid, pg in os_.profile.nav.pages do
 		if pg[recordId] then
-			regionId, page, rec = rid, pg, pg[recordId]
+			regionId, rec = rid, pg[recordId]
 			break
 		end
 	end
@@ -138,6 +155,12 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 	end
 	local p = services.PlayerService.position(player)
 	if not p or (p - vec(rec.position)).Magnitude > PLACE_RANGE then
+		return
+	end
+	-- Check room first so a full inventory leaves the record (and every unit's provenance) untouched.
+	local def = ItemDefs.get(rec.itemId)
+	if not def or def.stackLimit - Inventory.count(os_.profile.inventory, rec.itemId) < rec.units then
+		services.PlayerService.notify(player, "No room to carry it.", "warn")
 		return
 	end
 	local res =
@@ -152,17 +175,7 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 		end
 		return
 	end
-	local added =
-		Inventory.add(os_.profile.inventory, ItemDefs.get, res.itemId :: string, res.units :: number, "loadout")
-	if added < (res.units :: number) then
-		-- Not enough room: put the record back unchanged rather than destroying the unit.
-		Inventory.remove(os_.profile.inventory, res.itemId :: string, added)
-		page = os_.profile.nav.pages[regionId] or {}
-		os_.profile.nav.pages[regionId] = page
-		page[recordId] = rec
-		services.PlayerService.notify(player, "No room to carry it.", "warn")
-		return
-	end
+	Inventory.add(os_.profile.inventory, ItemDefs.get, res.itemId :: string, res.units :: number, "loadout")
 	services.SaveService.markDirty(owner)
 	services.PlayerService.pushInventory(owner)
 	NavigationService.refreshGroup(owner)
@@ -183,11 +196,96 @@ function NavigationService.setPartyRecovery(player: Player, recordId: string, al
 	end
 end
 
--- Sends the viewer every record they may see: their own, plus their current party members'.
+-- Migrates every record of `owner` whose pocket shows a different version on this server (rule 6), marks the
+-- profile dirty and tells the owner once per pocket where the records went. Returns how many moved.
+function NavigationService.migrateStale(owner: Player): number
+	local s = services.PlayerService.get(owner)
+	if not s then
+		return 0
+	end
+	local store = s.profile.nav
+	local stale: { [string]: boolean } = {}
+	for _, page in store.pages do
+		for _, r in page do
+			if Pockets.isStale(r.pocketId, r.pocketVersion, versionOf) then
+				stale[r.pocketId] = true
+			end
+		end
+	end
+	local ids = {}
+	for id in stale do
+		table.insert(ids, id)
+	end
+	table.sort(ids)
+	local total = 0
+	for _, pocketId in ids do
+		local def = WorldDefs.Pockets[pocketId]
+		local current = versionOf(pocketId)
+		if def and current then
+			local target = Pockets.migrationTarget(def, Config.Pockets.occupancyMargin)
+			local moved = NavRecords.migratePocketRecords(store, pocketId, current, target)
+			if #moved > 0 then
+				total += #moved
+				local kinds = {}
+				for _, r in moved do
+					table.insert(kinds, r.kind)
+				end
+				local regionName, anchorLabel = Pockets.noticeNames(def)
+				services.PlayerService.notify(owner, Pockets.migrationNotice(kinds, regionName, anchorLabel), "warn")
+			end
+		end
+	end
+	if total > 0 then
+		services.SaveService.markDirty(owner)
+	end
+	return total
+end
+
+-- Read-only copies of a player's own records in one region (creatures package, C04 Chalk Hand). Never a live
+-- reference: nothing outside this service can move, delete or transfer a saved marker.
+function NavigationService.ownRecords(player: Player, regionId: string): { NavRecords.NavRecord }
+	local s = services.PlayerService.get(player)
+	local out = {}
+	if s then
+		for _, r in NavRecords.inRegion(s.profile.nav, regionId) do
+			table.insert(out, NavRecords.copy(r))
+		end
+	end
+	return out
+end
+
+-- Rule 2: true when a rope of an online owner touches the pocket's bounds plus margin.
+function NavigationService.ropeBlocks(pocketDef: WorldDefs.PocketDef): boolean
+	local nav: { Pockets.NavInput } = {}
+	for _, s in services.PlayerService.all() do
+		-- a rope at a pocket lives in the pocket's region page: regionAt anywhere in a pocket's bounds plus margin
+		-- is the pocket's region (nearest chamber), so other pages never need scanning
+		local page = s.profile.nav.pages[pocketDef.regionId]
+		if page then
+			for _, r in page do
+				if r.kind == "rope" then
+					table.insert(nav, { kind = "rope", pos = r.position, endPos = r.endPosition, ownerOnline = true })
+				end
+			end
+		end
+	end
+	return Pockets.blocker(pocketDef, { nav = nav }, Config.Pockets.occupancyMargin) ~= nil
+end
+
+-- Sends the viewer every record they may see: their own, plus their current party members'. Records of a pocket
+-- version that does not exist here migrate first (lazy migration, rule 6).
 function NavigationService.refreshFor(viewer: Player)
 	local out = {}
 	local owners = services.PartyService.members(viewer)
 	for _, owner in owners do
+		if NavigationService.migrateStale(owner) > 0 then
+			-- the owner's party sees the move too (the second pass finds nothing stale, so this does not repeat)
+			task.defer(function()
+				if owner.Parent and services.PlayerService.get(owner) then
+					NavigationService.refreshGroup(owner)
+				end
+			end)
+		end
 		local s = services.PlayerService.get(owner)
 		if s then
 			local ids = services.PartyService.memberIds(owner)
@@ -205,6 +303,12 @@ function NavigationService.refreshFor(viewer: Player)
 							endPosition = rec.endPosition and vec(rec.endPosition) or nil,
 							routeId = rec.routeId,
 							allowPartyRecovery = rec.allowPartyRecovery,
+							regionId = rec.regionId,
+							pocketId = rec.pocketId,
+							pocketVersion = rec.pocketVersion,
+							migratedFrom = if rec.migratedFrom
+								then { pocketId = rec.migratedFrom.pocketId, version = rec.migratedFrom.version }
+								else nil,
 						})
 					end
 				end
