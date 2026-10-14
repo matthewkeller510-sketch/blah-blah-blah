@@ -73,7 +73,14 @@ local function shelterDef(id: string)
 	return WorldDefs.Shelters[id]
 end
 
-local function mk(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3?, material: Enum.Material?): Part
+local function mk(
+	parent: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3?,
+	material: Enum.Material?
+): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
@@ -98,9 +105,21 @@ local function prompt(parent: Instance, action: string, object: string, key: str
 end
 
 local THEMES = {
-	limestone = { wall = Color3.fromRGB(176, 166, 146), material = Enum.Material.Limestone, floor = Enum.Material.Slate },
-	office = { wall = Color3.fromRGB(150, 140, 120), material = Enum.Material.Plaster, floor = Enum.Material.WoodPlanks },
-	ironwork = { wall = Color3.fromRGB(96, 98, 96), material = Enum.Material.Concrete, floor = Enum.Material.DiamondPlate },
+	limestone = {
+		wall = Color3.fromRGB(176, 166, 146),
+		material = Enum.Material.Limestone,
+		floor = Enum.Material.Slate,
+	},
+	office = {
+		wall = Color3.fromRGB(150, 140, 120),
+		material = Enum.Material.Plaster,
+		floor = Enum.Material.WoodPlanks,
+	},
+	ironwork = {
+		wall = Color3.fromRGB(96, 98, 96),
+		material = Enum.Material.Concrete,
+		floor = Enum.Material.DiamondPlate,
+	},
 }
 
 -- Entrance visuals per stage: 0 = open vulnerability, partial = patched boards, >= required = solid and barred.
@@ -132,19 +151,65 @@ end
 
 local function buildCell(index: number, shelterId: string, key: string): Cell
 	local o = Config.Shelter.interiorCellOrigin
-	local origin = Vector3.new(o.x + (index % 20) * Config.Shelter.interiorCellSpacing, o.y, o.z + math.floor(index / 20) * Config.Shelter.interiorCellSpacing)
+	local origin = Vector3.new(
+		o.x + (index % 20) * Config.Shelter.interiorCellSpacing,
+		o.y,
+		o.z + math.floor(index / 20) * Config.Shelter.interiorCellSpacing
+	)
 	local model = Instance.new("Model")
 	model.Name = "Cell_" .. index
 	local def = shelterDef(shelterId)
 	local theme = THEMES[def.theme] or THEMES.limestone
 	local parts: { [string]: BasePart } = {}
 	local hx, hz = ROOM.X / 2, ROOM.Z / 2
-	mk(model, "Floor", Vector3.new(ROOM.X + 4, 1, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, -0.5, 0)), Color3.fromRGB(120, 112, 98), theme.floor)
-	mk(model, "Ceiling", Vector3.new(ROOM.X + 4, 2, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, ROOM.Y + 1, 0)), theme.wall, theme.material)
-	mk(model, "WallN", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, hz + 1)), theme.wall, theme.material)
-	mk(model, "WallS", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, -hz - 1)), theme.wall, theme.material)
-	mk(model, "WallE", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(hx + 1, ROOM.Y / 2, 0)), theme.wall, theme.material)
-	mk(model, "WallW", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(-hx - 1, ROOM.Y / 2, 0)), theme.wall, theme.material)
+	mk(
+		model,
+		"Floor",
+		Vector3.new(ROOM.X + 4, 1, ROOM.Z + 4),
+		CFrame.new(origin + Vector3.new(0, -0.5, 0)),
+		Color3.fromRGB(120, 112, 98),
+		theme.floor
+	)
+	mk(
+		model,
+		"Ceiling",
+		Vector3.new(ROOM.X + 4, 2, ROOM.Z + 4),
+		CFrame.new(origin + Vector3.new(0, ROOM.Y + 1, 0)),
+		theme.wall,
+		theme.material
+	)
+	mk(
+		model,
+		"WallN",
+		Vector3.new(ROOM.X + 4, ROOM.Y, 2),
+		CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, hz + 1)),
+		theme.wall,
+		theme.material
+	)
+	mk(
+		model,
+		"WallS",
+		Vector3.new(ROOM.X + 4, ROOM.Y, 2),
+		CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, -hz - 1)),
+		theme.wall,
+		theme.material
+	)
+	mk(
+		model,
+		"WallE",
+		Vector3.new(2, ROOM.Y, ROOM.Z),
+		CFrame.new(origin + Vector3.new(hx + 1, ROOM.Y / 2, 0)),
+		theme.wall,
+		theme.material
+	)
+	mk(
+		model,
+		"WallW",
+		Vector3.new(2, ROOM.Y, ROOM.Z),
+		CFrame.new(origin + Vector3.new(-hx - 1, ROOM.Y / 2, 0)),
+		theme.wall,
+		theme.material
+	)
 	-- Entrances. The physical room is always closed; these visuals show each entrance's fortification state and
 	-- where the vulnerabilities are. Entrance 1 is on the west wall, entrance 2 on the north wall.
 	local entranceFrames = {
@@ -153,27 +218,104 @@ local function buildCell(index: number, shelterId: string, key: string): Cell
 	}
 	for i, ef in entranceFrames do
 		local w = if i == 1 then 8 else 4
-		local open = mk(model, "Ent" .. i .. "Open", Vector3.new(w * 0.6, 7, 0.3), ef, Color3.fromRGB(10, 10, 10), Enum.Material.SmoothPlastic)
-		local patched = mk(model, "Ent" .. i .. "Patched", Vector3.new(w, 8, 0.5), ef * CFrame.new(0, 0, -0.3), WOOD, Enum.Material.WoodPlanks)
-		local secured = mk(model, "Ent" .. i .. "Secured", Vector3.new(w, 8.5, 0.6), ef * CFrame.new(0, 0, -0.5), RUST, Enum.Material.DiamondPlate)
-		local bar = mk(model, "Ent" .. i .. "Bar", Vector3.new(w + 2, 0.8, 0.6), ef * CFrame.new(0, 0, -1), WOOD, Enum.Material.Wood)
+		local open = mk(
+			model,
+			"Ent" .. i .. "Open",
+			Vector3.new(w * 0.6, 7, 0.3),
+			ef,
+			Color3.fromRGB(10, 10, 10),
+			Enum.Material.SmoothPlastic
+		)
+		local patched = mk(
+			model,
+			"Ent" .. i .. "Patched",
+			Vector3.new(w, 8, 0.5),
+			ef * CFrame.new(0, 0, -0.3),
+			WOOD,
+			Enum.Material.WoodPlanks
+		)
+		local secured = mk(
+			model,
+			"Ent" .. i .. "Secured",
+			Vector3.new(w, 8.5, 0.6),
+			ef * CFrame.new(0, 0, -0.5),
+			RUST,
+			Enum.Material.DiamondPlate
+		)
+		local bar = mk(
+			model,
+			"Ent" .. i .. "Bar",
+			Vector3.new(w + 2, 0.8, 0.6),
+			ef * CFrame.new(0, 0, -1),
+			WOOD,
+			Enum.Material.Wood
+		)
 		for _, part in { open, patched, secured, bar } do
 			part.CanCollide = false
 			parts[part.Name] = part
 		end
 	end
 	-- Furniture and interaction points
-	local exit = mk(model, "ExitDoor", Vector3.new(1, 8, 5), CFrame.new(origin.X - hx + 1.5, origin.Y + 4, origin.Z - 7), WOOD, Enum.Material.WoodPlanks)
+	local exit = mk(
+		model,
+		"ExitDoor",
+		Vector3.new(1, 8, 5),
+		CFrame.new(origin.X - hx + 1.5, origin.Y + 4, origin.Z - 7),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	prompt(exit, "Leave shelter", def.name, "exit")
-	local storage = mk(model, "Storage", Vector3.new(5, 3, 3), CFrame.new(origin.X + hx - 3.5, origin.Y + 1.5, origin.Z - hz + 2.5), WOOD, Enum.Material.WoodPlanks)
+	local storage = mk(
+		model,
+		"Storage",
+		Vector3.new(5, 3, 3),
+		CFrame.new(origin.X + hx - 3.5, origin.Y + 1.5, origin.Z - hz + 2.5),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	prompt(storage, "Open", "Shelter storage & escrow", "panel")
-	local board = mk(model, "Board", Vector3.new(0.4, 4, 6), CFrame.new(origin.X + hx - 0.4, origin.Y + 5, origin.Z + 4), WOOD, Enum.Material.WoodPlanks)
+	local board = mk(
+		model,
+		"Board",
+		Vector3.new(0.4, 4, 6),
+		CFrame.new(origin.X + hx - 0.4, origin.Y + 5, origin.Z + 4),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	prompt(board, "Open", "Shelter works & missions", "panel")
-	parts.Workbench = mk(model, "Workbench", Vector3.new(6, 3, 3), CFrame.new(origin.X, origin.Y + 1.5, origin.Z - hz + 2.5), WOOD, Enum.Material.WoodPlanks)
+	parts.Workbench = mk(
+		model,
+		"Workbench",
+		Vector3.new(6, 3, 3),
+		CFrame.new(origin.X, origin.Y + 1.5, origin.Z - hz + 2.5),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	prompt(parts.Workbench, "Craft", "Workbench", "panel")
-	parts.Shelves = mk(model, "Shelves", Vector3.new(2, 6, 7), CFrame.new(origin.X + hx - 1.5, origin.Y + 3, origin.Z - 4), WOOD, Enum.Material.WoodPlanks)
-	mk(model, "Cot", Vector3.new(7, 1.4, 3.5), CFrame.new(origin.X - 4, origin.Y + 0.7, origin.Z + hz - 3), Color3.fromRGB(90, 96, 80), Enum.Material.Fabric)
-	local lamp = mk(model, "Lamp", Vector3.new(0.8, 1.2, 0.8), CFrame.new(origin.X, origin.Y + ROOM.Y - 1, origin.Z), Color3.fromRGB(255, 220, 160), Enum.Material.Neon)
+	parts.Shelves = mk(
+		model,
+		"Shelves",
+		Vector3.new(2, 6, 7),
+		CFrame.new(origin.X + hx - 1.5, origin.Y + 3, origin.Z - 4),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
+	mk(
+		model,
+		"Cot",
+		Vector3.new(7, 1.4, 3.5),
+		CFrame.new(origin.X - 4, origin.Y + 0.7, origin.Z + hz - 3),
+		Color3.fromRGB(90, 96, 80),
+		Enum.Material.Fabric
+	)
+	local lamp = mk(
+		model,
+		"Lamp",
+		Vector3.new(0.8, 1.2, 0.8),
+		CFrame.new(origin.X, origin.Y + ROOM.Y - 1, origin.Z),
+		Color3.fromRGB(255, 220, 160),
+		Enum.Material.Neon
+	)
 	lamp.CanCollide = false
 	local pl = Instance.new("PointLight")
 	pl.Color = Color3.fromRGB(255, 214, 160)
@@ -219,9 +361,9 @@ local function getCell(player: Player, shelterId: string): Cell
 	if idx == nextIndex then
 		nextIndex += 1
 	end
-	c = buildCell(idx, shelterId, key)
-	cells[key] = c
-	return c
+	local built = buildCell(idx, shelterId, key)
+	cells[key] = built
+	return built
 end
 
 local function releaseIfEmpty(cell: Cell)
@@ -308,10 +450,13 @@ function ShelterService.enter(player: Player, shelterId: string)
 			n += c
 		end
 		if n > 0 then
-			services.PlayerService.notify(player,
-				if ok then string.format("Banked %d expedition item(s). Saved.", n)
-				else string.format("Banked %d item(s) in this session, but saving failed. It will retry.", n),
-				if ok then "info" else "warn")
+			services.PlayerService.notify(
+				player,
+				if ok
+					then string.format("Banked %d expedition item(s). Saved.", n)
+					else string.format("Banked %d item(s) in this session, but saving failed. It will retry.", n),
+				if ok then "info" else "warn"
+			)
 		elseif firstTime then
 			services.PlayerService.notify(player, def.name .. " registered as your last shelter.", "info")
 		end
@@ -383,7 +528,8 @@ function ShelterService.pushPanel(player: Player)
 	local shared = occupantsMap(cell)
 	local own = s.profile.shelterUpgrades
 	local ups = {}
-	for kindName, group in { safety = def.safetyUpgrades, functional = def.functionalUpgrades } do
+	local groups: { [string]: { [string]: any } } = { safety = def.safetyUpgrades, functional = def.functionalUpgrades }
+	for kindName, group in groups do
 		for id, u in group do
 			local cost, nextStage = Shelters.nextCost(def, shared, id)
 			table.insert(ups, {
@@ -417,7 +563,10 @@ function ShelterService.pushPanel(player: Player)
 	end
 	local entrances = {}
 	for _, e in def.entrances do
-		table.insert(entrances, { id = e.id, protected = Shelters.stage(shared, def.id, e.requiredUpgrade) >= e.requiredStage })
+		table.insert(
+			entrances,
+			{ id = e.id, protected = Shelters.stage(shared, def.id, e.requiredUpgrade) >= e.requiredStage }
+		)
 	end
 	services.PlayerService.send(player, "shelterPanel", {
 		open = true,
@@ -473,7 +622,11 @@ function ShelterService.upgrade(player: Player, upgradeId: string)
 		ShelterService.pushPanel(p)
 	end
 	if Shelters.isSecured(def, s.profile.shelterUpgrades) then
-		services.PlayerService.notify(player, def.name .. " is fully secured. Creatures cannot enter or harm anyone inside.", "info")
+		services.PlayerService.notify(
+			player,
+			def.name .. " is fully secured. Creatures cannot enter or harm anyone inside.",
+			"info"
+		)
 	end
 end
 
@@ -510,7 +663,11 @@ function ShelterService.changeClass(player: Player, className: string)
 		return
 	end
 	if s.profile.coins < Config.ClassChangeCoinCost then
-		services.PlayerService.notify(player, string.format("Changing class costs %d earned coins.", Config.ClassChangeCoinCost), "warn")
+		services.PlayerService.notify(
+			player,
+			string.format("Changing class costs %d earned coins.", Config.ClassChangeCoinCost),
+			"warn"
+		)
 		return
 	end
 	s.profile.coins -= Config.ClassChangeCoinCost

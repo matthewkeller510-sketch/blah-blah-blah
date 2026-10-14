@@ -50,13 +50,22 @@ function EconomyService.pushShop(player: Player)
 	local buy = {}
 	for _, e in SHOP do
 		local d = ItemDefs.require(e.itemId)
-		table.insert(buy, { itemId = e.itemId, name = d.displayName, price = e.price, have = Inventory.count(s.profile.inventory, e.itemId), limit = d.stackLimit })
+		table.insert(buy, {
+			itemId = e.itemId,
+			name = d.displayName,
+			price = e.price,
+			have = Inventory.count(s.profile.inventory, e.itemId),
+			limit = d.stackLimit,
+		})
 	end
 	local sell = {}
 	for id, entry in s.profile.inventory do
 		local d = ItemDefs.get(id)
 		if d and (d.category == "treasure") and not d.unique then
-			table.insert(sell, { itemId = id, name = d.displayName, value = d.sellValue, have = entry.loadout + entry.expedition })
+			table.insert(
+				sell,
+				{ itemId = id, name = d.displayName, value = d.sellValue, have = entry.loadout + entry.expedition }
+			)
 		end
 	end
 	local products = {}
@@ -64,9 +73,18 @@ function EconomyService.pushShop(player: Player)
 		local ok, info = pcall(function()
 			return MarketplaceService:GetProductInfo(pid, Enum.InfoType.Product)
 		end)
-		table.insert(products, { productId = pid, name = pr.name, contents = pr.contents, price = ok and info.PriceInRobux or nil })
+		table.insert(
+			products,
+			{ productId = pid, name = pr.name, contents = pr.contents, price = ok and info.PriceInRobux or nil }
+		)
 	end
-	services.PlayerService.send(player, "shop", { coins = s.profile.coins, buy = buy, sell = sell, products = products, storeConfigured = next(PRODUCTS) ~= nil })
+	services.PlayerService.send(player, "shop", {
+		coins = s.profile.coins,
+		buy = buy,
+		sell = sell,
+		products = products,
+		storeConfigured = next(PRODUCTS) ~= nil,
+	})
 end
 
 function EconomyService.buy(player: Player, itemId: string)

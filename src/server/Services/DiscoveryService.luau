@@ -145,7 +145,11 @@ local function buildPickups()
 			end
 			Progress.claim(s.profile.claims, u.id)
 			grant(player, { [u.itemId] = 1 })
-			services.PlayerService.notify(player, "Collected your " .. pp.ObjectText .. ". Party members must collect their own.", "info")
+			services.PlayerService.notify(
+				player,
+				"Collected your " .. pp.ObjectText .. ". Party members must collect their own.",
+				"info"
+			)
 			DiscoveryService.discover(player, u.discoveryId, u.label)
 		end)
 	end

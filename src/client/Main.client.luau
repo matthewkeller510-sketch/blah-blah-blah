@@ -80,8 +80,14 @@ stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 		Panels.discovery(data)
 	elseif channel == "research" then
 		Hud.notice(
-			string.format("Journal: %s — %s (%d/%d)%s", data.name, (string.gsub(data.stageName, "_", " ")), data.stage, data.stages,
-				if data.nextHint then (". Next: " .. data.nextHint) else ""),
+			string.format(
+				"Journal: %s — %s (%d/%d)%s",
+				data.name,
+				(string.gsub(data.stageName, "_", " ")),
+				data.stage,
+				data.stages,
+				if data.nextHint then (". Next: " .. data.nextHint) else ""
+			),
 			"info"
 		)
 		Panels.research(data)

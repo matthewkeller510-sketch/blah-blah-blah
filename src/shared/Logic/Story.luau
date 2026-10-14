@@ -28,7 +28,7 @@ Story.ACT1 = {
 	{
 		id = "A1.1",
 		objective = "Descend into the Old Quarry and find the survey board.",
-		journal = "Mara Voss: \"A survey team went past the recorded quarries and never signed out. Start where they started — the board at Galerie 14.\"",
+		journal = 'Mara Voss: "A survey team went past the recorded quarries and never signed out. Start where they started — the board at Galerie 14."',
 		done = function(f)
 			return f.discoveries["R01.survey_board"] == true
 		end,

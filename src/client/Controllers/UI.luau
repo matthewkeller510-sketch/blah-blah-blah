@@ -27,7 +27,7 @@ function UI.frame(parent: Instance, props: { [string]: any }?): Frame
 	f.BackgroundColor3 = UI.Colors.panel
 	f.BackgroundTransparency = 0.15
 	f.BorderSizePixel = 0
-	for k, v in props or {} do
+	for k, v in (props or {}) :: { [string]: any } do
 		(f :: any)[k] = v
 	end
 	f.Parent = parent
@@ -80,7 +80,7 @@ function UI.button(parent: Instance, text: string, onClick: () -> (), props: { [
 	b.BackgroundColor3 = UI.Colors.amber
 	b.AutoButtonColor = true
 	b.Size = UDim2.new(1, 0, 0, 40)
-	for k, v in props or {} do
+	for k, v in (props or {}) :: { [string]: any } do
 		(b :: any)[k] = v
 	end
 	UI.corner(b)
@@ -98,9 +98,13 @@ function UI.clear(parent: Instance)
 end
 
 function UI.bar(parent: Instance, name: string, color: Color3): (Frame, Frame)
-	local back = UI.frame(parent, { Name = name, Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.fromRGB(60, 58, 54) })
+	local back =
+		UI.frame(parent, { Name = name, Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Color3.fromRGB(60, 58, 54) })
 	UI.corner(back, 4)
-	local fill = UI.frame(back, { Name = "Fill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, BackgroundTransparency = 0 })
+	local fill = UI.frame(
+		back,
+		{ Name = "Fill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, BackgroundTransparency = 0 }
+	)
 	UI.corner(fill, 4)
 	return back, fill
 end
@@ -122,7 +126,12 @@ function UI.panel(parent: Instance, title: string, onClose: () -> ()): (Frame, S
 	local head = UI.label(root, title, 20)
 	head.Size = UDim2.new(1, -60, 0, 28)
 	head.AutomaticSize = Enum.AutomaticSize.None
-	UI.button(root, "Close", onClose, { Size = UDim2.new(0, 72, 0, UI.TOUCH * 0.8), Position = UDim2.new(1, -72, 0, -4) })
+	UI.button(
+		root,
+		"Close",
+		onClose,
+		{ Size = UDim2.new(0, 72, 0, UI.TOUCH * 0.8), Position = UDim2.new(1, -72, 0, -4) }
+	)
 	local body = Instance.new("ScrollingFrame")
 	body.BackgroundTransparency = 1
 	body.BorderSizePixel = 0

@@ -40,7 +40,12 @@ export type Research = { [string]: ResearchEntry } -- creatureId -> entry
 
 -- Each stage requires a specific piece of evidence; evidence can only advance one stage at a time so the
 -- journal never becomes a free instant omniscient description.
-function Progress.addEvidence(research: Research, creatureId: string, evidenceId: string, stageRequirements: { string }): number
+function Progress.addEvidence(
+	research: Research,
+	creatureId: string,
+	evidenceId: string,
+	stageRequirements: { string }
+): number
 	local e = research[creatureId]
 	if not e then
 		e = { stage = 0, evidence = {} }

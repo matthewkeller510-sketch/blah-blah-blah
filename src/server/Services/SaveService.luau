@@ -90,7 +90,11 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 					blocked = false -- UpdateAsync may call the transform more than once
 					old = old or { data = nil, lock = nil }
 					local lock = old.lock
-					if lock and lock.id ~= LOCK and (os.time() - (lock.time or 0)) < Config.Save.sessionLockStaleSeconds then
+					if
+						lock
+						and lock.id ~= LOCK
+						and (os.time() - (lock.time or 0)) < Config.Save.sessionLockStaleSeconds
+					then
 						blocked = true
 						return nil -- abort write, keep the other session's data
 					end
@@ -120,8 +124,13 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 	if not prof then
 		return nil, perr
 	end
-	entries[player] = { profile = prof, loaded = true, dirty = false, saving = false, lastStatus = "loaded", released = false }
-	setStatus(player, if available then "loaded" else "offline", if available then nil else "Saving unavailable in this session")
+	entries[player] =
+		{ profile = prof, loaded = true, dirty = false, saving = false, lastStatus = "loaded", released = false }
+	setStatus(
+		player,
+		if available then "loaded" else "offline",
+		if available then nil else "Saving unavailable in this session"
+	)
 	return prof, nil
 end
 

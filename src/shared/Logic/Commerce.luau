@@ -23,8 +23,22 @@ function Commerce.bind(inventoryModule: any)
 end
 
 Commerce.RECIPES = {
-	{ id = "craft.field_dressing", inputs = { ["mat.fabric"] = 2, ["mat.fastener"] = 1 }, output = "med.cloth_dressing", outputCount = 1, seconds = 3, requiresWorkbench = false },
-	{ id = "craft.chalk", inputs = { ["mat.chalk_fragment"] = 3 }, output = "nav.chalk", outputCount = 1, seconds = 2, requiresWorkbench = false },
+	{
+		id = "craft.field_dressing",
+		inputs = { ["mat.fabric"] = 2, ["mat.fastener"] = 1 },
+		output = "med.cloth_dressing",
+		outputCount = 1,
+		seconds = 3,
+		requiresWorkbench = false,
+	},
+	{
+		id = "craft.chalk",
+		inputs = { ["mat.chalk_fragment"] = 3 },
+		output = "nav.chalk",
+		outputCount = 1,
+		seconds = 2,
+		requiresWorkbench = false,
+	},
 } :: { Recipe }
 
 function Commerce.recipe(id: string): Recipe?
@@ -61,7 +75,8 @@ end
 function Commerce.craft(inv: any, lookup: any, recipe: Recipe, atWorkbench: boolean): (boolean, string?)
 	local p = Commerce.preview(inv, lookup, recipe, atWorkbench)
 	if not p.canCraft then
-		return false, if next(p.missing) ~= nil then "insufficient" elseif not p.outputFits then "no_space" else "needs_workbench"
+		return false,
+			if next(p.missing) ~= nil then "insufficient" elseif not p.outputFits then "no_space" else "needs_workbench"
 	end
 	local work = Inventory.clone(inv)
 	for id, n in recipe.inputs do

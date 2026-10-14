@@ -236,7 +236,11 @@ function PlayerService.damage(player: Player, amount: number, causesInjury: bool
 	s.busyToken += 1
 	s.lastThreatAt = os.clock()
 	if cond == "downed" and before ~= "downed" then
-		PlayerService.notify(player, "You are down. A party member can stabilize you, or crawl toward safety.", "danger")
+		PlayerService.notify(
+			player,
+			"You are down. A party member can stabilize you, or crawl toward safety.",
+			"danger"
+		)
 		if s.carrying then
 			PlayerService.dropCarry(player)
 		end
@@ -321,7 +325,8 @@ function PlayerService.useMedical(player: Player, itemId: string, target: Player
 	end
 	local applied
 	if ts.vitals.condition == "downed" then
-		applied = ts.vitals.stabilized and Vitals.revive(Config.Health, ts.vitals, Config.Health.stabilizedHealth + (d.healAmount or 0))
+		applied = ts.vitals.stabilized
+			and Vitals.revive(Config.Health, ts.vitals, Config.Health.stabilizedHealth + (d.healAmount or 0))
 		if not applied then
 			PlayerService.notify(player, "Stabilize them first.", "warn")
 		end
@@ -669,7 +674,11 @@ function PlayerService.onDeath(player: Player, _source: string)
 	if services.MissionService then
 		services.MissionService.onPlayerDied(player)
 	end
-	PlayerService.notify(player, "You died. Your unprotected supplies are in a death bag where you fell. Coins and navigation supplies are kept. A later death replaces this death bag.", "danger")
+	PlayerService.notify(
+		player,
+		"You died. Your unprotected supplies are in a death bag where you fell. Coins and navigation supplies are kept. A later death replaces this death bag.",
+		"danger"
+	)
 	local h = humanoid(player)
 	s.alive = false
 	if h and h.Health > 0 then
@@ -721,7 +730,9 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	if not profile then
-		player:Kick("Your expedition record could not be loaded safely (" .. tostring(err) .. "). Please rejoin in a moment.")
+		player:Kick(
+			"Your expedition record could not be loaded safely (" .. tostring(err) .. "). Please rejoin in a moment."
+		)
 		return
 	end
 	local s: Session = {
@@ -826,7 +837,15 @@ function PlayerService.start()
 				if s.vitals.condition == "downed" or s.carriedBy then
 					s.mode = Stamina.step(Config.Stamina, s.stamina, dt, false, false, false, stMods)
 				else
-					s.mode = Stamina.step(Config.Stamina, s.stamina, dt, moving, s.intents.sprint and not s.carrying, s.intents.crouch, stMods)
+					s.mode = Stamina.step(
+						Config.Stamina,
+						s.stamina,
+						dt,
+						moving,
+						s.intents.sprint and not s.carrying,
+						s.intents.crouch,
+						stMods
+					)
 				end
 				s.exertion = math.clamp(s.exertion + (if s.mode == "sprint" then dt / 10 else -dt / 20), 0, 1)
 				if prevMode ~= s.mode or prevExhausted ~= s.stamina.exhausted then
@@ -882,7 +901,11 @@ function PlayerService.start()
 				end
 				-- send state at up to 5 Hz when changed, 1 Hz otherwise
 				local now = os.clock()
-				if (s.dirtyState and now - s.lastSent > 0.2) or now - s.lastSent > 1 or (s.mode == "sprint" and now - s.lastSent > 0.2) then
+				if
+					(s.dirtyState and now - s.lastSent > 0.2)
+					or now - s.lastSent > 1
+					or (s.mode == "sprint" and now - s.lastSent > 0.2)
+				then
 					s.dirtyState = false
 					s.lastSent = now
 					stateEvent:FireClient(player, "vitals", statePayload(s))

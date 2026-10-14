@@ -92,22 +92,58 @@ local function buildP01()
 	p01 = Puzzles.newP01(math.random(0, P01.orientations - 1), P01.orientations)
 	local target = Puzzles.ARROWS[p01.target + 1]
 	-- Carving on the south wall (faces north into the hall) and a worn duplicate on the north wall.
-	local carving = mk("P01_Carving", Vector3.new(3, 3, 0.2), CFrame.new(v(P01.carving) + Vector3.new(0, 5, 0)) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(160, 154, 140), Enum.Material.Marble)
+	local carving = mk(
+		"P01_Carving",
+		Vector3.new(3, 3, 0.2),
+		CFrame.new(v(P01.carving) + Vector3.new(0, 5, 0)) * CFrame.Angles(0, math.pi, 0),
+		Color3.fromRGB(160, 154, 140),
+		Enum.Material.Marble
+	)
 	carving.CanCollide = false
 	label(carving, "⌖\n" .. target, INK)
-	local worn = mk("P01_WornCarving", Vector3.new(3, 3, 0.2), CFrame.new(v(P01.wornCarving) + Vector3.new(0, 5, 0)), Color3.fromRGB(150, 146, 134), Enum.Material.Marble)
+	local worn = mk(
+		"P01_WornCarving",
+		Vector3.new(3, 3, 0.2),
+		CFrame.new(v(P01.wornCarving) + Vector3.new(0, 5, 0)),
+		Color3.fromRGB(150, 146, 134),
+		Enum.Material.Marble
+	)
 	worn.CanCollide = false
 	local wl = label(worn, "⌖\n" .. target, INK)
 	wl.TextTransparency = 0.45 -- weathered but still legible: duplicate evidence (section 12)
 	-- Pedestal + rotatable plaque.
 	local base = v(P01.plaque)
-	mk("P01_Pedestal", Vector3.new(2.4, 3.6, 2.4), CFrame.new(base + Vector3.new(0, 1.8, 0)), Color3.fromRGB(150, 144, 130), Enum.Material.Limestone)
-	plaquePart = mk("P01_Plaque", Vector3.new(2.6, 2.6, 0.3), CFrame.new(base + Vector3.new(0, 4.9, 0)) * CFrame.Angles(math.rad(25), 0, 0), Color3.fromRGB(176, 150, 96), Enum.Material.Metal)
+	mk(
+		"P01_Pedestal",
+		Vector3.new(2.4, 3.6, 2.4),
+		CFrame.new(base + Vector3.new(0, 1.8, 0)),
+		Color3.fromRGB(150, 144, 130),
+		Enum.Material.Limestone
+	)
+	plaquePart = mk(
+		"P01_Plaque",
+		Vector3.new(2.6, 2.6, 0.3),
+		CFrame.new(base + Vector3.new(0, 4.9, 0)) * CFrame.Angles(math.rad(25), 0, 0),
+		Color3.fromRGB(176, 150, 96),
+		Enum.Material.Metal
+	)
 	plaqueLabel = label(plaquePart, "⌖\n" .. Puzzles.ARROWS[p01.orientation + 1], INK)
 	-- Gate across the corridor to the sealed chapel.
 	local g = v(P01.gate)
-	gatePart = mk("P01_Gate", Vector3.new(1, WorldDefs.CORRIDOR_HEIGHT, WorldDefs.CORRIDOR_WIDTH), CFrame.new(g + Vector3.new(0, WorldDefs.CORRIDOR_HEIGHT / 2, 0)), Color3.fromRGB(96, 60, 40), Enum.Material.CorrodedMetal)
-	local sign = mk("P01_GateSign", Vector3.new(5, 1.2, 0.2), CFrame.new(g + Vector3.new(-0.7, 6, 0)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(150, 146, 136), Enum.Material.Marble)
+	gatePart = mk(
+		"P01_Gate",
+		Vector3.new(1, WorldDefs.CORRIDOR_HEIGHT, WorldDefs.CORRIDOR_WIDTH),
+		CFrame.new(g + Vector3.new(0, WorldDefs.CORRIDOR_HEIGHT / 2, 0)),
+		Color3.fromRGB(96, 60, 40),
+		Enum.Material.CorrodedMetal
+	)
+	local sign = mk(
+		"P01_GateSign",
+		Vector3.new(5, 1.2, 0.2),
+		CFrame.new(g + Vector3.new(-0.7, 6, 0)) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(150, 146, 136),
+		Enum.Material.Marble
+	)
 	sign.CanCollide = false
 	label(sign, "SCELLÉ — ALIGNER LE RELEVÉ", INK)
 	local pp = prompt(plaquePart, "Turn plaque", "Survey plaque")
@@ -120,7 +156,11 @@ local function buildP01()
 		plaqueLabel.Text = "⌖\n" .. Puzzles.ARROWS[p01.orientation + 1]
 		cueNear(plaquePart.Position, 40, "plaque_turn", { solved = solved })
 		if solved then
-			TweenService:Create(gatePart, TweenInfo.new(2.5, Enum.EasingStyle.Quad), { CFrame = gatePart.CFrame + Vector3.new(0, WorldDefs.CORRIDOR_HEIGHT - 0.5, 0) }):Play()
+			TweenService:Create(
+				gatePart,
+				TweenInfo.new(2.5, Enum.EasingStyle.Quad),
+				{ CFrame = gatePart.CFrame + Vector3.new(0, WorldDefs.CORRIDOR_HEIGHT - 0.5, 0) }
+			):Play()
 			task.delay(2.5, function()
 				gatePart.CanCollide = false
 			end)
@@ -168,12 +208,25 @@ local function buildP02()
 	p02 = Puzzles.newP02(math.random(1, #Puzzles.P02_SOLUTIONS))
 	local wall = Color3.fromRGB(110, 62, 38)
 	for i, pos in P02.valves do
-		local wheel = mk("P02_Valve" .. i, Vector3.new(0.4, 2.6, 2.6), CFrame.new(v(pos)), wall, Enum.Material.CorrodedMetal)
+		local wheel =
+			mk("P02_Valve" .. i, Vector3.new(0.4, 2.6, 2.6), CFrame.new(v(pos)), wall, Enum.Material.CorrodedMetal)
 		wheel.Shape = Enum.PartType.Cylinder -- axis along X: the wheel faces into the gallery
-		local handle = mk("P02_Handle" .. i, Vector3.new(0.3, 2.4, 0.3), CFrame.new(v(pos) + Vector3.new(-0.4, 0, 0)), Color3.fromRGB(180, 150, 70), Enum.Material.Metal)
+		local handle = mk(
+			"P02_Handle" .. i,
+			Vector3.new(0.3, 2.4, 0.3),
+			CFrame.new(v(pos) + Vector3.new(-0.4, 0, 0)),
+			Color3.fromRGB(180, 150, 70),
+			Enum.Material.Metal
+		)
 		handle.CanCollide = false
 		valveHandles[i] = handle
-		local tag = mk("P02_ValveTag" .. i, Vector3.new(2.2, 1.4, 0.2), CFrame.new(v(pos) + Vector3.new(-0.2, 2.4, 0)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(150, 146, 136), Enum.Material.Metal)
+		local tag = mk(
+			"P02_ValveTag" .. i,
+			Vector3.new(2.2, 1.4, 0.2),
+			CFrame.new(v(pos) + Vector3.new(-0.2, 2.4, 0)) * CFrame.Angles(0, math.pi / 2, 0),
+			Color3.fromRGB(150, 146, 136),
+			Enum.Material.Metal
+		)
 		tag.CanCollide = false
 		valveLabels[i] = label(tag, "", Color3.fromRGB(30, 28, 24), Enum.Font.SpecialElite)
 		local pp = prompt(wheel, "Turn valve " .. NUMERALS[i], "Pump valve", 0.6)
@@ -194,18 +247,42 @@ local function buildP02()
 			end
 		end)
 	end
-	local clue = mk("P02_Clue", Vector3.new(4.5, 2.4, 0.2), CFrame.new(v(P02.clue)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(150, 146, 136), Enum.Material.Metal)
+	local clue = mk(
+		"P02_Clue",
+		Vector3.new(4.5, 2.4, 0.2),
+		CFrame.new(v(P02.clue)) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(150, 146, 136),
+		Enum.Material.Metal
+	)
 	clue.CanCollide = false
 	label(clue, Puzzles.p02Clue(p02.solution), Color3.fromRGB(30, 28, 24), Enum.Font.SpecialElite)
 	-- Gauge: a column of water that falls as more valves are set correctly (visible feedback).
-	local gaugeBack = mk("P02_Gauge", Vector3.new(0.2, 6.4, 1.2), CFrame.new(v(P02.gauge)), Color3.fromRGB(200, 196, 180), Enum.Material.SmoothPlastic)
+	local gaugeBack = mk(
+		"P02_Gauge",
+		Vector3.new(0.2, 6.4, 1.2),
+		CFrame.new(v(P02.gauge)),
+		Color3.fromRGB(200, 196, 180),
+		Enum.Material.SmoothPlastic
+	)
 	gaugeBack.CanCollide = false
 	local gl = label(gaugeBack, "NIVEAU", Color3.fromRGB(30, 28, 24))
 	gl.TextTransparency = 0.5
-	;(gl.Parent :: SurfaceGui).Face = Enum.NormalId.Left -- the panel's broad face looks west into the gallery
-	gaugeFill = mk("P02_GaugeFill", Vector3.new(0.3, 6, 0.8), CFrame.new(v(P02.gauge)), Color3.fromRGB(50, 90, 110), Enum.Material.Neon)
+	(gl.Parent :: SurfaceGui).Face = Enum.NormalId.Left -- the panel's broad face looks west into the gallery
+	gaugeFill = mk(
+		"P02_GaugeFill",
+		Vector3.new(0.3, 6, 0.8),
+		CFrame.new(v(P02.gauge)),
+		Color3.fromRGB(50, 90, 110),
+		Enum.Material.Neon
+	)
 	gaugeFill.CanCollide = false
-	local lever = mk("P02_Reset", Vector3.new(0.6, 2, 0.6), CFrame.new(v(P02.reset)), Color3.fromRGB(150, 40, 30), Enum.Material.Metal)
+	local lever = mk(
+		"P02_Reset",
+		Vector3.new(0.6, 2, 0.6),
+		CFrame.new(v(P02.reset)),
+		Color3.fromRGB(150, 40, 30),
+		Enum.Material.Metal
+	)
 	prompt(lever, "Reset valves", "Pump controls").Triggered:Connect(function()
 		if p02.drained then
 			return -- the drained state holds until the cistern refloods on its own
@@ -215,24 +292,54 @@ local function buildP02()
 		cueNear(lever.Position, 50, "valve_reset")
 	end)
 	-- Cistern water: deep until drained. Shallow water appears once drained so the Wader can still hear there.
-	deepWater = mk("P02_CisternDeep", Vector3.new(CISTERN.size.x, 7, CISTERN.size.z), CFrame.new(CISTERN.pos.x, CISTERN.pos.y + 3.5, CISTERN.pos.z), Color3.fromRGB(30, 50, 52), Enum.Material.Glass)
+	deepWater = mk(
+		"P02_CisternDeep",
+		Vector3.new(CISTERN.size.x, 7, CISTERN.size.z),
+		CFrame.new(CISTERN.pos.x, CISTERN.pos.y + 3.5, CISTERN.pos.z),
+		Color3.fromRGB(30, 50, 52),
+		Enum.Material.Glass
+	)
 	deepWater.Transparency = 0.25
 	deepWater.CanCollide = false
 	deepWater.CanQuery = false
-	cisternShallow = mk("P02_CisternShallow", Vector3.new(CISTERN.size.x, 1.2, CISTERN.size.z), CFrame.new(CISTERN.pos.x, CISTERN.pos.y + 0.6, CISTERN.pos.z), Color3.fromRGB(38, 58, 56), Enum.Material.Glass)
+	cisternShallow = mk(
+		"P02_CisternShallow",
+		Vector3.new(CISTERN.size.x, 1.2, CISTERN.size.z),
+		CFrame.new(CISTERN.pos.x, CISTERN.pos.y + 0.6, CISTERN.pos.z),
+		Color3.fromRGB(38, 58, 56),
+		Enum.Material.Glass
+	)
 	cisternShallow.CanCollide = false
 	cisternShallow.CanQuery = false
 	cisternShallow.Transparency = 1
 	local b = v(P02.barrier)
 	local x1 = CISTERN.pos.x - CISTERN.size.x / 2
-	corridorWater = mk("P02_CorridorDeep", Vector3.new(x1 - b.X, 7, WorldDefs.CORRIDOR_WIDTH), CFrame.new((b.X + x1) / 2, b.Y + 3.5, b.Z), Color3.fromRGB(30, 50, 52), Enum.Material.Glass)
+	corridorWater = mk(
+		"P02_CorridorDeep",
+		Vector3.new(x1 - b.X, 7, WorldDefs.CORRIDOR_WIDTH),
+		CFrame.new((b.X + x1) / 2, b.Y + 3.5, b.Z),
+		Color3.fromRGB(30, 50, 52),
+		Enum.Material.Glass
+	)
 	corridorWater.Transparency = 0.3
 	corridorWater.CanCollide = false
 	corridorWater.CanQuery = false
-	barrier = mk("P02_Barrier", Vector3.new(1, WorldDefs.CORRIDOR_HEIGHT, WorldDefs.CORRIDOR_WIDTH), CFrame.new(b + Vector3.new(-1, WorldDefs.CORRIDOR_HEIGHT / 2, 0)), Color3.new(), Enum.Material.SmoothPlastic)
+	barrier = mk(
+		"P02_Barrier",
+		Vector3.new(1, WorldDefs.CORRIDOR_HEIGHT, WorldDefs.CORRIDOR_WIDTH),
+		CFrame.new(b + Vector3.new(-1, WorldDefs.CORRIDOR_HEIGHT / 2, 0)),
+		Color3.new(),
+		Enum.Material.SmoothPlastic
+	)
 	barrier.Transparency = 1
 	barrier.CanQuery = false
-	local warnSign = mk("P02_Sign", Vector3.new(6, 1.4, 0.2), CFrame.new(b + Vector3.new(-1.6, 4.5, 0)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(150, 146, 136), Enum.Material.Metal)
+	local warnSign = mk(
+		"P02_Sign",
+		Vector3.new(6, 1.4, 0.2),
+		CFrame.new(b + Vector3.new(-1.6, 4.5, 0)) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(150, 146, 136),
+		Enum.Material.Metal
+	)
 	warnSign.CanCollide = false
 	label(warnSign, "TROP PROFOND — VOIR LES POMPES", Color3.fromRGB(30, 28, 24), Enum.Font.SpecialElite)
 	refreshValves()
@@ -243,8 +350,14 @@ end
 local function cisternOccupied(): boolean
 	for p in services.PlayerService.all() do
 		local pos = services.PlayerService.position(p)
-		if pos and pos.X > (P02.barrier.x - 4) and pos.X < CISTERN.pos.x + CISTERN.size.x / 2 + 2
-			and math.abs(pos.Z - CISTERN.pos.z) < CISTERN.size.z / 2 + 2 and pos.Y < CISTERN.pos.y + 14 and pos.Y > CISTERN.pos.y - 4 then
+		if
+			pos
+			and pos.X > (P02.barrier.x - 4)
+			and pos.X < CISTERN.pos.x + CISTERN.size.x / 2 + 2
+			and math.abs(pos.Z - CISTERN.pos.z) < CISTERN.size.z / 2 + 2
+			and pos.Y < CISTERN.pos.y + 14
+			and pos.Y > CISTERN.pos.y - 4
+		then
 			return true
 		end
 	end

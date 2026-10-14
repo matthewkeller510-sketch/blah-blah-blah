@@ -47,9 +47,14 @@ local renderers: { [string]: () -> () } = {}
 
 renderers.menu = function()
 	local b = open("menu", "Expedition")
-	for _, e in {
-		{ "Inventory", "inventory" }, { "Field notebook", "notebook" }, { "Party", "party" }, { "Settings", "settings" },
-	} do
+	for _, e in
+		{
+			{ "Inventory", "inventory" },
+			{ "Field notebook", "notebook" },
+			{ "Party", "party" },
+			{ "Settings", "settings" },
+		}
+	do
 		UI.button(b, e[1], function()
 			Panels.toggle(e[2])
 		end, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
@@ -60,11 +65,21 @@ renderers.inventory = function()
 	local b = open("inventory", "Inventory")
 	local d = ctx.state.inventory
 	if not d or #d.items == 0 then
-		UI.label(b, "You are carrying nothing. Crates in the quarry and the quartermaster at the depot are sources of supplies.", 15, C.dim)
+		UI.label(
+			b,
+			"You are carrying nothing. Crates in the quarry and the quartermaster at the depot are sources of supplies.",
+			15,
+			C.dim
+		)
 		return
 	end
 	UI.label(b, string.format("Coins: %d · Class: %s", d.coins, d.class), 15)
-	UI.label(b, "Expedition items are lost to a bag if you die or log out before reaching a shelter. Protected items (navigation supplies) are always kept.", 13, C.dim)
+	UI.label(
+		b,
+		"Expedition items are lost to a bag if you die or log out before reaching a shelter. Protected items (navigation supplies) are always kept.",
+		13,
+		C.dim
+	)
 	for _, it in d.items do
 		local row = UI.frame(b, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
 		UI.corner(row)
@@ -77,7 +92,16 @@ renderers.inventory = function()
 		if it.expedition > 0 then
 			table.insert(tags, it.expedition .. " unbanked")
 		end
-		UI.label(row, string.format("%s ×%d %s", it.name, it.loadout + it.expedition, if #tags > 0 then ("· " .. table.concat(tags, " · ")) else ""), 15)
+		UI.label(
+			row,
+			string.format(
+				"%s ×%d %s",
+				it.name,
+				it.loadout + it.expedition,
+				if #tags > 0 then ("· " .. table.concat(tags, " · ")) else ""
+			),
+			15
+		)
 		if it.category == "light" then
 			UI.button(row, "Equip", function()
 				ctx.send("light.equip", { itemId = it.id })
@@ -99,9 +123,12 @@ renderers.inventory = function()
 				end
 			end
 		elseif it.id == "nav.chalk" or it.id == "nav.sign" then
-			local presets = if it.id == "nav.chalk" then CHALK_PRESETS else SIGN_PRESETS
+			local presets: { string } = if it.id == "nav.chalk" then CHALK_PRESETS else SIGN_PRESETS
 			local key = if it.id == "nav.chalk" then "chalkPreset" else "signPreset"
-			local holder = UI.frame(row, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 })
+			local holder = UI.frame(
+				row,
+				{ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }
+			)
 			local g = Instance.new("UIGridLayout")
 			g.CellSize = UDim2.fromOffset(110, 34)
 			g.CellPadding = UDim2.fromOffset(4, 4)
@@ -158,10 +185,25 @@ renderers.notebook = function()
 			local row = UI.frame(b, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
 			UI.pad(row, 4)
 			UI.list(row, 2)
-			UI.label(row, string.format("%s “%s” at (%d, %d)", rec.kind, nice(rec.content), math.floor(rec.position.X), math.floor(rec.position.Z)), 14)
-			UI.button(row, if rec.allowPartyRecovery then "Party may pick up: ON" else "Party may pick up: OFF", function()
-				ctx.send("nav.partyRecovery", { recordId = rec.recordId, allow = not rec.allowPartyRecovery })
-			end, { Size = UDim2.new(0, 220, 0, 32), BackgroundColor3 = C.teal })
+			UI.label(
+				row,
+				string.format(
+					"%s “%s” at (%d, %d)",
+					rec.kind,
+					nice(rec.content),
+					math.floor(rec.position.X),
+					math.floor(rec.position.Z)
+				),
+				14
+			)
+			UI.button(
+				row,
+				if rec.allowPartyRecovery then "Party may pick up: ON" else "Party may pick up: OFF",
+				function()
+					ctx.send("nav.partyRecovery", { recordId = rec.recordId, allow = not rec.allowPartyRecovery })
+				end,
+				{ Size = UDim2.new(0, 220, 0, 32), BackgroundColor3 = C.teal }
+			)
 		end
 	end
 	if mine == 0 then
@@ -175,9 +217,17 @@ renderers.party = function()
 	if party and #party.members > 0 then
 		UI.label(b, "Current party (this session only)", 16, C.teal)
 		for _, m in party.members do
-			local row = UI.frame(b, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 })
+			local row = UI.frame(
+				b,
+				{ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }
+			)
 			UI.list(row, 2)
-			UI.label(row, string.format("%s%s — %s", if m.leader then "★ " else "", m.name, m.condition), 15, C.teal)
+			UI.label(
+				row,
+				string.format("%s%s — %s", if m.leader then "★ " else "", m.name, m.condition),
+				15,
+				C.teal
+			)
 			if party.isLeader and m.userId ~= Players.LocalPlayer.UserId then
 				UI.button(row, "Remove", function()
 					ctx.send("party.remove", { userId = m.userId })
@@ -307,9 +357,19 @@ function Panels.onboarding(d)
 	local b = open("onboarding", "Before you descend")
 	UI.label(b, "You are joining the search for a survey team that vanished below the recorded quarries.", 15)
 	UI.label(b, "• Light and medical supplies keep you alive. Running low makes things bolder.", 14, C.dim)
-	UI.label(b, "• Loot you pick up is EXPEDITION loot until you reach a shelter. Die or log out first and it stays behind in a bag.", 14, C.dim)
+	UI.label(
+		b,
+		"• Loot you pick up is EXPEDITION loot until you reach a shelter. Die or log out first and it stays behind in a bag.",
+		14,
+		C.dim
+	)
 	UI.label(b, "• Chalk, signs and rope are PROTECTED: you always keep unused ones.", 14, C.dim)
-	UI.label(b, "• Run, hide in niches, or throw a stone to draw attention away. Not everything can be fought.", 14, C.dim)
+	UI.label(
+		b,
+		"• Run, hide in niches, or throw a stone to draw attention away. Not everything can be fought.",
+		14,
+		C.dim
+	)
 	UI.label(b, "Choose a starting class. Every class can do everything; each starts with a small edge.", 15)
 	for _, name in { "Explorer", "Medic", "Runner", "Technician" } do
 		UI.button(b, name .. " — " .. CLASS_TEXT[name], function()
@@ -326,7 +386,16 @@ function Panels.missionList(list)
 		UI.corner(row)
 		UI.pad(row, 6)
 		UI.list(row, 4)
-		UI.label(row, string.format("%s %s%s", m.id, m.name, if m.estimate then (" · " .. m.estimate .. " · risk " .. tostring(m.risk)) else ""), 15)
+		UI.label(
+			row,
+			string.format(
+				"%s %s%s",
+				m.id,
+				m.name,
+				if m.estimate then (" · " .. m.estimate .. " · risk " .. tostring(m.risk)) else ""
+			),
+			15
+		)
 		if m.status ~= "SLICE" then
 			UI.label(row, "Planned — not built in this milestone.", 13, C.dim)
 		elseif m.available then
@@ -346,7 +415,7 @@ function Panels.missionList(list)
 	end
 end
 
-function Panels.shelter(d)
+function Panels.shelter(d: any)
 	if not d.open then
 		if current == "shelter" then
 			close()
@@ -359,11 +428,24 @@ function Panels.shelter(d)
 		patched = "PATCHED — some entrances protected.",
 		secured = "SECURED — creatures cannot enter or harm anyone inside.",
 	}
-	UI.label(b, fortText[d.fortification] or d.fortification, 16, if d.fortification == "secured" then C.teal else C.warn)
+	UI.label(
+		b,
+		fortText[d.fortification] or d.fortification,
+		16,
+		if d.fortification == "secured" then C.teal else C.warn
+	)
 	for _, e in d.entrances do
 		UI.label(b, string.format("• %s: %s", nice(e.id), if e.protected then "protected" else "VULNERABLE"), 14)
 	end
-	UI.label(b, string.format("Passive recovery here stops at %d%% health. Medical supplies heal further.", math.floor(d.passiveCap * 100)), 13, C.dim)
+	UI.label(
+		b,
+		string.format(
+			"Passive recovery here stops at %d%% health. Medical supplies heal further.",
+			math.floor(d.passiveCap * 100)
+		),
+		13,
+		C.dim
+	)
 	UI.label(b, "Improvements", 17)
 	for _, u in d.upgrades do
 		local row = UI.frame(b, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
@@ -395,7 +477,17 @@ function Panels.shelter(d)
 		for id, n in r.inputs do
 			table.insert(ins, n .. "× " .. nice(string.match(id, "%.(.+)$") or id))
 		end
-		UI.label(row, string.format("%s ×%d ← %s%s", r.output, r.outputCount, table.concat(ins, ", "), if r.requiresWorkbench then " (workbench)" else ""), 14)
+		UI.label(
+			row,
+			string.format(
+				"%s ×%d ← %s%s",
+				r.output,
+				r.outputCount,
+				table.concat(ins, ", "),
+				if r.requiresWorkbench then " (workbench)" else ""
+			),
+			14
+		)
 		UI.button(row, if r.canCraft then "Craft" else "Missing materials", function()
 			if r.canCraft then
 				ctx.send("shelter.craft", { recipeId = r.id })
@@ -416,7 +508,15 @@ function Panels.shelter(d)
 		end)
 	end
 	UI.label(b, string.format("Class: %s (coins %d)", d.class, d.coins), 17)
-	UI.label(b, string.format("Classes give small (~5%%) head starts; everyone can do everything. Changing costs %d earned coins.", d.classCost), 13, C.dim)
+	UI.label(
+		b,
+		string.format(
+			"Classes give small (~5%%) head starts; everyone can do everything. Changing costs %d earned coins.",
+			d.classCost
+		),
+		13,
+		C.dim
+	)
 	for _, cls in d.classes do
 		if cls ~= d.class then
 			UI.button(b, "Switch to " .. cls, function()
@@ -433,7 +533,7 @@ function Panels.shelter(d)
 	end, { BackgroundColor3 = C.dim })
 end
 
-function Panels.shop(d)
+function Panels.shop(d: any)
 	local b = open("shop", "Quartermaster (placeholder)")
 	UI.label(b, string.format("Coins: %d. Everything here can also be found in the tunnels.", d.coins), 14)
 	UI.label(b, "Buy", 17)
@@ -457,9 +557,14 @@ function Panels.shop(d)
 		UI.label(b, "No products are configured in this build. Purchases are never required to explore.", 13, C.dim)
 	end
 	for _, p in d.products do
-		UI.button(b, string.format("%s — %s", p.name, if p.price then (p.price .. " Robux") else "price unavailable"), function()
-			ctx.send("shop.product", { productId = p.productId })
-		end, { BackgroundColor3 = C.dim })
+		UI.button(
+			b,
+			string.format("%s — %s", p.name, if p.price then (p.price .. " Robux") else "price unavailable"),
+			function()
+				ctx.send("shop.product", { productId = p.productId })
+			end,
+			{ BackgroundColor3 = C.dim }
+		)
 	end
 end
 

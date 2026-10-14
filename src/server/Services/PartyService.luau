@@ -135,7 +135,11 @@ function PartyService.invite(from: Player, toUserId: number)
 	end
 	invites[to] = invites[to] or {}
 	invites[to][from.UserId] = os.clock() + INVITE_SECONDS
-	services.PlayerService.send(to, "partyInvite", { fromUserId = from.UserId, fromName = from.DisplayName, seconds = INVITE_SECONDS })
+	services.PlayerService.send(
+		to,
+		"partyInvite",
+		{ fromUserId = from.UserId, fromName = from.DisplayName, seconds = INVITE_SECONDS }
+	)
 	services.PlayerService.notify(from, "Invitation sent to " .. to.DisplayName .. ".", "info")
 end
 
@@ -199,10 +203,11 @@ function PartyService.accept(player: Player, fromUserId: number)
 			return
 		end
 	else
-		pid = HttpService:GenerateGUID(false)
-		p = { id = pid, leader = from, members = { from } }
-		parties[pid] = p
-		partyOf[from] = pid
+		local newId = HttpService:GenerateGUID(false)
+		pid = newId
+		p = { id = newId, leader = from, members = { from } }
+		parties[newId] = p
+		partyOf[from] = newId
 	end
 	table.insert(p.members, player)
 	partyOf[player] = pid

@@ -13,25 +13,29 @@ Net.Names = {
 	State = "State", -- server -> client: (channel: string, data: table)
 }
 
-local folder: Folder
+local folder: Folder? = nil
 
 local function getFolder(): Folder
-	if folder then
-		return folder
+	local existing = folder
+	if existing then
+		return existing
 	end
+	local result: Folder
 	if RunService:IsServer() then
 		local f = ReplicatedStorage:FindFirstChild("Remotes") :: Folder?
-		if not f then
+		if f then
+			result = f
+		else
 			local nf = Instance.new("Folder")
 			nf.Name = "Remotes"
 			nf.Parent = ReplicatedStorage
-			f = nf
+			result = nf
 		end
-		folder = f :: Folder
 	else
-		folder = ReplicatedStorage:WaitForChild("Remotes") :: Folder
+		result = ReplicatedStorage:WaitForChild("Remotes") :: Folder
 	end
-	return folder
+	folder = result
+	return result
 end
 
 function Net.event(name: string): RemoteEvent

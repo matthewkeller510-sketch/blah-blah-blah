@@ -38,12 +38,18 @@ function StoryService.push(player: Player, onlyIfChanged: boolean?)
 		act = "Act I — The Descent",
 		stepIndex = index,
 		steps = #Story.ACT1,
-		objective = if step then step.objective else "Act I complete. The network remains open — later acts are not built yet.",
+		objective = if step
+			then step.objective
+			else "Act I complete. The network remains open — later acts are not built yet.",
 		journal = Story.journal(f),
 		complete = step == nil,
 	})
 	if lastStep[player] and lastStep[player] ~= id then
-		services.PlayerService.notify(player, "Journal updated: " .. (if step then step.objective else "Act I complete."), "info")
+		services.PlayerService.notify(
+			player,
+			"Journal updated: " .. (if step then step.objective else "Act I complete."),
+			"info"
+		)
 	end
 	lastStep[player] = id
 end
@@ -59,16 +65,24 @@ function StoryService.atBoard(player: Player): boolean
 		return false
 	end
 	if Inventory.count(s.profile.inventory, "treasure.old_expedition_tag") < 1 then
-		services.PlayerService.notify(player, "Mara Voss: \"You found the tag? Then bring it here — it should be with you.\"", "info")
+		services.PlayerService.notify(
+			player,
+			'Mara Voss: "You found the tag? Then bring it here — it should be with you."',
+			"info"
+		)
 		return false
 	end
 	s.profile.storyStates["A1.complete"] = "1"
 	s.profile.coins += ACT1_REWARD_COINS
 	services.SaveService.markDirty(player)
 	task.spawn(services.SaveService.commit, player)
-	services.PlayerService.notify(player,
-		"Mara Voss: \"Team Seven's number. On a tag older than my grandmother. Whatever they measured down there, it measured them back.\" (+"
-			.. ACT1_REWARD_COINS .. " coins)", "info")
+	services.PlayerService.notify(
+		player,
+		'Mara Voss: "Team Seven\'s number. On a tag older than my grandmother. Whatever they measured down there, it measured them back." (+'
+			.. ACT1_REWARD_COINS
+			.. " coins)",
+		"info"
+	)
 	services.PlayerService.pushInventory(player)
 	StoryService.push(player)
 	return true

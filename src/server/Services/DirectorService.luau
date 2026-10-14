@@ -30,8 +30,10 @@ function DirectorService.pressure(player: Player): number
 		return 0
 	end
 	local r = WorldDefs.region(s.regionId)
-	local med = Inventory.count(s.profile.inventory, "med.bandage") + Inventory.count(s.profile.inventory, "med.cloth_dressing")
-	local hasLight = s.profile.equippedLight ~= nil and Inventory.count(s.profile.inventory, s.profile.equippedLight) > 0
+	local med = Inventory.count(s.profile.inventory, "med.bandage")
+		+ Inventory.count(s.profile.inventory, "med.cloth_dressing")
+	local hasLight = s.profile.equippedLight ~= nil
+		and Inventory.count(s.profile.inventory, s.profile.equippedLight) > 0
 	return Director.pressure(Config.Director, {
 		regionDanger = r and r.danger or 0,
 		healthFraction = s.vitals.health / s.vitals.max,
@@ -50,7 +52,14 @@ function DirectorService.mayEngage(player: Player, threshold: number): boolean
 	if not s or s.insideShelterId or s.vitals.condition == "downed" then
 		return false
 	end
-	return Director.mayStartDamagingThreat(Config.Director, victim(player), activeDamaging, os.clock(), DirectorService.pressure(player), threshold)
+	return Director.mayStartDamagingThreat(
+		Config.Director,
+		victim(player),
+		activeDamaging,
+		os.clock(),
+		DirectorService.pressure(player),
+		threshold
+	)
 end
 
 function DirectorService.beginThreat(player: Player)

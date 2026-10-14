@@ -32,7 +32,14 @@ local function v(t: { x: number, y: number, z: number }): Vector3
 	return Vector3.new(t.x, t.y, t.z)
 end
 
-local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3?, material: Enum.Material?): Part
+local function part(
+	parent: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3?,
+	material: Enum.Material?
+): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
@@ -47,7 +54,14 @@ local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, c
 	return p
 end
 
-local function deco(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3?, material: Enum.Material?): Part
+local function deco(
+	parent: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3?,
+	material: Enum.Material?
+): Part
 	local p = part(parent, name, size, cf, color, material)
 	p.CanCollide = false
 	p.CanQuery = false
@@ -84,7 +98,14 @@ local function openings(chamberId: string): { [string]: boolean }
 end
 
 -- A wall along one side, split around a centered opening of width W when open.
-local function sideWall(parent: Instance, center: Vector3, length: number, height: number, alongX: boolean, open: boolean)
+local function sideWall(
+	parent: Instance,
+	center: Vector3,
+	length: number,
+	height: number,
+	alongX: boolean,
+	open: boolean
+)
 	local y = center.Y + height / 2
 	if not open then
 		local size = if alongX then Vector3.new(length, height, WALL) else Vector3.new(WALL, height, length)
@@ -95,7 +116,9 @@ local function sideWall(parent: Instance, center: Vector3, length: number, heigh
 	for _, sgn in { -1, 1 } do
 		local off = sgn * (W / 2 + seg / 2)
 		local size = if alongX then Vector3.new(seg, height, WALL) else Vector3.new(WALL, height, seg)
-		local pos = if alongX then Vector3.new(center.X + off, y, center.Z) else Vector3.new(center.X, y, center.Z + off)
+		local pos = if alongX
+			then Vector3.new(center.X + off, y, center.Z)
+			else Vector3.new(center.X, y, center.Z + off)
 		part(parent, "Wall", size, CFrame.new(pos))
 	end
 	if height > H then
@@ -147,7 +170,14 @@ local function buildSlopedCorridor(f: Folder, a: any, b: any)
 	local len = (s1 - s0).Magnitude
 	local look = CFrame.lookAt((s0 + s1) / 2, s1)
 	local wet = a.regionId == "R03" and b.regionId == "R03"
-	part(f, "Floor", Vector3.new(W + WALL * 2, 1, len + 2), look * CFrame.new(0, -0.5, 0), if wet then WET else STONE_DARK, Enum.Material.Slate)
+	part(
+		f,
+		"Floor",
+		Vector3.new(W + WALL * 2, 1, len + 2),
+		look * CFrame.new(0, -0.5, 0),
+		if wet then WET else STONE_DARK,
+		Enum.Material.Slate
+	)
 	part(f, "Ceiling", Vector3.new(W + WALL * 2, 2, len + 2), look * CFrame.new(0, H + 1, 0), STONE)
 	part(f, "WallA", Vector3.new(WALL, H + 2, len + 2), look * CFrame.new(W / 2 + WALL / 2, H / 2, 0), STONE)
 	part(f, "WallB", Vector3.new(WALL, H + 2, len + 2), look * CFrame.new(-W / 2 - WALL / 2, H / 2, 0), STONE)
@@ -203,25 +233,51 @@ local function buildLandmarks()
 	-- Split pier: a dry-stacked pier split by a vertical crack
 	local pier = assert(WorldDefs.chamber("R01.split_pier"))
 	for _, dx in { -2.6, 2.6 } do
-		part(lm, "SplitPier", Vector3.new(4.4, pier.size.y, 8), CFrame.new(pier.pos.x + dx, pier.size.y / 2, pier.pos.z), STONE, Enum.Material.Cobblestone)
+		part(
+			lm,
+			"SplitPier",
+			Vector3.new(4.4, pier.size.y, 8),
+			CFrame.new(pier.pos.x + dx, pier.size.y / 2, pier.pos.z),
+			STONE,
+			Enum.Material.Cobblestone
+		)
 	end
 	-- Sloped gallery: an inclined ceiling slab and fallen blocks
 	local slope = assert(WorldDefs.chamber("R01.sloped_gallery"))
-	part(lm, "SlopedSlab", Vector3.new(slope.size.x, 2, slope.size.z * 1.05),
-		CFrame.new(slope.pos.x, slope.size.y - 5, slope.pos.z) * CFrame.Angles(math.rad(14), 0, 0), STONE)
-	part(lm, "FallenBlock", Vector3.new(5, 3, 4), CFrame.new(slope.pos.x + 7, 1.5, slope.pos.z - 6) * CFrame.Angles(0, 0.4, 0.1), STONE)
+	part(
+		lm,
+		"SlopedSlab",
+		Vector3.new(slope.size.x, 2, slope.size.z * 1.05),
+		CFrame.new(slope.pos.x, slope.size.y - 5, slope.pos.z) * CFrame.Angles(math.rad(14), 0, 0),
+		STONE
+	)
+	part(
+		lm,
+		"FallenBlock",
+		Vector3.new(5, 3, 4),
+		CFrame.new(slope.pos.x + 7, 1.5, slope.pos.z - 6) * CFrame.Angles(0, 0.4, 0.1),
+		STONE
+	)
 	-- Rusted pulley: frame + wheel, with a rope hanging into a shaft mouth in the ceiling
 	local pul = assert(WorldDefs.chamber("R01.rusted_pulley"))
 	local px, pz = pul.pos.x + 6, pul.pos.z + 4
 	part(lm, "PulleyPostA", Vector3.new(1, 14, 1), CFrame.new(px - 3, 7, pz), RUST, Enum.Material.CorrodedMetal)
 	part(lm, "PulleyPostB", Vector3.new(1, 14, 1), CFrame.new(px + 3, 7, pz), RUST, Enum.Material.CorrodedMetal)
 	part(lm, "PulleyBeam", Vector3.new(7, 1, 1), CFrame.new(px, 14, pz), RUST, Enum.Material.CorrodedMetal)
-	local wheel = part(lm, "PulleyWheel", Vector3.new(0.6, 4, 4), CFrame.new(px, 12, pz), RUST, Enum.Material.CorrodedMetal)
+	local wheel =
+		part(lm, "PulleyWheel", Vector3.new(0.6, 4, 4), CFrame.new(px, 12, pz), RUST, Enum.Material.CorrodedMetal)
 	wheel.Shape = Enum.PartType.Cylinder
 	deco(lm, "HangingRope", Vector3.new(0.3, 10, 0.3), CFrame.new(px + 1.6, 7, pz), WOOD, Enum.Material.Fabric)
 	-- Survey board: numbered survey plaque (R01 orientation landmark)
 	local sb = assert(WorldDefs.chamber("R01.survey_board"))
-	local board = part(lm, "SurveyBoard", Vector3.new(8, 5, 0.6), CFrame.new(sb.pos.x, 5, sb.pos.z + sb.size.z / 2 - 0.4), WOOD, Enum.Material.WoodPlanks)
+	local board = part(
+		lm,
+		"SurveyBoard",
+		Vector3.new(8, 5, 0.6),
+		CFrame.new(sb.pos.x, 5, sb.pos.z + sb.size.z / 2 - 0.4),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.LightInfluence = 1
@@ -240,10 +296,22 @@ local function buildLandmarks()
 	local rng = Random.new(1401)
 	for i = 1, 16 do
 		local sx, sz = rng:NextNumber(-12, 12), rng:NextNumber(-10, 10)
-		part(rubbleFolder, "Rubble" .. i, Vector3.new(rng:NextNumber(1.5, 3.5), rng:NextNumber(0.6, 1.4), rng:NextNumber(1.5, 3.5)),
-			CFrame.new(rub.pos.x + sx, 0.4, rub.pos.z + sz) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), STONE_DARK, Enum.Material.Slate)
+		part(
+			rubbleFolder,
+			"Rubble" .. i,
+			Vector3.new(rng:NextNumber(1.5, 3.5), rng:NextNumber(0.6, 1.4), rng:NextNumber(1.5, 3.5)),
+			CFrame.new(rub.pos.x + sx, 0.4, rub.pos.z + sz) * CFrame.Angles(0, rng:NextNumber(0, 3), 0),
+			STONE_DARK,
+			Enum.Material.Slate
+		)
 	end
-	local noisy = part(lm, "NoisyFloorVolume", Vector3.new(rub.size.x, 6, rub.size.z + 40), CFrame.new(rub.pos.x, 3, rub.pos.z), STONE)
+	local noisy = part(
+		lm,
+		"NoisyFloorVolume",
+		Vector3.new(rub.size.x, 6, rub.size.z + 40),
+		CFrame.new(rub.pos.x, 3, rub.pos.z),
+		STONE
+	)
 	noisy.Transparency = 1
 	noisy.CanCollide = false
 	noisy.CanQuery = false
@@ -258,16 +326,31 @@ local function boneInsert(parent: Instance, center: Vector3, facing: Vector3, wi
 	for row = 0, 1 do
 		for col = 0, cols - 1 do
 			local x = -width / 2 + 0.8 + col * ((width - 1.6) / (cols - 1))
-			local skull = deco(parent, "Skull", Vector3.new(1.1, 1.1, 1.1), cf * CFrame.new(x, -1 + row * 2.2, -0.2), BONE, Enum.Material.SmoothPlastic)
+			local skull = deco(
+				parent,
+				"Skull",
+				Vector3.new(1.1, 1.1, 1.1),
+				cf * CFrame.new(x, -1 + row * 2.2, -0.2),
+				BONE,
+				Enum.Material.SmoothPlastic
+			)
 			skull.Shape = Enum.PartType.Ball
 		end
 	end
-	deco(parent, "Femurs", Vector3.new(width, 0.5, 0.5), cf * CFrame.new(0, 0.1, -0.1), BONE, Enum.Material.SmoothPlastic)
+	deco(
+		parent,
+		"Femurs",
+		Vector3.new(width, 0.5, 0.5),
+		cf * CFrame.new(0, 0.1, -0.1),
+		BONE,
+		Enum.Material.SmoothPlastic
+	)
 end
 
 local function plaque(parent: Instance, cf: CFrame, text: string, size: Vector2?)
 	local sz = size or Vector2.new(3.2, 1.6)
-	local p = part(parent, "Plaque", Vector3.new(sz.X, sz.Y, 0.25), cf, Color3.fromRGB(150, 146, 136), Enum.Material.Marble)
+	local p =
+		part(parent, "Plaque", Vector3.new(sz.X, sz.Y, 0.25), cf, Color3.fromRGB(150, 146, 136), Enum.Material.Marble)
 	p.CanCollide = false
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
@@ -290,22 +373,44 @@ local function buildOssuary()
 	local bg = assert(WorldDefs.chamber("R02.bone_gate"))
 	local y0 = bg.pos.y
 	for _, dx in { -9, 9 } do
-		local pier = part(f, "BoneGatePier", Vector3.new(4, 12, 4), CFrame.new(bg.pos.x + dx, y0 + 6, bg.pos.z + 10), BONE, Enum.Material.Pebble)
+		local pier = part(
+			f,
+			"BoneGatePier",
+			Vector3.new(4, 12, 4),
+			CFrame.new(bg.pos.x + dx, y0 + 6, bg.pos.z + 10),
+			BONE,
+			Enum.Material.Pebble
+		)
 		pier.Name = "BoneGatePier"
 	end
-	part(f, "BoneGateLintel", Vector3.new(22, 2, 4), CFrame.new(bg.pos.x, y0 + 12, bg.pos.z + 10), BONE, Enum.Material.Pebble)
+	part(
+		f,
+		"BoneGateLintel",
+		Vector3.new(22, 2, 4),
+		CFrame.new(bg.pos.x, y0 + 12, bg.pos.z + 10),
+		BONE,
+		Enum.Material.Pebble
+	)
 	plaque(f, CFrame.new(bg.pos.x, y0 + 9, bg.pos.z + 7.8), "OSSUAIRE — SECTEUR NORD", Vector2.new(8, 1.4))
 	boneInsert(f, Vector3.new(bg.pos.x - 13.6, y0 + 3.5, bg.pos.z - 10), Vector3.new(1, 0, 0), 6)
 	-- Hall of Plaques: numbered plaques in rows (histories identify places; one row is the P01 clue context)
 	local ph = assert(WorldDefs.chamber("R02.plaque_hall"))
 	local yh = ph.pos.y
 	for i = 0, 3 do
-		plaque(f, CFrame.new(ph.pos.x + 14.6, yh + 4 + (i % 2) * 2, ph.pos.z - 16 + i * 2.4) * CFrame.Angles(0, math.pi / 2, 0),
-			string.format("GALERIE %d\nRELEVÉ %d", 31 + i, 1786 + i * 3))
+		plaque(
+			f,
+			CFrame.new(ph.pos.x + 14.6, yh + 4 + (i % 2) * 2, ph.pos.z - 16 + i * 2.4)
+				* CFrame.Angles(0, math.pi / 2, 0),
+			string.format("GALERIE %d\nRELEVÉ %d", 31 + i, 1786 + i * 3)
+		)
 	end
 	for i = 0, 3 do
-		plaque(f, CFrame.new(ph.pos.x - 14.6, yh + 4 + (i % 2) * 2, ph.pos.z + 9 + i * 2.4) * CFrame.Angles(0, -math.pi / 2, 0),
-			string.format("SECTEUR %s", string.char(65 + i)))
+		plaque(
+			f,
+			CFrame.new(ph.pos.x - 14.6, yh + 4 + (i % 2) * 2, ph.pos.z + 9 + i * 2.4)
+				* CFrame.Angles(0, -math.pi / 2, 0),
+			string.format("SECTEUR %s", string.char(65 + i))
+		)
 	end
 	-- inserts avoid the doorways and the P01 carvings (south-west and north-east)
 	boneInsert(f, Vector3.new(ph.pos.x - 10, yh + 3.5, ph.pos.z + 19.4), Vector3.new(0, 0, -1), 7)
@@ -314,13 +419,27 @@ local function buildOssuary()
 	local lc = assert(WorldDefs.chamber("R02.lantern_crypt"))
 	for i = -1, 1 do
 		local nx = lc.pos.x - 12.4
-		deco(f, "LampNiche", Vector3.new(0.4, 2, 1.6), CFrame.new(nx, lc.pos.y + 5, lc.pos.z + i * 6), Color3.fromRGB(14, 12, 10), Enum.Material.SmoothPlastic)
+		deco(
+			f,
+			"LampNiche",
+			Vector3.new(0.4, 2, 1.6),
+			CFrame.new(nx, lc.pos.y + 5, lc.pos.z + i * 6),
+			Color3.fromRGB(14, 12, 10),
+			Enum.Material.SmoothPlastic
+		)
 		part(f, "NicheSill", Vector3.new(1, 0.3, 2.2), CFrame.new(nx + 0.3, lc.pos.y + 4, lc.pos.z + i * 6), STONE)
 	end
 	boneInsert(f, Vector3.new(lc.pos.x, lc.pos.y + 3.5, lc.pos.z + 12.4), Vector3.new(0, 0, -1), 10)
 	-- Sealed Chapel: altar and a tarnished cross-free reliquary shelf (neutral, fictional)
 	local ch = assert(WorldDefs.chamber("R02.sealed_chapel"))
-	part(f, "Altar", Vector3.new(6, 3, 3), CFrame.new(ch.pos.x, ch.pos.y + 1.5, ch.pos.z + 8), STONE, Enum.Material.Marble)
+	part(
+		f,
+		"Altar",
+		Vector3.new(6, 3, 3),
+		CFrame.new(ch.pos.x, ch.pos.y + 1.5, ch.pos.z + 8),
+		STONE,
+		Enum.Material.Marble
+	)
 	plaque(f, CFrame.new(ch.pos.x, ch.pos.y + 6, ch.pos.z + 11.6), "RELEVÉ SCELLÉ — ÉQUIPE 7", Vector2.new(6, 1.4))
 	-- Long Ossuary: inserts along both walls
 	local lo = assert(WorldDefs.chamber("R02.ossuary_long"))
@@ -330,7 +449,14 @@ end
 
 local function waterVolume(parent: Instance, center: Vector3, size: Vector3)
 	-- Shallow water: non-colliding, unqueryable volume whose top is 1.2 studs above the floor.
-	local w = part(parent, "ShallowWater", Vector3.new(size.X, 1.2, size.Z), CFrame.new(center.X, center.Y + 0.6, center.Z), WATER, Enum.Material.Glass)
+	local w = part(
+		parent,
+		"ShallowWater",
+		Vector3.new(size.X, 1.2, size.Z),
+		CFrame.new(center.X, center.Y + 0.6, center.Z),
+		WATER,
+		Enum.Material.Glass
+	)
 	w.Transparency = 0.35
 	w.Reflectance = 0.15
 	w.CanCollide = false
@@ -342,7 +468,14 @@ end
 
 local function stone(parent: Instance, x: number, y: number, z: number)
 	-- Stepping stone: dry footing above the water line (silent to water-sensitive hearing).
-	part(parent, "SteppingStone", Vector3.new(3.2, 1.7, 3.2), CFrame.new(x, y + 0.85, z) * CFrame.Angles(0, math.rad((x * 37 + z) % 40), 0), WET, Enum.Material.Slate)
+	part(
+		parent,
+		"SteppingStone",
+		Vector3.new(3.2, 1.7, 3.2),
+		CFrame.new(x, y + 0.85, z) * CFrame.Angles(0, math.rad((x * 37 + z) % 40), 0),
+		WET,
+		Enum.Material.Slate
+	)
 end
 
 local function buildWaterworks()
@@ -355,15 +488,49 @@ local function buildWaterworks()
 			-- silt lines: old water marks painted along each wall
 			local silt = Color3.fromRGB(70, 64, 50)
 			local y = c.pos.y + 2.6
-			deco(f, "SiltLine", Vector3.new(c.size.x, 0.25, 0.1), CFrame.new(c.pos.x, y, c.pos.z + c.size.z / 2 - 0.05), silt, Enum.Material.Mud)
-			deco(f, "SiltLine", Vector3.new(c.size.x, 0.25, 0.1), CFrame.new(c.pos.x, y, c.pos.z - c.size.z / 2 + 0.05), silt, Enum.Material.Mud)
-			deco(f, "SiltLine", Vector3.new(0.1, 0.25, c.size.z), CFrame.new(c.pos.x + c.size.x / 2 - 0.05, y, c.pos.z), silt, Enum.Material.Mud)
-			deco(f, "SiltLine", Vector3.new(0.1, 0.25, c.size.z), CFrame.new(c.pos.x - c.size.x / 2 + 0.05, y, c.pos.z), silt, Enum.Material.Mud)
+			deco(
+				f,
+				"SiltLine",
+				Vector3.new(c.size.x, 0.25, 0.1),
+				CFrame.new(c.pos.x, y, c.pos.z + c.size.z / 2 - 0.05),
+				silt,
+				Enum.Material.Mud
+			)
+			deco(
+				f,
+				"SiltLine",
+				Vector3.new(c.size.x, 0.25, 0.1),
+				CFrame.new(c.pos.x, y, c.pos.z - c.size.z / 2 + 0.05),
+				silt,
+				Enum.Material.Mud
+			)
+			deco(
+				f,
+				"SiltLine",
+				Vector3.new(0.1, 0.25, c.size.z),
+				CFrame.new(c.pos.x + c.size.x / 2 - 0.05, y, c.pos.z),
+				silt,
+				Enum.Material.Mud
+			)
+			deco(
+				f,
+				"SiltLine",
+				Vector3.new(0.1, 0.25, c.size.z),
+				CFrame.new(c.pos.x - c.size.x / 2 + 0.05, y, c.pos.z),
+				silt,
+				Enum.Material.Mud
+			)
 		end
 	end
 	for _, cor in WorldDefs.Corridors do
 		local a, b = assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to))
-		if a.regionId == "R03" and b.regionId == "R03" and a.pos.y == b.pos.y and not (a.dry and b.dry) and cor.gate == nil then
+		if
+			a.regionId == "R03"
+			and b.regionId == "R03"
+			and a.pos.y == b.pos.y
+			and not (a.dry and b.dry)
+			and cor.gate == nil
+		then
 			-- exact corridor span between the two chamber walls
 			if a.pos.x == b.pos.x then
 				local lo, hi = if a.pos.z < b.pos.z then a else b, if a.pos.z < b.pos.z then b else a
@@ -388,16 +555,44 @@ local function buildWaterworks()
 	-- Old pumps: large housings and pipes in the dry gallery
 	local pg = assert(WorldDefs.chamber("R03.pump_gallery"))
 	for i = -1, 1, 2 do
-		local housing = part(f, "PumpHousing", Vector3.new(6, 5, 5), CFrame.new(pg.pos.x + i * 8, pg.pos.y + 2.5, pg.pos.z + 8), RUST, Enum.Material.CorrodedMetal)
+		local housing = part(
+			f,
+			"PumpHousing",
+			Vector3.new(6, 5, 5),
+			CFrame.new(pg.pos.x + i * 8, pg.pos.y + 2.5, pg.pos.z + 8),
+			RUST,
+			Enum.Material.CorrodedMetal
+		)
 		housing.Shape = Enum.PartType.Cylinder
-		part(f, "PumpPipe", Vector3.new(1.4, 12, 1.4), CFrame.new(pg.pos.x + i * 8, pg.pos.y + 9, pg.pos.z + 8), RUST, Enum.Material.CorrodedMetal)
+		part(
+			f,
+			"PumpPipe",
+			Vector3.new(1.4, 12, 1.4),
+			CFrame.new(pg.pos.x + i * 8, pg.pos.y + 9, pg.pos.z + 8),
+			RUST,
+			Enum.Material.CorrodedMetal
+		)
 	end
 	for i = 0, 2 do
-		deco(f, "WallPipe", Vector3.new(1, 1, 30), CFrame.new(pg.pos.x + 15.3, pg.pos.y + 9 + i * 1.6, pg.pos.z), RUST, Enum.Material.CorrodedMetal)
+		deco(
+			f,
+			"WallPipe",
+			Vector3.new(1, 1, 30),
+			CFrame.new(pg.pos.x + 15.3, pg.pos.y + 9 + i * 1.6, pg.pos.z),
+			RUST,
+			Enum.Material.CorrodedMetal
+		)
 	end
 	-- Pump platform: a raised iron deck (the shelter exterior is literally above the water)
 	local pp = assert(WorldDefs.chamber("R03.pump_platform"))
-	part(f, "PlatformGrate", Vector3.new(pp.size.x - 2, 0.4, pp.size.z - 2), CFrame.new(pp.pos.x, pp.pos.y + 0.2, pp.pos.z), Color3.fromRGB(70, 70, 72), Enum.Material.DiamondPlate)
+	part(
+		f,
+		"PlatformGrate",
+		Vector3.new(pp.size.x - 2, 0.4, pp.size.z - 2),
+		CFrame.new(pp.pos.x, pp.pos.y + 0.2, pp.pos.z),
+		Color3.fromRGB(70, 70, 72),
+		Enum.Material.DiamondPlate
+	)
 end
 
 -- Hiding niches (F07): a shallow framed recess against a wall. Players step in via a prompt.
@@ -409,10 +604,29 @@ local function buildHidingSpots()
 		local side = Vector3.new(-facing.Z, 0, facing.X)
 		local cf = CFrame.lookAt(base, base + facing)
 		for _, sgn in { -1, 1 } do
-			part(f, "NichePillar", Vector3.new(1, 8, 2.6), CFrame.new(base + side * sgn * 2.4 + facing * 1.3 + Vector3.new(0, 4, 0)) * (cf - cf.Position), STONE_DARK, Enum.Material.Cobblestone)
+			part(
+				f,
+				"NichePillar",
+				Vector3.new(1, 8, 2.6),
+				CFrame.new(base + side * sgn * 2.4 + facing * 1.3 + Vector3.new(0, 4, 0)) * (cf - cf.Position),
+				STONE_DARK,
+				Enum.Material.Cobblestone
+			)
 		end
-		part(f, "NicheLintel", Vector3.new(5.8, 1, 2.6), CFrame.new(base + facing * 1.3 + Vector3.new(0, 8.5, 0)) * (cf - cf.Position), STONE_DARK, Enum.Material.Cobblestone)
-		local anchor = part(f, "HideAnchor", Vector3.new(3, 6, 1), CFrame.new(base + facing * 1.6 + Vector3.new(0, 3, 0)) * (cf - cf.Position))
+		part(
+			f,
+			"NicheLintel",
+			Vector3.new(5.8, 1, 2.6),
+			CFrame.new(base + facing * 1.3 + Vector3.new(0, 8.5, 0)) * (cf - cf.Position),
+			STONE_DARK,
+			Enum.Material.Cobblestone
+		)
+		local anchor = part(
+			f,
+			"HideAnchor",
+			Vector3.new(3, 6, 1),
+			CFrame.new(base + facing * 1.6 + Vector3.new(0, 3, 0)) * (cf - cf.Position)
+		)
 		anchor.Transparency = 1
 		anchor.CanCollide = false
 		anchor.CanQuery = false
@@ -446,8 +660,18 @@ local function buildShelterExteriors()
 		local doorPos = WorldBuilder.shelterDoor(id)
 		local dir = SIDE_OFFSETS[s.doorSide]
 		local size = if dir.X ~= 0 then Vector3.new(1, 9, 8) else Vector3.new(8, 9, 1)
-		local color = if s.theme == "office" then WOOD elseif s.theme == "ironwork" then Color3.fromRGB(70, 70, 72) else RUST
-		local door = part(f, "ShelterDoor", size, CFrame.new(doorPos), color, if s.theme == "office" then Enum.Material.WoodPlanks else Enum.Material.CorrodedMetal)
+		local color = if s.theme == "office"
+			then WOOD
+			elseif s.theme == "ironwork" then Color3.fromRGB(70, 70, 72)
+			else RUST
+		local door = part(
+			f,
+			"ShelterDoor",
+			size,
+			CFrame.new(doorPos),
+			color,
+			if s.theme == "office" then Enum.Material.WoodPlanks else Enum.Material.CorrodedMetal
+		)
 		door:SetAttribute("ShelterId", id)
 		CollectionService:AddTag(door, "ShelterDoor")
 		local prompt = Instance.new("ProximityPrompt")
@@ -457,7 +681,8 @@ local function buildShelterExteriors()
 		prompt.MaxActivationDistance = 10
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = door
-		local reg = part(f, "RegisterVolume", Vector3.new(c.size.x, 10, c.size.z), CFrame.new(c.pos.x, c.pos.y + 5, c.pos.z))
+		local reg =
+			part(f, "RegisterVolume", Vector3.new(c.size.x, 10, c.size.z), CFrame.new(c.pos.x, c.pos.y + 5, c.pos.z))
 		reg.Transparency = 1
 		reg.CanCollide = false
 		reg.CanQuery = false
@@ -470,30 +695,120 @@ local function buildDepot()
 	local f = regionFolders.R00
 	local d = WorldDefs.Depot
 	local cy = d.courtyard.pos.y
-	part(f, "Courtyard", Vector3.new(d.courtyard.size.x, 1, d.courtyard.size.z), CFrame.new(0, cy - 0.5, 0), Color3.fromRGB(96, 96, 100), Enum.Material.Cobblestone)
+	part(
+		f,
+		"Courtyard",
+		Vector3.new(d.courtyard.size.x, 1, d.courtyard.size.z),
+		CFrame.new(0, cy - 0.5, 0),
+		Color3.fromRGB(96, 96, 100),
+		Enum.Material.Cobblestone
+	)
 	-- perimeter walls (city noise lives above; Audio cues are listed in docs/AUDIO-CUES.md)
-	part(f, "WallS", Vector3.new(70, 16, 2), CFrame.new(0, cy + 8, -31), Color3.fromRGB(150, 140, 125), Enum.Material.Brick)
-	part(f, "WallE", Vector3.new(2, 16, 62), CFrame.new(36, cy + 8, 0), Color3.fromRGB(150, 140, 125), Enum.Material.Brick)
-	part(f, "WallW", Vector3.new(2, 16, 62), CFrame.new(-36, cy + 8, 0), Color3.fromRGB(150, 140, 125), Enum.Material.Brick)
-	part(f, "WallN_W", Vector3.new(29, 16, 2), CFrame.new(-21.5, cy + 8, 31), Color3.fromRGB(150, 140, 125), Enum.Material.Brick)
-	part(f, "WallN_E", Vector3.new(29, 16, 2), CFrame.new(21.5, cy + 8, 31), Color3.fromRGB(150, 140, 125), Enum.Material.Brick)
+	part(
+		f,
+		"WallS",
+		Vector3.new(70, 16, 2),
+		CFrame.new(0, cy + 8, -31),
+		Color3.fromRGB(150, 140, 125),
+		Enum.Material.Brick
+	)
+	part(
+		f,
+		"WallE",
+		Vector3.new(2, 16, 62),
+		CFrame.new(36, cy + 8, 0),
+		Color3.fromRGB(150, 140, 125),
+		Enum.Material.Brick
+	)
+	part(
+		f,
+		"WallW",
+		Vector3.new(2, 16, 62),
+		CFrame.new(-36, cy + 8, 0),
+		Color3.fromRGB(150, 140, 125),
+		Enum.Material.Brick
+	)
+	part(
+		f,
+		"WallN_W",
+		Vector3.new(29, 16, 2),
+		CFrame.new(-21.5, cy + 8, 31),
+		Color3.fromRGB(150, 140, 125),
+		Enum.Material.Brick
+	)
+	part(
+		f,
+		"WallN_E",
+		Vector3.new(29, 16, 2),
+		CFrame.new(21.5, cy + 8, 31),
+		Color3.fromRGB(150, 140, 125),
+		Enum.Material.Brick
+	)
 	-- equipment room
 	local er = d.equipmentRoom
 	local erf = folder(f, "EquipmentRoom")
-	part(erf, "Back", Vector3.new(er.size.x, er.size.y, 1), CFrame.new(er.pos.x, cy + er.size.y / 2, er.pos.z - er.size.z / 2), STONE)
-	part(erf, "Side", Vector3.new(1, er.size.y, er.size.z), CFrame.new(er.pos.x - er.size.x / 2, cy + er.size.y / 2, er.pos.z), STONE)
-	part(erf, "Roof", Vector3.new(er.size.x, 1, er.size.z), CFrame.new(er.pos.x, cy + er.size.y, er.pos.z), Color3.fromRGB(70, 70, 75), Enum.Material.Slate)
-	part(erf, "Shelf", Vector3.new(8, 4, 2), CFrame.new(er.pos.x - 3, cy + 2, er.pos.z - er.size.z / 2 + 1.5), WOOD, Enum.Material.WoodPlanks)
+	part(
+		erf,
+		"Back",
+		Vector3.new(er.size.x, er.size.y, 1),
+		CFrame.new(er.pos.x, cy + er.size.y / 2, er.pos.z - er.size.z / 2),
+		STONE
+	)
+	part(
+		erf,
+		"Side",
+		Vector3.new(1, er.size.y, er.size.z),
+		CFrame.new(er.pos.x - er.size.x / 2, cy + er.size.y / 2, er.pos.z),
+		STONE
+	)
+	part(
+		erf,
+		"Roof",
+		Vector3.new(er.size.x, 1, er.size.z),
+		CFrame.new(er.pos.x, cy + er.size.y, er.pos.z),
+		Color3.fromRGB(70, 70, 75),
+		Enum.Material.Slate
+	)
+	part(
+		erf,
+		"Shelf",
+		Vector3.new(8, 4, 2),
+		CFrame.new(er.pos.x - 3, cy + 2, er.pos.z - er.size.z / 2 + 1.5),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
 	-- mission board
-	local mb = part(f, "MissionBoard", Vector3.new(6, 4, 0.5), CFrame.new(v(d.missionBoard)), WOOD, Enum.Material.WoodPlanks)
+	local mb =
+		part(f, "MissionBoard", Vector3.new(6, 4, 0.5), CFrame.new(v(d.missionBoard)), WOOD, Enum.Material.WoodPlanks)
 	mb:SetAttribute("MissionBoard", true)
 	CollectionService:AddTag(mb, "MissionBoard")
 	-- descent house + ramp
 	local top, bot = v(d.ramp.top), v(d.ramp.bottom)
 	local hf = folder(f, "DescentHouse")
-	part(hf, "HouseW", Vector3.new(2, 14, 24), CFrame.new(-W / 2 - 1, cy + 7, top.Z + 12), STONE_DARK, Enum.Material.Brick)
-	part(hf, "HouseE", Vector3.new(2, 14, 24), CFrame.new(W / 2 + 1, cy + 7, top.Z + 12), STONE_DARK, Enum.Material.Brick)
-	part(hf, "HouseRoof", Vector3.new(W + 4, 1, 24), CFrame.new(0, cy + 14, top.Z + 12), Color3.fromRGB(70, 70, 75), Enum.Material.Slate)
+	part(
+		hf,
+		"HouseW",
+		Vector3.new(2, 14, 24),
+		CFrame.new(-W / 2 - 1, cy + 7, top.Z + 12),
+		STONE_DARK,
+		Enum.Material.Brick
+	)
+	part(
+		hf,
+		"HouseE",
+		Vector3.new(2, 14, 24),
+		CFrame.new(W / 2 + 1, cy + 7, top.Z + 12),
+		STONE_DARK,
+		Enum.Material.Brick
+	)
+	part(
+		hf,
+		"HouseRoof",
+		Vector3.new(W + 4, 1, 24),
+		CFrame.new(0, cy + 14, top.Z + 12),
+		Color3.fromRGB(70, 70, 75),
+		Enum.Material.Slate
+	)
 	local rf = folder(regionFolders.R01, "DescentRamp")
 	local delta = bot - top
 	local len = delta.Magnitude

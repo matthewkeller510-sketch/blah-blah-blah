@@ -60,7 +60,11 @@ local function direction(pos: Vector3?): string
 		return " (here)"
 	end
 	local ang = math.deg(math.atan2(rel.X, -rel.Z))
-	local dir = if math.abs(ang) < 35 then "ahead" elseif math.abs(ang) > 145 then "behind" elseif ang > 0 then "right" else "left"
+	local dir = if math.abs(ang) < 35
+		then "ahead"
+		elseif math.abs(ang) > 145 then "behind"
+		elseif ang > 0 then "right"
+		else "left"
 	local range = if dist < 15 then "close" elseif dist < 45 then "near" else "far"
 	return string.format(" (%s, %s)", dir, range)
 end
@@ -108,14 +112,20 @@ function Cues.cue(d: any)
 		end
 	end
 	if d.id == "valve_turn" and d.extra then
-		text = string.format("[the valve squeals; the gauge settles — %d of %d set right]", d.extra.correct, d.extra.of)
+		text =
+			string.format("[the valve squeals; the gauge settles — %d of %d set right]", d.extra.correct, d.extra.of)
 	elseif d.id == "plaque_turn" and d.extra and d.extra.solved then
 		text = "[the plaque locks into place with a deep click]"
 	end
 	caption(text .. direction(d.position), def.essential)
 	-- visual alternative for essential cues: a brief edge pulse (not a flash; respects reduceFlashes)
 	if def.essential and not ctx.settings.get("reduceFlashes") then
-		local edge = UI.frame(ctx.gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 1, ZIndex = 0 })
+		local edge = UI.frame(ctx.gui, {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 1,
+			ZIndex = 0,
+		})
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = UI.Colors.warn
 		stroke.Thickness = 6
@@ -181,7 +191,9 @@ function Cues.init(c)
 			local low = lastVitals.lightCharge < 15
 			local base = spot:GetAttribute("BaseBrightness") or 1
 			if low then
-				local wave = if ctx.settings.get("reduceFlashes") then (0.85 + 0.15 * math.sin(t * 2)) else (if math.noise(t * 6) > 0.25 then 0.35 else 1)
+				local wave = if ctx.settings.get("reduceFlashes")
+					then (0.85 + 0.15 * math.sin(t * 2))
+					else (if math.noise(t * 6) > 0.25 then 0.35 else 1)
 				spot.Brightness = (base :: number) * wave
 			else
 				spot.Brightness = base :: number

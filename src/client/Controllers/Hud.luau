@@ -32,7 +32,8 @@ local inShelter = false
 
 -- Priority: active mission, then the story objective, then the shelter reminder.
 local function refreshObjective()
-	objective.Text = if missionObjective ~= "" then missionObjective
+	objective.Text = if missionObjective ~= ""
+		then missionObjective
 		elseif storyObjective ~= "" then storyObjective
 		elseif inShelter then "Shelter: rest here. Passive recovery stops at half health; supplies heal further."
 		else ""
@@ -42,14 +43,25 @@ function Hud.init(c)
 	ctx = c
 	local gui = ctx.gui
 
-	local status = UI.frame(gui, { Name = "Status", Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(250, 0), AutomaticSize = Enum.AutomaticSize.Y })
+	local status = UI.frame(gui, {
+		Name = "Status",
+		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(250, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+	})
 	UI.corner(status)
 	UI.pad(status, 8)
 	UI.list(status, 4)
 	healthText = UI.label(status, "Health", 15)
 	local hb
 	hb, healthFill = UI.bar(status, "Health", C.injury)
-	capMarker = UI.frame(hb, { Name = "Cap", Size = UDim2.new(0, 2, 1, 4), Position = UDim2.new(0.5, -1, 0, -2), BackgroundColor3 = C.bone, BackgroundTransparency = 0.3 })
+	capMarker = UI.frame(hb, {
+		Name = "Cap",
+		Size = UDim2.new(0, 2, 1, 4),
+		Position = UDim2.new(0.5, -1, 0, -2),
+		BackgroundColor3 = C.bone,
+		BackgroundTransparency = 0.3,
+	})
 	staminaText = UI.label(status, "", 13, C.dim)
 	staminaBack, staminaFill = UI.bar(status, "Stamina", C.bone)
 	lightText = UI.label(status, "Light: —", 14)
@@ -61,12 +73,26 @@ function Hud.init(c)
 	objective.TextXAlignment = Enum.TextXAlignment.Center
 	objective.TextStrokeTransparency = 0.6
 
-	partyBox = UI.frame(gui, { Name = "Party", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(190, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false })
+	partyBox = UI.frame(gui, {
+		Name = "Party",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(190, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	})
 	UI.corner(partyBox)
 	UI.pad(partyBox, 6)
 	UI.list(partyBox, 2)
 
-	noticeBox = UI.frame(gui, { Name = "Notices", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.new(0.55, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 })
+	noticeBox = UI.frame(gui, {
+		Name = "Notices",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -150),
+		Size = UDim2.new(0.55, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	})
 	local l = UI.list(noticeBox, 4)
 	l.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -82,7 +108,14 @@ function Hud.init(c)
 	holdBack.Size = UDim2.fromOffset(160, 8)
 	holdBack.Visible = false
 
-	crosshair = UI.frame(gui, { Name = "Marker", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(4, 4), BackgroundColor3 = C.bone, BackgroundTransparency = 0.35 })
+	crosshair = UI.frame(gui, {
+		Name = "Marker",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(4, 4),
+		BackgroundColor3 = C.bone,
+		BackgroundTransparency = 0.35,
+	})
 	UI.corner(crosshair, 2)
 
 	downedText = UI.label(gui, "", 22, C.bone)
@@ -98,7 +131,14 @@ function Hud.init(c)
 	pressureText.Size = UDim2.fromOffset(200, 0)
 	pressureText.TextXAlignment = Enum.TextXAlignment.Right
 
-	inviteBox = UI.frame(gui, { Name = "Invite", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 140), Size = UDim2.fromOffset(220, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false })
+	inviteBox = UI.frame(gui, {
+		Name = "Invite",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 140),
+		Size = UDim2.fromOffset(220, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	})
 	UI.corner(inviteBox)
 	UI.pad(inviteBox, 8)
 	UI.list(inviteBox, 4)
@@ -115,7 +155,11 @@ function Hud.vitals(d: any)
 	healthFill.Size = UDim2.fromScale(math.clamp(frac, 0, 1), 1)
 	capMarker.Position = UDim2.new(d.passiveCap / d.maxHealth, -1, 0, -2)
 	local cond = d.condition
-	local word = if cond == "healthy" then "Steady" elseif cond == "injured" then "Injured" elseif cond == "downed" then "DOWN" else "Dead"
+	local word = if cond == "healthy"
+		then "Steady"
+		elseif cond == "injured" then "Injured"
+		elseif cond == "downed" then "DOWN"
+		else "Dead"
 	healthText.Text = string.format("%s · %d/%d", word, math.floor(d.health + 0.5), d.maxHealth)
 	healthText.TextColor3 = if cond == "healthy" then C.bone else C.warn
 	staminaBack.Visible = d.showStamina
@@ -124,7 +168,14 @@ function Hud.vitals(d: any)
 	staminaFill.BackgroundColor3 = if d.exhausted then C.dim else C.bone
 	staminaText.Text = if d.exhausted then "Exhausted — walking until you recover" else "Stamina"
 	if d.lightName then
-		lightText.Text = string.format("%s %s · %d%% · %d cell%s", d.lightName, if d.lightOn then "ON" else "off", math.floor(d.lightCharge), d.cells, if d.cells == 1 then "" else "s")
+		lightText.Text = string.format(
+			"%s %s · %d%% · %d cell%s",
+			d.lightName,
+			if d.lightOn then "ON" else "off",
+			math.floor(d.lightCharge),
+			d.cells,
+			if d.cells == 1 then "" else "s"
+		)
 		lightText.TextColor3 = if d.lightCharge < 15 then C.warn else C.bone
 	else
 		lightText.Text = "No light"
@@ -133,7 +184,8 @@ function Hud.vitals(d: any)
 	if d.hidden then
 		downedText.Text = "HIDDEN — creatures cannot sense you. Use the niche prompt to step out."
 	elseif cond == "downed" then
-		downedText.Text = if d.stabilized then "DOWN — stabilized. A teammate can treat or carry you."
+		downedText.Text = if d.stabilized
+			then "DOWN — stabilized. A teammate can treat or carry you."
 			else string.format("DOWN — %ds. A party member can stabilize you.", math.ceil(d.downedRemaining))
 		if d.carriedBy then
 			downedText.Text = "Carried by " .. d.carriedBy
@@ -150,7 +202,14 @@ end
 function Hud.inventory(_d: any) end
 
 function Hud.notice(text: string, kind: string?)
-	local f = UI.frame(noticeBox, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = if kind == "danger" then C.injury elseif kind == "warn" then Color3.fromRGB(70, 56, 30) else C.panel })
+	local f = UI.frame(noticeBox, {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = if kind == "danger"
+			then C.injury
+			elseif kind == "warn" then Color3.fromRGB(70, 56, 30)
+			else C.panel,
+	})
 	UI.corner(f)
 	UI.pad(f, 6)
 	local t = UI.label(f, (if kind == "danger" then "! " elseif kind == "warn" then "• " else "") .. text, 15)
@@ -201,8 +260,12 @@ function Hud.hold(d: any)
 	if d.seconds then
 		holdBack.Visible = true
 		holdFill.Size = UDim2.fromScale(0, 1)
-		holdTween = TweenService:Create(holdFill, TweenInfo.new(d.seconds, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(1, 1) })
-		;(holdTween :: Tween):Play()
+		holdTween = TweenService:Create(
+			holdFill,
+			TweenInfo.new(d.seconds, Enum.EasingStyle.Linear),
+			{ Size = UDim2.fromScale(1, 1) }
+		);
+		(holdTween :: Tween):Play()
 	else
 		holdBack.Visible = false
 		if d.cancelled then
@@ -215,8 +278,13 @@ function Hud.party(d: any)
 	UI.clear(partyBox)
 	partyBox.Visible = #d.members > 0
 	for _, m in d.members do
-		local cond = if m.condition == "healthy" then "ok" elseif m.condition == "injured" then "injured" elseif m.condition == "downed" then "DOWN" else m.condition
-		local t = UI.label(partyBox, string.format("%s%s · %s", if m.leader then "★ " else "", m.name, cond), 14, C.teal)
+		local cond = if m.condition == "healthy"
+			then "ok"
+			elseif m.condition == "injured" then "injured"
+			elseif m.condition == "downed" then "DOWN"
+			else m.condition
+		local t =
+			UI.label(partyBox, string.format("%s%s · %s", if m.leader then "★ " else "", m.name, cond), 14, C.teal)
 		if m.condition == "downed" then
 			t.TextColor3 = C.warn
 		end
@@ -241,7 +309,10 @@ function Hud.invite(d: any)
 end
 
 function Hud.discovery(d: any)
-	Hud.notice(if d.byOther then string.format("Discovered with %s: %s", d.byOther, d.label) else ("Discovered: " .. d.label), "info")
+	Hud.notice(
+		if d.byOther then string.format("Discovered with %s: %s", d.byOther, d.label) else ("Discovered: " .. d.label),
+		"info"
+	)
 end
 
 function Hud.mission(d: any)
@@ -262,7 +333,9 @@ function Hud.story(d: any)
 end
 
 function Hud.debugPressure(d: any)
-	pressureText.Text = if ctx.settings.get("showPressureDebug") then string.format("director pressure %.2f", d.pressure) else ""
+	pressureText.Text = if ctx.settings.get("showPressureDebug")
+		then string.format("director pressure %.2f", d.pressure)
+		else ""
 end
 
 return Hud

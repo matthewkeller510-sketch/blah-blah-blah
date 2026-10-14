@@ -77,7 +77,14 @@ function RecoveryService.pushAll()
 	end
 end
 
-local function create(player: Player, kind: "death" | "logout", contents, pos: Vector3?, opId: string, anchorOverride: any?)
+local function create(
+	player: Player,
+	kind: "death" | "logout",
+	contents,
+	pos: Vector3?,
+	opId: string,
+	anchorOverride: any?
+)
 	local s = services.PlayerService.get(player)
 	if not s then
 		return
@@ -85,10 +92,12 @@ local function create(player: Player, kind: "death" | "logout", contents, pos: V
 	local anchor = anchorOverride or (pos and anchorFrom(pos))
 	if not anchor then
 		-- No valid position known: never destroy owed items. Put them on the safest anchor.
-		anchor = { regionId = "R01", pocketVersion = 1, anchorId = "R01.survey_board", offset = { x = 0, y = 0, z = 0 } }
+		anchor =
+			{ regionId = "R01", pocketVersion = 1, anchorId = "R01.survey_board", offset = { x = 0, y = 0, z = 0 } }
 	end
 	local authorized = partyIdsOf(player) or {}
-	local bag, replaced = RecoveryBags.create(s.profile, kind, player.UserId, contents, anchor, opId, os.time(), authorized)
+	local bag, replaced =
+		RecoveryBags.create(s.profile, kind, player.UserId, contents, anchor, opId, os.time(), authorized)
 	if replaced then
 		services.PlayerService.notify(player, "Your previous " .. kind .. " bag was replaced.", "warn")
 	end
@@ -135,7 +144,11 @@ function RecoveryService.reconcileCrash(player: Player)
 	end
 	local cp = s.profile.checkpoint
 	create(player, "logout", contents, nil, "crash:" .. tostring(cp.anchorId) .. ":" .. tostring(os.time()), cp)
-	services.PlayerService.notify(player, "Your last session ended unexpectedly. Unbanked loot was left in a departure bag.", "warn")
+	services.PlayerService.notify(
+		player,
+		"Your last session ended unexpectedly. Unbanked loot was left in a departure bag.",
+		"warn"
+	)
 end
 
 function RecoveryService.recover(requester: Player, ownerUserId: number, kind: string)
@@ -180,7 +193,11 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 		end
 		services.PlayerService.pushInventory(owner)
 	else
-		services.PlayerService.notify(owner, requester.DisplayName .. " recovered your " .. kind .. " bag into your shelter escrow.", "info")
+		services.PlayerService.notify(
+			owner,
+			requester.DisplayName .. " recovered your " .. kind .. " bag into your shelter escrow.",
+			"info"
+		)
 		services.PlayerService.notify(requester, "Recovered into " .. owner.DisplayName .. "'s shelter escrow.", "info")
 	end
 	services.SaveService.markDirty(owner)

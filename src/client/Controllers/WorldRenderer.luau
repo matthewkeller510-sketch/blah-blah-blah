@@ -18,10 +18,21 @@ local bagRecords: { any } = {}
 local built: { [string]: Instance } = {}
 
 local SYMBOL = {
-	arrow = "➜", danger = "⚠", shelter = "⌂", exit = "⇧", water = "≈", x = "✕",
-	route_a = "A", route_b = "B", route_c = "C",
-	to_shelter = "→ SHELTER", to_exit = "→ EXIT", danger_ahead = "DANGER AHEAD", water_crossing = "WATER",
-	dead_end = "DEAD END", rescue_here = "RESCUE HERE",
+	arrow = "➜",
+	danger = "⚠",
+	shelter = "⌂",
+	exit = "⇧",
+	water = "≈",
+	x = "✕",
+	route_a = "A",
+	route_b = "B",
+	route_c = "C",
+	to_shelter = "→ SHELTER",
+	to_exit = "→ EXIT",
+	danger_ahead = "DANGER AHEAD",
+	water_crossing = "WATER",
+	dead_end = "DEAD END",
+	rescue_here = "RESCUE HERE",
 }
 
 local function textOn(part: BasePart, face: Enum.NormalId, text: string, color: Color3, font: Enum.Font)
@@ -52,7 +63,7 @@ local function pickupPrompt(parent: Instance, text: string, onTrigger: () -> ())
 	pp.Triggered:Connect(onTrigger)
 end
 
-local function buildNav(rec): Instance
+local function buildNav(rec: any): Instance
 	local m = Instance.new("Model")
 	m.Name = "Nav_" .. rec.recordId
 	local pos: Vector3 = rec.position
@@ -63,7 +74,13 @@ local function buildNav(rec): Instance
 		p.Transparency = 1
 		p.Size = Vector3.new(1.6, 1.6, 0.05)
 		p.CFrame = CFrame.lookAt(pos + n * 0.03, pos + n)
-		textOn(p, Enum.NormalId.Front, SYMBOL[rec.content] or "?", Color3.fromRGB(238, 236, 228), Enum.Font.PermanentMarker)
+		textOn(
+			p,
+			Enum.NormalId.Front,
+			SYMBOL[rec.content] or "?",
+			Color3.fromRGB(238, 236, 228),
+			Enum.Font.PermanentMarker
+		)
 		p.Parent = m
 		m.PrimaryPart = p
 	elseif rec.kind == "sign" then
@@ -73,7 +90,13 @@ local function buildNav(rec): Instance
 		p.Color = Color3.fromRGB(120, 90, 55)
 		p.Material = Enum.Material.WoodPlanks
 		p.CFrame = CFrame.lookAt(pos + n * 0.1 + Vector3.new(0, 1.5, 0), pos + n * 2 + Vector3.new(0, 1.5, 0))
-		textOn(p, Enum.NormalId.Front, SYMBOL[rec.content] or "?", Color3.fromRGB(245, 235, 210), Enum.Font.SpecialElite)
+		textOn(
+			p,
+			Enum.NormalId.Front,
+			SYMBOL[rec.content] or "?",
+			Color3.fromRGB(245, 235, 210),
+			Enum.Font.SpecialElite
+		)
 		p.Parent = m
 		m.PrimaryPart = p
 	else
@@ -107,7 +130,7 @@ local function buildNav(rec): Instance
 	return m
 end
 
-local function buildBag(rec): Instance
+local function buildBag(rec: any): Instance
 	local p = Instance.new("Part")
 	p.Name = "Bag_" .. rec.kind .. "_" .. rec.ownerId
 	p.Anchored, p.CanCollide = true, false
@@ -127,7 +150,11 @@ local function buildBag(rec): Instance
 	t.Font = UI.font()
 	t.TextScaled = true
 	t.TextColor3 = UI.Colors.bone
-	t.Text = (if rec.isOwn then "Your " else "Party member's ") .. (if rec.kind == "death" then "death bag" else "departure bag") .. " (" .. rec.count .. ")"
+	t.Text = (if rec.isOwn then "Your " else "Party member's ")
+		.. (if rec.kind == "death" then "death bag" else "departure bag")
+		.. " ("
+		.. rec.count
+		.. ")"
 	t.Parent = bb
 	pickupPrompt(p, if rec.isOwn then "Recover" else "Recover to their escrow", function()
 		ctx.send("bag.recover", { ownerId = rec.ownerId, kind = rec.kind })
@@ -136,8 +163,10 @@ local function buildBag(rec): Instance
 	return p
 end
 
-local function key(rec, isBag: boolean): string
-	return if isBag then ("bag:" .. rec.ownerId .. ":" .. rec.kind .. ":" .. tostring(rec.position)) else ("nav:" .. rec.recordId .. ":" .. tostring(rec.allowPartyRecovery))
+local function key(rec: any, isBag: boolean): string
+	return if isBag
+		then ("bag:" .. rec.ownerId .. ":" .. rec.kind .. ":" .. tostring(rec.position))
+		else ("nav:" .. rec.recordId .. ":" .. tostring(rec.allowPartyRecovery))
 end
 
 local function refresh()
@@ -195,7 +224,7 @@ function WorldRenderer.bags(list)
 end
 
 -- Verified party ping: authored by the server with the real party identity; mimics cannot forge it.
-function WorldRenderer.ping(d)
+function WorldRenderer.ping(d: any)
 	local p = Instance.new("Part")
 	p.Anchored, p.CanCollide, p.Transparency = true, false, 1
 	p.Size = Vector3.one

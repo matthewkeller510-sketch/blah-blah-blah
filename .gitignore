@@ -5,3 +5,4 @@
 *.rbxmx
 sourcemap.json
 .DS_Store
+.cache/

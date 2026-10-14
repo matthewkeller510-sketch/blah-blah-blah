@@ -41,16 +41,34 @@ end
 
 -- Light family (C01). Range, brightness and drain are separate stats.
 def({
-	id = "light.pocket_torch", displayName = "Battered Pocket Torch", category = "light",
-	stackLimit = 1, protected = false, sellValue = 4,
-	beamRange = 28, beamAngle = 45, brightness = 1.2, drainPerSecond = 0.6,
-	meshRef = "PLACEHOLDER:C01/torch_small", iconRef = "PLACEHOLDER:icon/torch_small", sound = "equip_torch",
+	id = "light.pocket_torch",
+	displayName = "Battered Pocket Torch",
+	category = "light",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 4,
+	beamRange = 28,
+	beamAngle = 45,
+	brightness = 1.2,
+	drainPerSecond = 0.6,
+	meshRef = "PLACEHOLDER:C01/torch_small",
+	iconRef = "PLACEHOLDER:icon/torch_small",
+	sound = "equip_torch",
 })
 def({
-	id = "light.expedition_flashlight", displayName = "Expedition Flashlight", category = "light",
-	stackLimit = 1, protected = false, sellValue = 18,
-	beamRange = 48, beamAngle = 35, brightness = 1.8, drainPerSecond = 0.9,
-	meshRef = "PLACEHOLDER:C01/flashlight", iconRef = "PLACEHOLDER:icon/flashlight", sound = "equip_flashlight",
+	id = "light.expedition_flashlight",
+	displayName = "Expedition Flashlight",
+	category = "light",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 18,
+	beamRange = 48,
+	beamAngle = 35,
+	brightness = 1.8,
+	drainPerSecond = 0.9,
+	meshRef = "PLACEHOLDER:C01/flashlight",
+	iconRef = "PLACEHOLDER:icon/flashlight",
+	sound = "equip_flashlight",
 })
 
 def({
@@ -71,89 +89,174 @@ def({
 
 -- Power
 def({
-	id = "power.cell", displayName = "Replaceable Cell", category = "power",
-	stackLimit = 6, protected = false, sellValue = 3, charge = 100,
-	meshRef = "PLACEHOLDER:C01/cell", iconRef = "PLACEHOLDER:icon/cell",
+	id = "power.cell",
+	displayName = "Replaceable Cell",
+	category = "power",
+	stackLimit = 6,
+	protected = false,
+	sellValue = 3,
+	charge = 100,
+	meshRef = "PLACEHOLDER:C01/cell",
+	iconRef = "PLACEHOLDER:icon/cell",
 })
 
 -- Medical (fictional, game-oriented; no real medical instruction)
 def({
-	id = "med.cloth_dressing", displayName = "Cloth Dressing", category = "medical",
-	stackLimit = 5, protected = false, sellValue = 2, healAmount = 15, treatSeconds = 3, removesInjury = false,
-	meshRef = "PLACEHOLDER:C02/dressing", iconRef = "PLACEHOLDER:icon/dressing",
+	id = "med.cloth_dressing",
+	displayName = "Cloth Dressing",
+	category = "medical",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 2,
+	healAmount = 15,
+	treatSeconds = 3,
+	removesInjury = false,
+	meshRef = "PLACEHOLDER:C02/dressing",
+	iconRef = "PLACEHOLDER:icon/dressing",
 })
 def({
-	id = "med.bandage", displayName = "Proper Bandage", category = "medical",
-	stackLimit = 5, protected = false, sellValue = 5, healAmount = 30, treatSeconds = 4, removesInjury = true,
-	meshRef = "PLACEHOLDER:C02/bandage", iconRef = "PLACEHOLDER:icon/bandage",
+	id = "med.bandage",
+	displayName = "Proper Bandage",
+	category = "medical",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 5,
+	healAmount = 30,
+	treatSeconds = 4,
+	removesInjury = true,
+	meshRef = "PLACEHOLDER:C02/bandage",
+	iconRef = "PLACEHOLDER:icon/bandage",
 })
 
 -- Tools
 def({
-	id = "tool.stun_device", displayName = "Limited Stun Device", category = "tool",
-	stackLimit = 1, protected = false, sellValue = 20, stunCharges = 3,
-	meshRef = "PLACEHOLDER:C02/stun", iconRef = "PLACEHOLDER:icon/stun",
+	id = "tool.stun_device",
+	displayName = "Limited Stun Device",
+	category = "tool",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 20,
+	stunCharges = 3,
+	meshRef = "PLACEHOLDER:C02/stun",
+	iconRef = "PLACEHOLDER:icon/stun",
 })
 def({
-	id = "tool.iron_bar", displayName = "Short Iron Bar", category = "tool",
-	stackLimit = 1, protected = false, sellValue = 6, meleeDamage = 25,
-	meshRef = "PLACEHOLDER:C02/bar", iconRef = "PLACEHOLDER:icon/bar",
+	id = "tool.iron_bar",
+	displayName = "Short Iron Bar",
+	category = "tool",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 6,
+	meleeDamage = 25,
+	meshRef = "PLACEHOLDER:C02/bar",
+	iconRef = "PLACEHOLDER:icon/bar",
 })
 
 -- Navigation (F09, F21: protected equally whether earned, found or purchased)
 def({
-	id = "nav.chalk", displayName = "Chalk Stick", category = "navigation",
-	stackLimit = 50, protected = true, sellValue = 1,
-	meshRef = "PLACEHOLDER:C03/chalk", iconRef = "PLACEHOLDER:icon/chalk",
+	id = "nav.chalk",
+	displayName = "Chalk Stick",
+	category = "navigation",
+	stackLimit = 50,
+	protected = true,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C03/chalk",
+	iconRef = "PLACEHOLDER:icon/chalk",
 })
 def({
-	id = "nav.sign", displayName = "Route Sign", category = "navigation",
-	stackLimit = 10, protected = true, sellValue = 3,
-	meshRef = "PLACEHOLDER:C03/sign_arrow", iconRef = "PLACEHOLDER:icon/sign_arrow",
+	id = "nav.sign",
+	displayName = "Route Sign",
+	category = "navigation",
+	stackLimit = 10,
+	protected = true,
+	sellValue = 3,
+	meshRef = "PLACEHOLDER:C03/sign_arrow",
+	iconRef = "PLACEHOLDER:icon/sign_arrow",
 })
 def({
-	id = "nav.rope", displayName = "Rope Coil (segment)", category = "navigation",
-	stackLimit = 20, protected = true, sellValue = 2,
-	meshRef = "PLACEHOLDER:C03/rope", iconRef = "PLACEHOLDER:icon/rope",
+	id = "nav.rope",
+	displayName = "Rope Coil (segment)",
+	category = "navigation",
+	stackLimit = 20,
+	protected = true,
+	sellValue = 2,
+	meshRef = "PLACEHOLDER:C03/rope",
+	iconRef = "PLACEHOLDER:icon/rope",
 })
 
 -- Crafting materials
 def({
-	id = "mat.fabric", displayName = "Recovered Fabric", category = "material",
-	stackLimit = 20, protected = false, sellValue = 1,
-	meshRef = "PLACEHOLDER:C04/fabric", iconRef = "PLACEHOLDER:icon/fabric",
+	id = "mat.fabric",
+	displayName = "Recovered Fabric",
+	category = "material",
+	stackLimit = 20,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/fabric",
+	iconRef = "PLACEHOLDER:icon/fabric",
 })
 def({
-	id = "mat.fastener", displayName = "Fastening Material", category = "material",
-	stackLimit = 20, protected = false, sellValue = 1,
-	meshRef = "PLACEHOLDER:C04/fastener", iconRef = "PLACEHOLDER:icon/fastener",
+	id = "mat.fastener",
+	displayName = "Fastening Material",
+	category = "material",
+	stackLimit = 20,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/fastener",
+	iconRef = "PLACEHOLDER:icon/fastener",
 })
 def({
-	id = "mat.plank", displayName = "Rough Plank", category = "material",
-	stackLimit = 10, protected = false, sellValue = 1,
-	meshRef = "PLACEHOLDER:C04/plank", iconRef = "PLACEHOLDER:icon/plank",
+	id = "mat.plank",
+	displayName = "Rough Plank",
+	category = "material",
+	stackLimit = 10,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/plank",
+	iconRef = "PLACEHOLDER:icon/plank",
 })
 def({
-	id = "mat.bracket", displayName = "Iron Brackets", category = "material",
-	stackLimit = 10, protected = false, sellValue = 1,
-	meshRef = "PLACEHOLDER:C04/bracket", iconRef = "PLACEHOLDER:icon/bracket",
+	id = "mat.bracket",
+	displayName = "Iron Brackets",
+	category = "material",
+	stackLimit = 10,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/bracket",
+	iconRef = "PLACEHOLDER:icon/bracket",
 })
 def({
-	id = "mat.chalk_fragment", displayName = "Chalk Fragments", category = "material",
-	stackLimit = 30, protected = false, sellValue = 0,
-	meshRef = "PLACEHOLDER:C04/chalk_frag", iconRef = "PLACEHOLDER:icon/chalk_frag",
+	id = "mat.chalk_fragment",
+	displayName = "Chalk Fragments",
+	category = "material",
+	stackLimit = 30,
+	protected = false,
+	sellValue = 0,
+	meshRef = "PLACEHOLDER:C04/chalk_frag",
+	iconRef = "PLACEHOLDER:icon/chalk_frag",
 })
 
 -- Treasure / evidence (fictional)
 def({
-	id = "treasure.survey_tag", displayName = "Expedition Survey Tag", category = "treasure",
-	stackLimit = 1, protected = false, sellValue = 25, unique = true,
-	meshRef = "PLACEHOLDER:C04/survey_tag", iconRef = "PLACEHOLDER:icon/survey_tag",
+	id = "treasure.survey_tag",
+	displayName = "Expedition Survey Tag",
+	category = "treasure",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 25,
+	unique = true,
+	meshRef = "PLACEHOLDER:C04/survey_tag",
+	iconRef = "PLACEHOLDER:icon/survey_tag",
 })
 def({
-	id = "treasure.brass_rule", displayName = "Brass Measuring Rule", category = "treasure",
-	stackLimit = 5, protected = false, sellValue = 12,
-	meshRef = "PLACEHOLDER:C04/brass_rule", iconRef = "PLACEHOLDER:icon/brass_rule",
+	id = "treasure.brass_rule",
+	displayName = "Brass Measuring Rule",
+	category = "treasure",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 12,
+	meshRef = "PLACEHOLDER:C04/brass_rule",
+	iconRef = "PLACEHOLDER:icon/brass_rule",
 })
 
 def({

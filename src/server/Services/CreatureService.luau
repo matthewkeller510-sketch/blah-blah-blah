@@ -52,7 +52,7 @@ local function route(fromId: string, toId: string): { string }
 	local seen = { [fromId] = true }
 	local q = { fromId }
 	while #q > 0 do
-		local cur = table.remove(q, 1)
+		local cur = table.remove(q, 1) :: string
 		if cur == toId then
 			break
 		end
@@ -144,7 +144,14 @@ local function body(name: string, regionId: string, size: Vector3, color: Color3
 	return m
 end
 
-local function addPart(m: Model, name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material): Part
+local function addPart(
+	m: Model,
+	name: string,
+	size: Vector3,
+	offset: CFrame,
+	color: Color3,
+	material: Enum.Material
+): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
@@ -170,7 +177,9 @@ local function moveModel(m: Model, to: Vector3, lift: number, speed: number, dt:
 	local step = math.min(d.Magnitude, speed * dt)
 	local np = from + d.Unit * step
 	local flat = Vector3.new(d.X, 0, d.Z)
-	local cf = if flat.Magnitude > 0.01 then CFrame.lookAt(np, np + flat.Unit) else CFrame.new(np) * (bp.CFrame - bp.Position)
+	local cf = if flat.Magnitude > 0.01
+		then CFrame.lookAt(np, np + flat.Unit)
+		else CFrame.new(np) * (bp.CFrame - bp.Position)
 	m:PivotTo(cf)
 	return step >= d.Magnitude - 0.01
 end
@@ -268,8 +277,19 @@ local function sidelookerTick(dt: number)
 			local look = Vector3.new(head.CFrame.LookVector.X, 0, head.CFrame.LookVector.Z).Unit
 			if d > 30 and d < 60 and math.abs(look:Dot(to.Unit)) < 0.6 then
 				local c = assert(WorldDefs.chamber(id))
-				local corner = n + Vector3.new((c.size.x / 2 - 1.5) * (if math.random() < 0.5 then -1 else 1), 0, (c.size.z / 2 - 1.5))
-				local mm = body("Sidelooker", c.regionId, Vector3.new(1.2, 8.5, 0.8), Color3.fromRGB(58, 56, 52), Enum.Material.Slate)
+				local corner = n
+					+ Vector3.new(
+						(c.size.x / 2 - 1.5) * (if math.random() < 0.5 then -1 else 1),
+						0,
+						(c.size.z / 2 - 1.5)
+					)
+				local mm = body(
+					"Sidelooker",
+					c.regionId,
+					Vector3.new(1.2, 8.5, 0.8),
+					Color3.fromRGB(58, 56, 52),
+					Enum.Material.Slate
+				)
 				mm:PivotTo(CFrame.lookAt(corner + Vector3.new(0, 4.25, 0), head.Position))
 				sideState.model = mm
 				sideState.watcher = p
@@ -314,7 +334,14 @@ local function spawnScrabbler(homes: { string }): Scrabbler
 	local regionId = nodeRegion[home]
 	local m = body("Scrabbler", regionId, Vector3.new(3.6, 1.8, 5.5), Color3.fromRGB(70, 66, 58), Enum.Material.Slate)
 	m:PivotTo(CFrame.new(nodes[home] + Vector3.new(math.random(-6, 6), SCRAB_LIFT, math.random(-6, 6))))
-	addPart(m, "MineralPlates", Vector3.new(3, 0.6, 4.6), CFrame.new(0, 1.1, 0), Color3.fromRGB(120, 116, 108), Enum.Material.Basalt)
+	addPart(
+		m,
+		"MineralPlates",
+		Vector3.new(3, 0.6, 4.6),
+		CFrame.new(0, 1.1, 0),
+		Color3.fromRGB(120, 116, 108),
+		Enum.Material.Basalt
+	)
 	m:SetAttribute("CreatureId", SCRAB.id)
 	return {
 		model = m,
@@ -395,7 +422,8 @@ local function scrabblerTick(s: Scrabbler, dt: number)
 			local pos = services.PlayerService.position(p) :: Vector3
 			local d = (pos - bp.Position).Magnitude
 			local heard = d < SCRAB.hearingRadius and noisy(p, sess)
-			local seen = d < SCRAB.sightRadius * (if sess.lightOn then 1.4 else 0.6) and lineOfSight(bp.Position + Vector3.new(0, 1, 0), pos)
+			local seen = d < SCRAB.sightRadius * (if sess.lightOn then 1.4 else 0.6)
+				and lineOfSight(bp.Position + Vector3.new(0, 1, 0), pos)
 			if (heard or seen) and d < bestD then
 				best, bestD = p, d
 			end
@@ -434,7 +462,14 @@ local function scrabblerTick(s: Scrabbler, dt: number)
 		local tpos = t and services.PlayerService.position(t)
 		local tsess = t and services.PlayerService.get(t)
 		-- leash: it never follows a target out of its own region, into a shelter, or to a hiding niche
-		if not t or not tpos or not tsess or tsess.insideShelterId or tsess.hiddenAt or tsess.regionId ~= s.regionId then
+		if
+			not t
+			or not tpos
+			or not tsess
+			or tsess.insideShelterId
+			or tsess.hiddenAt
+			or tsess.regionId ~= s.regionId
+		then
 			if t and tsess and tsess.hiddenAt then
 				evidence(t, SCRAB, "escaped_by_breaking_sight")
 			end
@@ -513,11 +548,41 @@ local function spawnWader()
 	local home = WADER.homes[1]
 	local m = body("Wader", "R03", Vector3.new(2.2, 9, 1.6), Color3.fromRGB(58, 66, 62), Enum.Material.SmoothPlastic)
 	m:PivotTo(CFrame.new(nodes[home] + Vector3.new(0, WADER_LIFT, 0)))
-	addPart(m, "LongArmL", Vector3.new(0.5, 7, 0.5), CFrame.new(-1.5, -1, -0.2) * CFrame.Angles(0.1, 0, 0.08), Color3.fromRGB(50, 58, 54), Enum.Material.SmoothPlastic)
-	addPart(m, "LongArmR", Vector3.new(0.5, 7, 0.5), CFrame.new(1.5, -1, -0.2) * CFrame.Angles(0.1, 0, -0.08), Color3.fromRGB(50, 58, 54), Enum.Material.SmoothPlastic)
-	addPart(m, "Head", Vector3.new(1.4, 1.6, 1.2), CFrame.new(0, 5.3, -0.3), Color3.fromRGB(72, 80, 74), Enum.Material.SmoothPlastic)
+	addPart(
+		m,
+		"LongArmL",
+		Vector3.new(0.5, 7, 0.5),
+		CFrame.new(-1.5, -1, -0.2) * CFrame.Angles(0.1, 0, 0.08),
+		Color3.fromRGB(50, 58, 54),
+		Enum.Material.SmoothPlastic
+	)
+	addPart(
+		m,
+		"LongArmR",
+		Vector3.new(0.5, 7, 0.5),
+		CFrame.new(1.5, -1, -0.2) * CFrame.Angles(0.1, 0, -0.08),
+		Color3.fromRGB(50, 58, 54),
+		Enum.Material.SmoothPlastic
+	)
+	addPart(
+		m,
+		"Head",
+		Vector3.new(1.4, 1.6, 1.2),
+		CFrame.new(0, 5.3, -0.3),
+		Color3.fromRGB(72, 80, 74),
+		Enum.Material.SmoothPlastic
+	)
 	m:SetAttribute("CreatureId", WADER.id)
-	wader = { model = m, state = "wander", target = nil, goal = nil, stateUntil = 0, lastHeard = 0, home = home, engaged = false }
+	wader = {
+		model = m,
+		state = "wander",
+		target = nil,
+		goal = nil,
+		stateUntil = 0,
+		lastHeard = 0,
+		home = home,
+		engaged = false,
+	}
 end
 
 local function waderEnd(wasChase: boolean)
@@ -607,7 +672,9 @@ local function waderTick(dt: number)
 		end
 		local arrived = w.goal == nil or travel(w.model, w.goal :: Vector3, WADER_LIFT, WADER.pursueSpeed, dt)
 		local tpos = services.PlayerService.position(t)
-		local flat = if tpos then Vector3.new(tpos.X - bp.Position.X, 0, tpos.Z - bp.Position.Z).Magnitude else math.huge
+		local flat = if tpos
+			then Vector3.new(tpos.X - bp.Position.X, 0, tpos.Z - bp.Position.Z).Magnitude
+			else math.huge
 		if tpos and not tsess.hiddenAt and tsess.inWater and flat < 5 and math.abs(tpos.Y - bp.Position.Y) < 8 then
 			services.PlayerService.damage(t, WADER.damage, true, "wader")
 			cueAll(bp.Position, 40, "wader_strike")
@@ -650,7 +717,10 @@ function CreatureService.noise(pos: Vector3, kind: string, loudness: number, sou
 	end
 	if kind == "clatter" or (kind == "splash" and source == nil) then
 		for _, s in scrabblers do
-			if (s.state == "idle" or s.state == "search") and (pos - (s.model.PrimaryPart :: BasePart).Position).Magnitude < 35 then
+			if
+				(s.state == "idle" or s.state == "search")
+				and (pos - (s.model.PrimaryPart :: BasePart).Position).Magnitude < 35
+			then
 				s.investigate = pos
 			end
 		end
@@ -680,8 +750,25 @@ local knocker: Knocker
 local function spawnKnocker()
 	local m = body("Knocker", "R01", Vector3.new(4.5, 7.5, 3.5), Color3.fromRGB(64, 58, 52), Enum.Material.Rock)
 	m:PivotTo(CFrame.new(0, -30, laneZ0)) -- dormant below the floor, out of play
-	addPart(m, "FoldedForelimbs", Vector3.new(5.2, 2, 2), CFrame.new(0, 1, -1.6), Color3.fromRGB(80, 72, 64), Enum.Material.Rock)
-	knocker = { model = m, state = "dormant", target = nil, knocks = 0, nextAt = 0, dir = 1, endZ = laneZ1, hit = {}, cooldownUntil = 0 }
+	addPart(
+		m,
+		"FoldedForelimbs",
+		Vector3.new(5.2, 2, 2),
+		CFrame.new(0, 1, -1.6),
+		Color3.fromRGB(80, 72, 64),
+		Enum.Material.Rock
+	)
+	knocker = {
+		model = m,
+		state = "dormant",
+		target = nil,
+		knocks = 0,
+		nextAt = 0,
+		dir = 1,
+		endZ = laneZ1,
+		hit = {},
+		cooldownUntil = 0,
+	}
 end
 
 local function placeKnocker(pos: Vector3, facingDir: Vector3)
@@ -740,7 +827,15 @@ local function knockerTick(dt: number)
 		placeKnocker(pos, Vector3.new(0, 0, k.dir))
 		for p, sess in services.PlayerService.all() do
 			local pp = services.PlayerService.position(p)
-			if pp and not k.hit[p] and perceivable(p, sess) and math.abs(pp.X - pos.X) < 4 and math.abs(pp.Z - pos.Z) < 3 and pp.Y > -4 and pp.Y < 12 then
+			if
+				pp
+				and not k.hit[p]
+				and perceivable(p, sess)
+				and math.abs(pp.X - pos.X) < 4
+				and math.abs(pp.Z - pos.Z) < 3
+				and pp.Y > -4
+				and pp.Y < 12
+			then
 				k.hit[p] = true
 				services.PlayerService.damage(p, KNOCK.damage, true, "knocker")
 			end
@@ -798,7 +893,12 @@ end
 
 function CreatureService.useTool(player: Player, itemId: string)
 	local sess = services.PlayerService.get(player)
-	if not sess or Inventory.count(sess.profile.inventory, itemId) < 1 or sess.vitals.condition == "downed" or sess.hiddenAt then
+	if
+		not sess
+		or Inventory.count(sess.profile.inventory, itemId) < 1
+		or sess.vitals.condition == "downed"
+		or sess.hiddenAt
+	then
 		return
 	end
 	local now = os.clock()

@@ -27,7 +27,12 @@ export type Profile = {
 	missionCooldowns: { [string]: number },
 	toolCharges: { [string]: number },
 	-- Durable expedition checkpoint (section 20): last valid grounded position for crash reconciliation.
-	checkpoint: { regionId: string, pocketVersion: number, anchorId: string, offset: { x: number, y: number, z: number } }?,
+	checkpoint: {
+		regionId: string,
+		pocketVersion: number,
+		anchorId: string,
+		offset: { x: number, y: number, z: number },
+	}?,
 	settings: { [string]: any },
 }
 
@@ -76,7 +81,12 @@ local MIGRATIONS: { [number]: (any) -> () } = {
 
 -- Fills missing fields from defaults without overwriting saved values, then applies migrations.
 -- Returns (profile, error). A profile from a NEWER schema is refused so an old server never truncates it.
-function Profile.reconcile(saved: any, userId: number, defaultClass: string, startShelterId: string): (Profile?, string?)
+function Profile.reconcile(
+	saved: any,
+	userId: number,
+	defaultClass: string,
+	startShelterId: string
+): (Profile?, string?)
 	local def = Profile.default(userId, defaultClass, startShelterId)
 	if saved == nil then
 		return def, nil

@@ -70,7 +70,10 @@ function NavigationService.place(player: Player, payload: any)
 		end
 		endPos = payload.endPosition
 		assert(endPos)
-		if (endPos - pos).Magnitude > Config.Navigation.ropeMaxSegmentLength or (endPos - head.Position).Magnitude > Config.Navigation.ropeMaxSegmentLength + PLACE_RANGE then
+		if
+			(endPos - pos).Magnitude > Config.Navigation.ropeMaxSegmentLength
+			or (endPos - head.Position).Magnitude > Config.Navigation.ropeMaxSegmentLength + PLACE_RANGE
+		then
 			services.PlayerService.notify(player, "Rope segment too long.", "warn")
 			return
 		end
@@ -96,9 +99,16 @@ function NavigationService.place(player: Player, payload: any)
 		units = 1,
 	}, Config.Navigation.maxPlacedPerPlayer)
 	if not rec then
-		services.PlayerService.notify(player, if err == "placement_limit"
-			then string.format("You have %d markers placed. Pick some up from your notebook list to place more.", Config.Navigation.maxPlacedPerPlayer)
-			else "That marker cannot be placed.", "warn")
+		services.PlayerService.notify(
+			player,
+			if err == "placement_limit"
+				then string.format(
+					"You have %d markers placed. Pick some up from your notebook list to place more.",
+					Config.Navigation.maxPlacedPerPlayer
+				)
+				else "That marker cannot be placed.",
+			"warn"
+		)
 		return
 	end
 	Inventory.remove(s.profile.inventory, itemId, 1)
@@ -130,14 +140,20 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 	if not p or (p - vec(rec.position)).Magnitude > PLACE_RANGE then
 		return
 	end
-	local res = NavRecords.retrieve(os_.profile.nav, regionId, recordId, player.UserId, services.PartyService.memberIds(owner))
+	local res =
+		NavRecords.retrieve(os_.profile.nav, regionId, recordId, player.UserId, services.PartyService.memberIds(owner))
 	if not res.ok then
 		if res.reason == "not_authorized" then
-			services.PlayerService.notify(player, "Only the owner can pick that up unless they allow party recovery.", "warn")
+			services.PlayerService.notify(
+				player,
+				"Only the owner can pick that up unless they allow party recovery.",
+				"warn"
+			)
 		end
 		return
 	end
-	local added = Inventory.add(os_.profile.inventory, ItemDefs.get, res.itemId :: string, res.units :: number, "loadout")
+	local added =
+		Inventory.add(os_.profile.inventory, ItemDefs.get, res.itemId :: string, res.units :: number, "loadout")
 	if added < (res.units :: number) then
 		-- Not enough room: put the record back unchanged rather than destroying the unit.
 		Inventory.remove(os_.profile.inventory, res.itemId :: string, added)
@@ -177,21 +193,21 @@ function NavigationService.refreshFor(viewer: Player)
 			local ids = services.PartyService.memberIds(owner)
 			for regionId in s.profile.nav.pages do
 				for _, rec in NavRecords.inRegion(s.profile.nav, regionId) do
-				if NavRecords.canSee(rec, viewer.UserId, ids) then
-					table.insert(out, {
-						recordId = rec.recordId,
-						ownerId = rec.ownerId,
-						isOwn = rec.ownerId == viewer.UserId,
-						kind = rec.kind,
-						content = rec.content,
-						position = vec(rec.position),
-						facing = vec(rec.facing),
-						endPosition = rec.endPosition and vec(rec.endPosition) or nil,
-						routeId = rec.routeId,
-						allowPartyRecovery = rec.allowPartyRecovery,
-					})
+					if NavRecords.canSee(rec, viewer.UserId, ids) then
+						table.insert(out, {
+							recordId = rec.recordId,
+							ownerId = rec.ownerId,
+							isOwn = rec.ownerId == viewer.UserId,
+							kind = rec.kind,
+							content = rec.content,
+							position = vec(rec.position),
+							facing = vec(rec.facing),
+							endPosition = rec.endPosition and vec(rec.endPosition) or nil,
+							routeId = rec.routeId,
+							allowPartyRecovery = rec.allowPartyRecovery,
+						})
+					end
 				end
-			end
 			end
 		end
 	end

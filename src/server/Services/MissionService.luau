@@ -42,10 +42,10 @@ local M02_REWARD = { coins = 20, items = { ["power.cell"] = 1, ["med.cloth_dress
 local M07_REWARD_COINS = 30
 local COOLDOWNS = { M01 = 120, M02 = 180, M07 = 240 } -- TUNE seconds
 local LORE = {
-	"Field note, smudged: \"Measured the gallery twice. The second time it was eleven metres longer.\"",
+	'Field note, smudged: "Measured the gallery twice. The second time it was eleven metres longer."',
 	"Inventory slip: two lamps, one theodolite, rope 40 m. Signed E. Renaud. The date is torn off.",
 	"Survey sketch: a corridor drawn, crossed out, and drawn again one chamber to the left.",
-	"Pencil on a card: \"If you hear us calling from the water, do not answer.\"",
+	'Pencil on a card: "If you hear us calling from the water, do not answer."',
 }
 
 local missions: { [string]: Mission } = {}
@@ -83,7 +83,11 @@ local function pushMission(m: Mission)
 		objective = (function()
 			if m.template == "M02" then
 				local region = WorldDefs.region((assert(WorldDefs.chamber(m.spawn.chamberId))).regionId)
-				return "A survey cache was left " .. m.spawn.clue .. " (" .. (region and region.name or "?") .. "). Each of you opens your own copy."
+				return "A survey cache was left "
+					.. m.spawn.clue
+					.. " ("
+					.. (region and region.name or "?")
+					.. "). Each of you opens your own copy."
 			elseif m.template == "M07" then
 				local c = WorldDefs.creatureById(m.creatureId or "")
 				if m.state == "return" then
@@ -93,7 +97,11 @@ local function pushMission(m: Mission)
 				return "Observe the " .. (c and c.name or "?") .. ": " .. hint
 			end
 			if m.state == "travel" then
-				return "A survivor was last heard near " .. (assert(WorldDefs.chamber(m.spawn.chamberId))).label .. ". Look for a " .. string.gsub(m.spawn.cue, "_", " ") .. "."
+				return "A survivor was last heard near "
+					.. (assert(WorldDefs.chamber(m.spawn.chamberId))).label
+					.. ". Look for a "
+					.. string.gsub(m.spawn.cue, "_", " ")
+					.. "."
 			elseif m.state == "treat" or m.state == "ready" then
 				return "Treat the survivor, then escort or carry them to a shelter."
 			elseif m.state == "escort" then
@@ -310,7 +318,7 @@ function MissionService.accept(player: Player, templateId: string)
 	end
 	local near = nearbyChambers(player)
 	if templateId == "M01" or templateId == "M02" then
-		local pool = if templateId == "M01" then WorldDefs.RescueSpawns else WorldDefs.CacheSpots
+		local pool: { any } = if templateId == "M01" then WorldDefs.RescueSpawns else WorldDefs.CacheSpots
 		local candidates = {}
 		for _, sp in pool do
 			if near[sp.chamberId] and not spotBusy(sp.id) then
@@ -318,7 +326,11 @@ function MissionService.accept(player: Player, templateId: string)
 			end
 		end
 		if #candidates == 0 then
-			services.PlayerService.notify(player, "Nothing suitable is close to your last shelter right now. Try again shortly or register a different shelter.", "warn")
+			services.PlayerService.notify(
+				player,
+				"Nothing suitable is close to your last shelter right now. Try again shortly or register a different shelter.",
+				"warn"
+			)
 			return
 		end
 		local m = newMission(player, templateId, candidates[math.random(1, #candidates)])
@@ -380,7 +392,8 @@ function MissionService.interact(player: Player, m: Mission)
 	local pp = root:FindFirstChild("RescuePrompt") :: ProximityPrompt
 	if m.state == "travel" or m.state == "treat" then
 		m.state = "treat"
-		local useItem = if Inventory.count(s.profile.inventory, "med.bandage") > 0 then "med.bandage"
+		local useItem = if Inventory.count(s.profile.inventory, "med.bandage") > 0
+			then "med.bandage"
 			elseif Inventory.count(s.profile.inventory, "med.cloth_dressing") > 0 then "med.cloth_dressing"
 			else nil
 		local secs = (if useItem then 4 else 9) * ((Config.Classes[s.profile.class] or {}).treatTimeMultiplier or 1)
@@ -583,7 +596,11 @@ function MissionService.collectCache(player: Player, m: Mission)
 	m.participants[player.UserId] = nil
 	reward(player, "M02", M02_REWARD.coins, M02_REWARD.items)
 	local lore = LORE[math.random(1, #LORE)]
-	services.PlayerService.notify(player, string.format("Cache recovered (+%d coins). %s", M02_REWARD.coins, lore), "info")
+	services.PlayerService.notify(
+		player,
+		string.format("Cache recovered (+%d coins). %s", M02_REWARD.coins, lore),
+		"info"
+	)
 	services.PlayerService.send(player, "mission", { id = m.id, state = "done" })
 	MissionService.closeCacheIfFinished(m)
 end
@@ -604,7 +621,13 @@ end
 -- Called by CreatureService whenever a player's research stage rises.
 function MissionService.onResearch(player: Player, creatureId: string, stage: number)
 	local m = missionFor(player)
-	if m and m.template == "M07" and m.state == "observe" and m.creatureId == creatureId and stage > (m.startStage or 0) then
+	if
+		m
+		and m.template == "M07"
+		and m.state == "observe"
+		and m.creatureId == creatureId
+		and stage > (m.startStage or 0)
+	then
 		m.state = "return"
 		pushMission(m)
 	end
@@ -617,7 +640,11 @@ local function complete(m: Mission)
 		if p and s then
 			reward(p, "M01", Config.Missions.nearbyRescueRewardCoins, nil)
 			s.profile.missionCooldowns.M01 = os.time() + Config.Missions.nearbyRescueCooldownSeconds
-			services.PlayerService.notify(p, string.format("Rescue complete. +%d coins.", Config.Missions.nearbyRescueRewardCoins), "info")
+			services.PlayerService.notify(
+				p,
+				string.format("Rescue complete. +%d coins.", Config.Missions.nearbyRescueRewardCoins),
+				"info"
+			)
 			services.DirectorService.afterRescue(p)
 		end
 	end
@@ -650,7 +677,11 @@ function MissionService.onShelterReached(player: Player)
 	end
 	if m.template == "M07" and m.state == "return" then
 		reward(player, "M07", M07_REWARD_COINS, nil)
-		services.PlayerService.notify(player, string.format("Observation filed in the journal. +%d coins.", M07_REWARD_COINS), "info")
+		services.PlayerService.notify(
+			player,
+			string.format("Observation filed in the journal. +%d coins.", M07_REWARD_COINS),
+			"info"
+		)
 		clearMission(m, "done")
 		return
 	end
@@ -739,7 +770,10 @@ function MissionService.start()
 		while true do
 			task.wait(15)
 			for _, m in missions do
-				if (m.state == "travel" or m.state == "collect" or m.state == "observe") and os.clock() - m.createdAt > 25 * 60 then
+				if
+					(m.state == "travel" or m.state == "collect" or m.state == "observe")
+					and os.clock() - m.createdAt > 25 * 60
+				then
 					clearMission(m, "failed", "timed out")
 				end
 			end

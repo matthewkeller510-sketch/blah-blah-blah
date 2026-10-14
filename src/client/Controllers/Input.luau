@@ -62,7 +62,10 @@ end
 
 local function useMedical()
 	local have = inv()
-	local id = if (have["med.bandage"] or 0) > 0 then "med.bandage" elseif (have["med.cloth_dressing"] or 0) > 0 then "med.cloth_dressing" else nil
+	local id = if (have["med.bandage"] or 0) > 0
+		then "med.bandage"
+		elseif (have["med.cloth_dressing"] or 0) > 0 then "med.cloth_dressing"
+		else nil
 	if id then
 		ctx.send("med.use", { itemId = id })
 	else
@@ -105,7 +108,9 @@ local function placeMarker(kind: string)
 		ropeStart = nil
 		return
 	end
-	local content = if kind == "sign" then (ctx.state.signPreset or "to_shelter") else (ctx.state.chalkPreset or "arrow")
+	local content = if kind == "sign"
+		then (ctx.state.signPreset or "to_shelter")
+		else (ctx.state.chalkPreset or "arrow")
 	ctx.send("nav.place", { kind = kind, content = content, position = hit.Position })
 end
 
@@ -155,23 +160,51 @@ local function rescueAction()
 end
 
 local KEYMAP: { [Enum.KeyCode]: () -> () } = {
-	[Enum.KeyCode.F] = function() ctx.send("light.toggle") end,
-	[Enum.KeyCode.R] = function() ctx.send("light.swap") end,
+	[Enum.KeyCode.F] = function()
+		ctx.send("light.toggle")
+	end,
+	[Enum.KeyCode.R] = function()
+		ctx.send("light.swap")
+	end,
 	[Enum.KeyCode.H] = useMedical,
-	[Enum.KeyCode.G] = function() placeMarker("chalk") end,
-	[Enum.KeyCode.T] = function() placeMarker("sign") end,
-	[Enum.KeyCode.Y] = function() placeMarker("rope") end,
-	[Enum.KeyCode.Z] = function() ctx.send("party.ping") end,
-	[Enum.KeyCode.B] = function() ctx.send("throw") end,
+	[Enum.KeyCode.G] = function()
+		placeMarker("chalk")
+	end,
+	[Enum.KeyCode.T] = function()
+		placeMarker("sign")
+	end,
+	[Enum.KeyCode.Y] = function()
+		placeMarker("rope")
+	end,
+	[Enum.KeyCode.Z] = function()
+		ctx.send("party.ping")
+	end,
+	[Enum.KeyCode.B] = function()
+		ctx.send("throw")
+	end,
 	[Enum.KeyCode.X] = rescueAction,
 	[Enum.KeyCode.Q] = cycleTool,
-	[Enum.KeyCode.Tab] = function() ctx.panels.toggle("notebook") end,
-	[Enum.KeyCode.I] = function() ctx.panels.toggle("inventory") end,
-	[Enum.KeyCode.P] = function() ctx.panels.toggle("party") end,
-	[Enum.KeyCode.O] = function() ctx.panels.toggle("settings") end,
-	[Enum.KeyCode.C] = function() setCrouch(not crouch) end,
-	[Enum.KeyCode.ButtonL3] = function() setCrouch(not crouch) end,
-	[Enum.KeyCode.ButtonY] = function() ctx.send("light.toggle") end,
+	[Enum.KeyCode.Tab] = function()
+		ctx.panels.toggle("notebook")
+	end,
+	[Enum.KeyCode.I] = function()
+		ctx.panels.toggle("inventory")
+	end,
+	[Enum.KeyCode.P] = function()
+		ctx.panels.toggle("party")
+	end,
+	[Enum.KeyCode.O] = function()
+		ctx.panels.toggle("settings")
+	end,
+	[Enum.KeyCode.C] = function()
+		setCrouch(not crouch)
+	end,
+	[Enum.KeyCode.ButtonL3] = function()
+		setCrouch(not crouch)
+	end,
+	[Enum.KeyCode.ButtonY] = function()
+		ctx.send("light.toggle")
+	end,
 	[Enum.KeyCode.ButtonX] = useMedical,
 }
 
@@ -207,20 +240,31 @@ local function buildTouch()
 		end)
 		if onUp then
 			b.InputEnded:Connect(function(io)
-				if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
+				if
+					io.UserInputType == Enum.UserInputType.Touch
+					or io.UserInputType == Enum.UserInputType.MouseButton1
+				then
 					onUp()
 				end
 			end)
 		end
 		return b
 	end
-	btn("Menu", function() ctx.panels.toggle("menu") end)
+	btn("Menu", function()
+		ctx.panels.toggle("menu")
+	end)
 	btn("Med", useMedical)
-	btn("Mark", function() placeMarker("chalk") end)
-	btn("Light", function() ctx.send("light.toggle") end)
+	btn("Mark", function()
+		placeMarker("chalk")
+	end)
+	btn("Light", function()
+		ctx.send("light.toggle")
+	end)
 	btn("Use", useTool)
 	btn("Help", rescueAction)
-	btn("Crouch", function() setCrouch(not crouch) end)
+	btn("Crouch", function()
+		setCrouch(not crouch)
+	end)
 	btn("Sprint", function()
 		if ctx.settings.get("sprintToggle") then
 			sprintToggled = not sprintToggled
@@ -234,11 +278,16 @@ local function buildTouch()
 			sendIntents()
 		end
 	end)
-	btn("Cell", function() ctx.send("light.swap") end)
-	btn("Throw", function() ctx.send("throw") end)
+	btn("Cell", function()
+		ctx.send("light.swap")
+	end)
+	btn("Throw", function()
+		ctx.send("throw")
+	end)
 	frame.Visible = UserInputService.TouchEnabled
 	UserInputService.LastInputTypeChanged:Connect(function(t)
-		frame.Visible = t == Enum.UserInputType.Touch or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
+		frame.Visible = t == Enum.UserInputType.Touch
+			or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
 	end)
 end
 
@@ -272,7 +321,10 @@ function Input.init(c)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(io)
-		if (io.KeyCode == Enum.KeyCode.LeftShift or io.KeyCode == Enum.KeyCode.ButtonL2) and not ctx.settings.get("sprintToggle") then
+		if
+			(io.KeyCode == Enum.KeyCode.LeftShift or io.KeyCode == Enum.KeyCode.ButtonL2)
+			and not ctx.settings.get("sprintToggle")
+		then
 			sprintHeld = false
 			sendIntents()
 		end
