@@ -5,8 +5,7 @@
 --     motion are reduced with the reduceFlashes setting;
 --   * the C04 Chalk Hand's false mark: a fresh reversed chalk arrow beside your own mark, a thin hand withdrawing into
 --     a crack, and an Inspect prompt ("falseMark" channel). Inspecting shows "This mark is not in your notebook." and
---     offers "Compare with my own mark"; both only send requests (chalkhand.inspect / chalkhand.compare);
---   * the notebook's research entries after a rejoin ("researchAll" channel, no notice per creature).
+--     offers "Compare with my own mark"; both only send requests (chalkhand.inspect / chalkhand.compare).
 -- Nothing here authors damage, pickups, records or any economic outcome; every part is CanQuery=false so it never
 -- interferes with aiming or placement rays.
 
@@ -358,22 +357,6 @@ local function onFalseMark(d: any)
 	end)
 end
 
--- Notebook after a rejoin ---------------------------------------------------------------------------------
-local function onResearchAll(d: any)
-	if type(d) ~= "table" or type(d.entries) ~= "table" then
-		return
-	end
-	local panels = ctx.panels
-	if not panels or not panels.research then
-		return
-	end
-	for _, e in d.entries do
-		if type(e) == "table" and type(e.id) == "string" then
-			panels.research(e)
-		end
-	end
-end
-
 function CreatureFX.init(c: any)
 	ctx = c
 	folder = Instance.new("Folder")
@@ -382,7 +365,6 @@ function CreatureFX.init(c: any)
 	ctx.on("sidelooker", onSidelooker)
 	ctx.on("moth", onMoth)
 	ctx.on("falseMark", onFalseMark)
-	ctx.on("researchAll", onResearchAll)
 	RunService.RenderStepped:Connect(stepSwarm)
 	player.CharacterAdded:Connect(function()
 		-- a new character: nothing private survives a respawn

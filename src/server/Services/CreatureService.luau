@@ -52,7 +52,6 @@ local MODULES: { { name: string, m: Module } } = {
 
 local TOOL_COOLDOWN = 0.8
 local lastSwing: { [Player]: number } = {}
-local researchPushed: { [Player]: boolean } = {}
 local lastWarn: { [string]: number } = {}
 
 -- Research: the existing path (contract API). Unknown creature ids are ignored.
@@ -162,22 +161,6 @@ function CreatureService.useTool(player: Player, itemId: string)
 	end
 end
 
--- Notebook after a rejoin: send every recorded research entry once per session on a separate channel (CreatureFX
--- fills the notebook from it without a notice per creature).
-local function pushResearch(p: Player, s: any)
-	local entries = {}
-	for _, def in WorldDefs.Creatures do
-		local e = s.profile.research[def.id]
-		if e and e.stage > 0 and #def.researchEvidence > 0 then
-			local stage = math.min(e.stage, #def.researchEvidence)
-			table.insert(entries, Common.researchPayload(def, stage))
-		end
-	end
-	if #entries > 0 then
-		services.PlayerService.send(p, "researchAll", { entries = entries })
-	end
-end
-
 local function warnThrottled(name: string, err: any)
 	local now = os.clock()
 	if now - (lastWarn[name] or -math.huge) > 10 then
@@ -221,7 +204,6 @@ function CreatureService.start()
 	end
 	Players.PlayerRemoving:Connect(function(p)
 		lastSwing[p] = nil
-		researchPushed[p] = nil
 		for _, entry in MODULES do
 			local ok, err = pcall(entry.m.onPlayerRemoving :: any, p)
 			if not ok then
@@ -231,7 +213,6 @@ function CreatureService.start()
 	end)
 	local TICK = 1 / 15
 	task.spawn(function()
-		local pushAcc = 0
 		while true do
 			local dt = task.wait(TICK)
 			debug.profilebegin("Creatures")
@@ -244,16 +225,6 @@ function CreatureService.start()
 				local ok, err = pcall(entry.m.tick :: any, dt)
 				if not ok then
 					warnThrottled(entry.name, err)
-				end
-			end
-			pushAcc += dt
-			if pushAcc >= 1 then
-				pushAcc = 0
-				for p, s in services.PlayerService.all() do
-					if not researchPushed[p] then
-						researchPushed[p] = true
-						pushResearch(p, s)
-					end
 				end
 			end
 			debug.profileend()
