@@ -6,7 +6,7 @@
 
 local Config = {}
 
-Config.SCHEMA_VERSION = 1
+Config.SCHEMA_VERSION = 2
 
 -- 03. Server/party capacity (TUNE, unverified)
 Config.Server = {
@@ -105,6 +105,69 @@ Config.Navigation = {
 Config.Missions = {
 	nearbyRescueRewardCoins = 40,
 	nearbyRescueCooldownSeconds = 120,
+	-- Milestone 3 (docs/MILESTONE-3.md 4.4)
+	medicalDeliveryBaseCoins = 10,
+	medicalDeliveryCoinsPerItem = 10,
+	medicalDeliveryMaxItems = 3,
+	medicalDeliveryCooldownSeconds = 180,
+	powerRestorationCoins = 50,
+	waterworksCoins = 25,
+	waterworksCooldownSeconds = 300,
+	shelterEstablishmentCoins = 40,
+	act2CompletionCoins = 80,
+}
+
+-- 04 / F08. Variable pockets (docs/MILESTONE-3.md section 3). TUNE.
+Config.Pockets = {
+	cycleSeconds = 600, -- a change is attempted at most once per cycle, and only when the pocket is empty
+	telegraphSeconds = 20, -- survey clicks and dust at both mouths before any change; entering aborts it
+	occupancyMargin = 6, -- studs added around a pocket's bounds when checking for players, survivors, bags, ropes
+	checkSeconds = 5,
+}
+
+-- 07/08. Injury penalty (PROPOSED, D40): never affects walking (F05). Bandages and splints remove it.
+Config.Injury = {
+	sprintSpeedMultiplier = 0.85,
+	staminaRegenMultiplier = 0.85,
+}
+
+-- 08/09. Lanterns and flares (PROPOSED/TUNE)
+Config.Lantern = {
+	exposureMultiplier = 1.5, -- an open lantern widens how far creatures notice its carrier
+}
+Config.Flare = {
+	maxActivePerPlayer = 2,
+	placeDistance = 5,
+}
+
+-- 09 / F24. Field experience with diminishing returns (D37). TUNE.
+Config.Progression = {
+	rankDivisor = 50, -- rank = floor(sqrt(xp / rankDivisor))
+	decay = 0.85, -- bonus = cap * (1 - decay ^ rank)
+	maxStaminaCap = 15,
+	maxHealthCap = 15,
+	xp = { discovery = 5, shelter = 20, research = 10, story = 25, mission = 10, bag = 5 },
+}
+
+-- 10. Milestone 3 creature tuning (TUNE)
+Config.Creatures = {
+	mothRangeFactor = 0.4, -- a clinging Wick Moth swarm shortens the beam to this fraction
+	mothDarkSeconds = 3, -- light off this long disperses the swarm
+	minerRhythmSeconds = 1.5, -- the Borrowed Miner's exact work rhythm
+	chalkHandIntervalSeconds = 120, -- at most one false mark per player per interval
+	thiefDamage = 20,
+	thiefDecoyRadius = 30,
+	thiefDecoySeconds = 20,
+	thiefLoseSightSeconds = 4,
+}
+
+-- 12. Milestone 3 puzzle timings (TUNE)
+Config.Puzzles = {
+	stationPowerSeconds = 1200, -- P03 power lasts this long, then trips only when the generator room is empty
+	fuseInsertSeconds = 3,
+	fuseWrongBoxSeconds = 4, -- a wrong box costs time, never health, and returns the fuse
+	pulleyDropSeconds = 300, -- P04 grate drops this long after unlatching, only when nobody is under or behind it
+	sluiceRefloodSeconds = 600,
 }
 
 -- 20. Saving (Roblox DataStore limits documented in source S06)

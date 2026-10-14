@@ -601,7 +601,13 @@ return function(T: any)
 
 	print("World graph (Milestone 2)")
 	test("every chamber is reachable from the depot ramp with puzzle gates open", function()
-		local d = WorldDefs.hops("R01.survey_board", { P01 = true, P02 = true })
+		local all = {}
+		for _, cor in WorldDefs.Corridors do
+			if cor.gate then
+				all[cor.gate] = true
+			end
+		end
+		local d = WorldDefs.hops("R01.survey_board", all)
 		for _, c in WorldDefs.Chambers do
 			assert(d[c.id] ~= nil, c.id .. " unreachable")
 		end

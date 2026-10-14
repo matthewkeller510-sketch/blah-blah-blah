@@ -14,7 +14,9 @@ export type Region = {
 	landmarks: { string },
 }
 export type Chamber = { id: string, regionId: string, pos: V3, size: V3, label: string, dry: boolean? }
-export type Corridor = { from: string, to: string, gate: string? }
+-- pocket: a variable pocket (section 04, F08) built by PocketService, never by WorldBuilder; every version keeps
+-- the same entry/exit contract, so graph code treats the link as always connected.
+export type Corridor = { from: string, to: string, gate: string?, pocket: string? }
 export type UpgradeDef = { maxStage: number, costPerStage: { Cost } }
 export type Entrance = { id: string, requiredUpgrade: string, requiredStage: number }
 export type ShelterDef = {
@@ -53,8 +55,22 @@ export type CreatureDef = {
 	hints: { string }?,
 	[string]: any,
 }
-export type CharacterDef = { name: string, role: string, status: string, pos: V3? }
+export type CharacterDef = { name: string, role: string, status: string, pos: V3?, rescuePos: V3? }
 export type MissionDef = { name: string, status: string, estimate: string?, risk: string? }
+export type MissionSpot = { id: string, chamberId: string, pos: V3, clue: string? }
+export type Readable = { id: string, chamberId: string, pos: V3, facing: V3, title: string }
+export type PocketDef = {
+	id: string,
+	regionId: string,
+	from: string, -- static chamber at one mouth
+	to: string, -- static chamber at the other mouth
+	axis: string, -- "x" or "z": the axis joining the two mouths
+	bounds: { min: V3, max: V3 }, -- covers every version; occupancy uses it plus Config.Pockets.occupancyMargin
+	versions: { string },
+	migrationAnchor: string, -- static chamber that receives records whose pocket version no longer exists here
+	doors: { number }?, -- PK3 only: x positions of the three doors on the doorway room's north wall
+	puzzle: string?,
+}
 
 local WorldDefs = {}
 
@@ -95,8 +111,22 @@ local Regions: { Region } = {
 		shelterId = "S03.pump_platform",
 		landmarks = { "R03.pump_gallery", "R03.sluice", "R03.cistern", "R03.silt_loop" },
 	},
-	{ id = "R04", name = "Abandoned Survey Station", danger = 0.55, inSlice = false, shelterId = nil, landmarks = {} },
-	{ id = "R05", name = "Shifting Crossroads", danger = 0.6, inSlice = false, shelterId = nil, landmarks = {} },
+	{
+		id = "R04",
+		name = "Abandoned Survey Station",
+		danger = 0.55,
+		inSlice = true,
+		shelterId = "S04.service_office",
+		landmarks = { "R04.station_hall", "R04.radio_room", "R04.generator_room", "R04.map_room" },
+	},
+	{
+		id = "R05",
+		name = "Shifting Crossroads",
+		danger = 0.6,
+		inSlice = true,
+		shelterId = "S05.stable_junction",
+		landmarks = { "R05.south_anchor", "R05.center_anchor", "R05.doorway_room", "R05.junction" },
+	},
 	{ id = "R06", name = "Buried Paris", danger = 0.65, inSlice = false, shelterId = nil, landmarks = {} },
 	{ id = "R07", name = "Inverted Archive", danger = 0.7, inSlice = false, shelterId = nil, landmarks = {} },
 	{ id = "R08", name = "Memory Houses", danger = 0.75, inSlice = false, shelterId = nil, landmarks = {} },
@@ -254,6 +284,160 @@ local Chambers: { Chamber } = {
 		size = { x = 24, y = 12, z = 24 },
 		label = "Silt Works",
 	},
+	-- R01 additions (Milestone 3): the Borrowed Miner's dead end and the room behind the P04 grate
+	{
+		id = "R01.collapsed_drift",
+		regionId = "R01",
+		pos = { x = 182, y = 0, z = 330 },
+		size = { x = 20, y = 12, z = 20 },
+		label = "Collapsed Drift",
+	},
+	{
+		id = "R01.pulley_store",
+		regionId = "R01",
+		pos = { x = 0, y = 0, z = 420 },
+		size = { x = 20, y = 12, z = 20 },
+		label = "Pulley Store",
+	},
+	-- R03 additions (Milestone 3, M05): the Overflow Vault and the long dry route to it
+	{
+		id = "R03.overflow_vault",
+		regionId = "R03",
+		pos = { x = -264, y = -44, z = 720 },
+		size = { x = 24, y = 14, z = 24 },
+		label = "Overflow Vault",
+		dry = true,
+	},
+	{
+		id = "R03.drain_gallery",
+		regionId = "R03",
+		pos = { x = -174, y = -44, z = 630 },
+		size = { x = 22, y = 12, z = 22 },
+		label = "Drain Gallery",
+		dry = true,
+	},
+	{
+		id = "R03.vault_stair",
+		regionId = "R03",
+		pos = { x = -264, y = -44, z = 630 },
+		size = { x = 20, y = 12, z = 20 },
+		label = "Vault Stair",
+		dry = true,
+	},
+	-- R04 Abandoned Survey Station (y = -64), reached down a slope north of the Sluice Channel
+	{
+		id = "R04.station_hall",
+		regionId = "R04",
+		pos = { x = -84, y = -64, z = 930 },
+		size = { x = 32, y = 14, z = 32 },
+		label = "Survey Station Hall",
+	},
+	{
+		id = "R04.battery_store",
+		regionId = "R04",
+		pos = { x = -174, y = -64, z = 930 },
+		size = { x = 24, y = 12, z = 24 },
+		label = "Battery Store",
+	},
+	{
+		id = "R04.collapsed_adit",
+		regionId = "R04",
+		pos = { x = -264, y = -64, z = 930 },
+		size = { x = 20, y = 12, z = 20 },
+		label = "Collapsed Adit",
+	},
+	{
+		id = "R04.radio_room",
+		regionId = "R04",
+		pos = { x = 6, y = -64, z = 930 },
+		size = { x = 26, y = 14, z = 26 },
+		label = "Radio Room",
+	},
+	{
+		id = "R04.generator_room",
+		regionId = "R04",
+		pos = { x = -84, y = -64, z = 1020 },
+		size = { x = 30, y = 16, z = 30 },
+		label = "Generator Room",
+	},
+	{
+		id = "R04.map_room",
+		regionId = "R04",
+		pos = { x = 6, y = -64, z = 1020 },
+		size = { x = 28, y = 14, z = 28 },
+		label = "Map Room",
+	},
+	{
+		id = "R04.service_office",
+		regionId = "R04",
+		pos = { x = -174, y = -64, z = 1020 },
+		size = { x = 24, y = 12, z = 24 },
+		label = "Service Office",
+	},
+	-- R05 Shifting Crossroads (y = -84): stable anchor rooms joined in places by variable pockets (WorldDefs.Pockets)
+	{
+		id = "R05.south_anchor",
+		regionId = "R05",
+		pos = { x = 6, y = -84, z = 1120 },
+		size = { x = 28, y = 14, z = 28 },
+		label = "South Survey Anchor",
+	},
+	{
+		id = "R05.sw_bend",
+		regionId = "R05",
+		pos = { x = -84, y = -84, z = 1120 },
+		size = { x = 24, y = 12, z = 24 },
+		label = "Measured Bend",
+	},
+	{
+		id = "R05.west_anchor",
+		regionId = "R05",
+		pos = { x = -84, y = -84, z = 1210 },
+		size = { x = 24, y = 14, z = 24 },
+		label = "West Survey Anchor",
+	},
+	{
+		id = "R05.center_anchor",
+		regionId = "R05",
+		pos = { x = 6, y = -84, z = 1210 },
+		size = { x = 28, y = 14, z = 28 },
+		label = "Measured Crossing",
+	},
+	{
+		id = "R05.east_anchor",
+		regionId = "R05",
+		pos = { x = 96, y = -84, z = 1210 },
+		size = { x = 24, y = 14, z = 24 },
+		label = "East Survey Anchor",
+	},
+	{
+		id = "R05.east_niche",
+		regionId = "R05",
+		pos = { x = 96, y = -84, z = 1300 },
+		size = { x = 22, y = 12, z = 22 },
+		label = "Numbered Niche",
+	},
+	{
+		id = "R05.doorway_room",
+		regionId = "R05",
+		pos = { x = 6, y = -84, z = 1300 },
+		size = { x = 40, y = 16, z = 24 },
+		label = "Room of Three Doors",
+	},
+	{
+		id = "R05.east_loop",
+		regionId = "R05",
+		pos = { x = 96, y = -84, z = 1390 },
+		size = { x = 24, y = 12, z = 24 },
+		label = "Returning Gallery",
+	},
+	{
+		id = "R05.junction",
+		regionId = "R05",
+		pos = { x = 6, y = -84, z = 1390 },
+		size = { x = 28, y = 14, z = 28 },
+		label = "Stable Stone Junction",
+	},
 }
 WorldDefs.Chambers = Chambers
 
@@ -281,6 +465,35 @@ local Corridors: { Corridor } = {
 	{ from = "R03.sluice", to = "R03.pump_platform" },
 	{ from = "R03.pump_platform", to = "R03.silt_loop" },
 	{ from = "R03.silt_loop", to = "R03.pump_gallery" },
+	-- Milestone 3 ------------------------------------------------------------------------------------
+	{ from = "R01.east_loop", to = "R01.collapsed_drift" }, -- the Borrowed Miner's misleading dead end
+	{ from = "R01.rusted_pulley", to = "R01.pulley_store", gate = "P04" }, -- grate raised by the counterweight
+	{ from = "R03.silt_loop", to = "R03.overflow_vault", gate = "W05" }, -- deep until the sluice gates are set (loud)
+	{ from = "R03.silt_loop", to = "R03.drain_gallery" }, -- the long silent route begins
+	{ from = "R03.drain_gallery", to = "R03.vault_stair" },
+	{ from = "R03.vault_stair", to = "R03.overflow_vault" },
+	-- descent into the survey station
+	{ from = "R03.sluice", to = "R04.station_hall" },
+	{ from = "R04.station_hall", to = "R04.battery_store" },
+	{ from = "R04.battery_store", to = "R04.collapsed_adit" },
+	{ from = "R04.station_hall", to = "R04.radio_room" },
+	{ from = "R04.station_hall", to = "R04.generator_room" },
+	{ from = "R04.generator_room", to = "R04.map_room" },
+	{ from = "R04.radio_room", to = "R04.map_room" },
+	{ from = "R04.generator_room", to = "R04.service_office" },
+	{ from = "R04.battery_store", to = "R04.service_office" },
+	-- descent into the shifting crossroads
+	{ from = "R04.map_room", to = "R05.south_anchor" },
+	{ from = "R05.south_anchor", to = "R05.sw_bend" },
+	{ from = "R05.sw_bend", to = "R05.west_anchor" },
+	{ from = "R05.west_anchor", to = "R05.center_anchor" },
+	{ from = "R05.center_anchor", to = "R05.doorway_room" },
+	{ from = "R05.east_anchor", to = "R05.east_niche" },
+	{ from = "R05.east_niche", to = "R05.east_loop" },
+	{ from = "R05.east_loop", to = "R05.junction" },
+	{ from = "R05.south_anchor", to = "R05.center_anchor", pocket = "PK1" },
+	{ from = "R05.center_anchor", to = "R05.east_anchor", pocket = "PK2" },
+	{ from = "R05.doorway_room", to = "R05.junction", pocket = "PK3" }, -- also puzzle P06
 }
 WorldDefs.Corridors = Corridors
 
@@ -372,6 +585,61 @@ local Shelters: { [string]: ShelterDef } = {
 				},
 			},
 			pipe_plug = { maxStage = 1, costPerStage = { { ["mat.plank"] = 2, ["mat.fastener"] = 2 } } },
+		},
+		functionalUpgrades = {
+			workbench = { maxStage = 1, costPerStage = { { ["mat.plank"] = 2, ["mat.fastener"] = 2 } } },
+			better_lighting = { maxStage = 1, costPerStage = { { ["power.cell"] = 1, ["mat.fastener"] = 1 } } },
+		},
+	},
+	["S04.service_office"] = {
+		id = "S04.service_office",
+		family = "survey_station_room",
+		regionId = "R04",
+		name = "Reinforced Service Office",
+		exteriorChamberId = "R04.service_office",
+		doorSide = "W",
+		theme = "office",
+		entrances = {
+			{ id = "steel_door", requiredUpgrade = "door_bars", requiredStage = 2 },
+			{ id = "cable_duct", requiredUpgrade = "duct_cover", requiredStage = 1 },
+		},
+		safetyUpgrades = {
+			door_bars = {
+				maxStage = 2,
+				costPerStage = {
+					{ ["mat.bracket"] = 2 },
+					{ ["mat.plank"] = 2, ["mat.fastener"] = 2 },
+				},
+			},
+			duct_cover = { maxStage = 1, costPerStage = { { ["mat.bracket"] = 1, ["mat.fastener"] = 2 } } },
+		},
+		functionalUpgrades = {
+			workbench = { maxStage = 1, costPerStage = { { ["mat.plank"] = 2, ["mat.fastener"] = 2 } } },
+			-- Also requires the private breaker repair (M04); see docs/MILESTONE-3.md 4.1.
+			station_power = { maxStage = 1, costPerStage = { { ["tool.fuse_kit"] = 1 } } },
+		},
+	},
+	["S05.stable_junction"] = {
+		id = "S05.stable_junction",
+		family = "stable_anchor_chamber",
+		regionId = "R05",
+		name = "Stable Stone Junction",
+		exteriorChamberId = "R05.junction",
+		doorSide = "N",
+		theme = "limestone",
+		entrances = {
+			{ id = "survey_arch", requiredUpgrade = "arch_brace", requiredStage = 2 },
+			{ id = "floor_fissure", requiredUpgrade = "fissure_fill", requiredStage = 1 },
+		},
+		safetyUpgrades = {
+			arch_brace = {
+				maxStage = 2,
+				costPerStage = {
+					{ ["mat.plank"] = 2 },
+					{ ["mat.bracket"] = 2, ["mat.fastener"] = 1 },
+				},
+			},
+			fissure_fill = { maxStage = 1, costPerStage = { { ["mat.plank"] = 3, ["mat.fastener"] = 1 } } },
 		},
 		functionalUpgrades = {
 			workbench = { maxStage = 1, costPerStage = { { ["mat.plank"] = 2, ["mat.fastener"] = 2 } } },
@@ -506,6 +774,79 @@ local ScavengeSites: { ScavengeSite } = {
 		respawnSeconds = 1800,
 		contents = { ["treasure.brass_rule"] = 2, ["med.bandage"] = 1, ["power.cell"] = 2 },
 	},
+	-- Milestone 3
+	{
+		id = "R01.scav.pulley_store_crate",
+		regionId = "R01",
+		pos = { x = 6, y = 1, z = 426 },
+		requiresLight = false,
+		respawnSeconds = 1200,
+		contents = { ["nav.rope"] = 2, ["treasure.brass_rule"] = 1, ["mat.fabric"] = 2 },
+	},
+	{
+		id = "R03.scav.vault_cache",
+		regionId = "R03",
+		pos = { x = -256, y = -43, z = 730 },
+		requiresLight = false,
+		respawnSeconds = 1800,
+		contents = { ["tool.flare"] = 2, ["power.cell"] = 1, ["mat.fuse_component"] = 2 },
+	},
+	{
+		id = "R04.scav.hall_desk",
+		regionId = "R04",
+		pos = { x = -72, y = -63, z = 942 },
+		requiresLight = false,
+		respawnSeconds = 900,
+		contents = { ["tool.flare"] = 1, ["mat.fuse_component"] = 2, ["treasure.dated_battery"] = 1 },
+	},
+	{
+		id = "R04.scav.medical_shelves",
+		regionId = "R04",
+		pos = { x = -72, y = -63, z = 917 },
+		requiresLight = false,
+		respawnSeconds = 1200,
+		contents = { ["med.splint"] = 1, ["med.cloth_dressing"] = 1, ["mat.fabric"] = 1 },
+	},
+	{
+		id = "R04.scav.battery_shelf",
+		regionId = "R04",
+		pos = { x = -182, y = -63, z = 921 },
+		requiresLight = true,
+		respawnSeconds = 3600,
+		contents = { ["light.shielded_lantern"] = 1, ["tool.repair_roll"] = 1, ["mat.battery_housing"] = 1 },
+	},
+	{
+		id = "R04.scav.generator_locker",
+		regionId = "R04",
+		pos = { x = -97, y = -63, z = 1032 },
+		requiresLight = false,
+		respawnSeconds = 1200,
+		contents = { ["tool.fuse_kit"] = 1, ["tool.repair_roll"] = 1, ["mat.bracket"] = 1 },
+	},
+	{
+		id = "R04.scav.radio_bench",
+		regionId = "R04",
+		pos = { x = 14, y = -63, z = 921 },
+		requiresLight = true,
+		respawnSeconds = 900,
+		contents = { ["mat.fuse_component"] = 2, ["mat.battery_housing"] = 1, ["power.cell"] = 1 },
+	},
+	{
+		id = "R04.scav.map_drawer",
+		regionId = "R04",
+		pos = { x = 16, y = -63, z = 1009 },
+		requiresLight = true,
+		respawnSeconds = 1800,
+		contents = { ["treasure.field_photograph"] = 1, ["nav.sign"] = 1 },
+	},
+	{
+		id = "R05.scav.anchor_cache",
+		regionId = "R05",
+		pos = { x = 16, y = -83, z = 1110 },
+		requiresLight = false,
+		respawnSeconds = 1200,
+		contents = { ["treasure.dated_battery"] = 1, ["nav.chalk"] = 5, ["power.cell"] = 1 },
+	},
 }
 WorldDefs.ScavengeSites = ScavengeSites
 
@@ -525,6 +866,13 @@ local UniquePickups: { UniquePickup } = {
 		discoveryId = "R02.found_old_tag",
 		label = "Old expedition tag",
 	},
+	{
+		id = "R03.unique.waterworks_log",
+		itemId = "evidence.waterworks_log",
+		pos = { x = -2, y = -43, z = 830 },
+		discoveryId = "R03.found_waterworks_log",
+		label = "Waterworks log",
+	},
 }
 WorldDefs.UniquePickups = UniquePickups
 
@@ -540,6 +888,17 @@ local HidingSpots: { HidingSpot } = {
 	{ id = "hide.R03.pumps", pos = { x = -98, y = -44, z = 708 }, facing = { x = 1, y = 0, z = 0 } },
 	{ id = "hide.R03.silt", pos = { x = -184, y = -44, z = 712 }, facing = { x = 1, y = 0, z = 0 } },
 	{ id = "hide.R03.sluice", pos = { x = -96, y = -44, z = 836 }, facing = { x = 1, y = 0, z = 0 } },
+	-- Milestone 3
+	{ id = "hide.R03.drain", pos = { x = -165, y = -44, z = 622 }, facing = { x = -1, y = 0, z = 0 } },
+	{ id = "hide.R04.hall", pos = { x = -98, y = -64, z = 942 }, facing = { x = 1, y = 0, z = 0 } },
+	{ id = "hide.R04.battery", pos = { x = -170, y = -64, z = 920 }, facing = { x = 0, y = 0, z = 1 } },
+	{ id = "hide.R04.generator", pos = { x = -97, y = -64, z = 1009 }, facing = { x = 1, y = 0, z = 0 } },
+	{ id = "hide.R04.map", pos = { x = 18, y = -64, z = 1031 }, facing = { x = -1, y = 0, z = 0 } },
+	{ id = "hide.R05.south", pos = { x = 18, y = -84, z = 1112 }, facing = { x = -1, y = 0, z = 0 } },
+	{ id = "hide.R05.bend", pos = { x = -94, y = -84, z = 1112 }, facing = { x = 1, y = 0, z = 0 } },
+	{ id = "hide.R05.east", pos = { x = 106, y = -84, z = 1200 }, facing = { x = -1, y = 0, z = 0 } },
+	{ id = "hide.R05.niche", pos = { x = 105, y = -84, z = 1300 }, facing = { x = -1, y = 0, z = 0 } },
+	{ id = "hide.R05.loop", pos = { x = 106, y = -84, z = 1400 }, facing = { x = -1, y = 0, z = 0 } },
 }
 WorldDefs.HidingSpots = HidingSpots
 
@@ -568,10 +927,77 @@ local Puzzles: { [string]: PuzzleDef } = {
 		barrier = { x = -20, y = -44, z = 820 }, -- deep water in the corridor to the cistern
 		refloodSeconds = 600,
 	},
-	P03 = { id = "P03", name = "Fuse bridge", status = "PLANNED" },
-	P04 = { id = "P04", name = "Weight and pulley", status = "PLANNED" },
-	P05 = { id = "P05", name = "Echo sequence", status = "PLANNED" },
-	P06 = { id = "P06", name = "Impossible doorway", status = "PLANNED" },
+	-- P03: three labelled junction boxes on the generator room's north wall (facing -z); the circuit plate names the
+	-- dead line. Needs a repair tool roll (kept) and a fuse kit (consumed). Shared per server.
+	P03 = {
+		id = "P03",
+		name = "Fuse bridge",
+		status = "SLICE",
+		regionId = "R04",
+		chamberId = "R04.generator_room",
+		boxes = {
+			{ label = "A", pos = { x = -92, y = -61, z = 1033 } },
+			{ label = "B", pos = { x = -84, y = -61, z = 1033 } },
+			{ label = "C", pos = { x = -76, y = -61, z = 1033 } },
+		},
+		plate = { x = -73, y = -61, z = 1007 }, -- circuit plate on the south wall (faces +z)
+		generator = { x = -84, y = -64, z = 1022 },
+	},
+	-- P04: load stones into the counterweight basket to raise the grate to the Pulley Store; latch it to cross solo.
+	P04 = {
+		id = "P04",
+		name = "Weight and pulley",
+		status = "SLICE",
+		regionId = "R01",
+		chamberId = "R01.rusted_pulley",
+		stonePile = { x = -13, y = 0, z = 317 },
+		basket = { x = 6, y = 0, z = 334 }, -- hangs from the existing pulley frame
+		latch = { x = 13, y = 0, z = 343 },
+		grate = { x = 0, y = 0, z = 346 }, -- in the north opening
+		innerLever = { x = -8, y = 0, z = 413 }, -- inside the Pulley Store: always opens the grate
+		stonesNeeded = 3,
+	},
+	-- P05: repeat the radio's short/long pattern (lamp and caption give the same rhythm visually).
+	P05 = {
+		id = "P05",
+		name = "Echo sequence",
+		status = "SLICE",
+		regionId = "R04",
+		chamberId = "R04.radio_room",
+		radio = { x = 17, y = -64, z = 930 }, -- on the east wall, facing -x
+		sequences = { "SLSS", "LSLS", "SSLL", "LSSL", "SLLS" }, -- authored; one is chosen per server
+	},
+	-- P06: the three-version pocket PK3 (WorldDefs.Pockets). Nothing is locked; verifying the stable door is the success.
+	P06 = {
+		id = "P06",
+		name = "Impossible doorway",
+		status = "SLICE",
+		regionId = "R05",
+		chamberId = "R05.doorway_room",
+		pocketId = "PK3",
+		observationStep = { x = -10, y = -84, z = 1292 },
+		flickerPeriodSeconds = 12,
+	},
+	-- W05: sluice gates for M05 Waterworks Passage. Turn the three wheels in the clue order; each turn is loud.
+	W05 = {
+		id = "W05",
+		name = "Sluice gates",
+		status = "SLICE",
+		regionId = "R03",
+		chamberId = "R03.silt_loop",
+		wheels = {
+			{ x = -164, y = -41, z = 710 },
+			{ x = -164, y = -41, z = 730 },
+			{ x = -184, y = -41, z = 730 },
+		},
+		clues = {
+			{ pos = { x = -99, y = -40, z = 708 }, facing = { x = 1, y = 0, z = 0 } }, -- Old Pumps, west wall
+			{ pos = { x = -164, y = -40, z = 630 }, facing = { x = -1, y = 0, z = 0 } }, -- Drain Gallery, east wall
+		},
+		barrier = { x = -219, y = -44, z = 720 }, -- deep water in the corridor to the Overflow Vault
+		orders = { "123", "132", "213", "231", "312", "321" }, -- authored; one is chosen per server
+		refloodSeconds = 600,
+	},
 }
 WorldDefs.Puzzles = Puzzles
 
@@ -604,6 +1030,26 @@ local RescueSpawns: { RescueSpawn } = {
 		cue = "chalk_scrawl",
 	},
 	{ id = "R03.rescue.silt", chamberId = "R03.silt_loop", pos = { x = -168, y = -42, z = 714 }, cue = "rope_end" },
+	-- Milestone 3 (stable chambers only; never inside a variable pocket)
+	{
+		id = "R04.rescue.battery",
+		chamberId = "R04.battery_store",
+		pos = { x = -165, y = -63, z = 939 },
+		cue = "dropped_lamp",
+	},
+	{ id = "R04.rescue.radio", chamberId = "R04.radio_room", pos = { x = -3, y = -63, z = 920 }, cue = "rope_end" },
+	{
+		id = "R05.rescue.south",
+		chamberId = "R05.south_anchor",
+		pos = { x = 16, y = -83, z = 1130 },
+		cue = "chalk_scrawl",
+	},
+	{
+		id = "R05.rescue.west",
+		chamberId = "R05.west_anchor",
+		pos = { x = -92, y = -83, z = 1204 },
+		cue = "dropped_lamp",
+	},
 }
 WorldDefs.RescueSpawns = RescueSpawns
 
@@ -645,6 +1091,25 @@ local CacheSpots: { CacheSpot } = {
 		pos = { x = -75, y = -43, z = 733 },
 		clue = "beside the three iron valves",
 	},
+	-- Milestone 3
+	{
+		id = "cache.station",
+		chamberId = "R04.station_hall",
+		pos = { x = -93, y = -63, z = 917 },
+		clue = "under the desk with three calendars that disagree",
+	},
+	{
+		id = "cache.maproom",
+		chamberId = "R04.map_room",
+		pos = { x = -4, y = -63, z = 1031 },
+		clue = "below the map that shows a street where no street can be",
+	},
+	{
+		id = "cache.westanchor",
+		chamberId = "R05.west_anchor",
+		pos = { x = -92, y = -83, z = 1218 },
+		clue = "beside the anchor plaque marked with a diamond",
+	},
 }
 WorldDefs.CacheSpots = CacheSpots
 
@@ -664,29 +1129,68 @@ local Creatures: { [string]: CreatureDef } = {
 			"Compare sketches (not yet possible).",
 		},
 	},
+	-- C02: an exact work rhythm; walks toward a dead end when watched; never answers a verified party ping.
 	C02_BorrowedMiner = {
 		id = "C02",
 		name = "Borrowed Miner",
-		status = "PLANNED",
+		status = "SLICE",
 		damaging = false,
 		killable = false,
-		researchEvidence = {},
+		walkSpeed = 7,
+		watchRadius = 40,
+		homes = {
+			{
+				chamberId = "R01.east_loop",
+				workPos = { x = 92, y = 0, z = 340 },
+				lureChamberId = "R01.collapsed_drift",
+				lurePos = { x = 188, y = 0, z = 330 },
+			},
+			{
+				chamberId = "R04.station_hall",
+				workPos = { x = -70, y = -64, z = 920 },
+				lureChamberId = "R04.collapsed_adit",
+				lurePos = { x = -268, y = -64, z = 930 },
+			},
+		},
+		researchEvidence = { "seen", "heard_exact_rhythm", "waited_for_repeat", "failed_verification" },
+		hints = {
+			"Look for a miner still working where nobody should be.",
+			"Listen: the strokes keep an exact rhythm.",
+			"Stay close and let it repeat three times.",
+			"Send a verified party ping near it, or watch it fade at the dead end.",
+		},
 	},
+	-- C03: clings to an exposed light and shortens its beam; darkness, shielding or a flare disperses it. Harmless.
 	C03_WickMoth = {
 		id = "C03",
 		name = "Wick Moth",
-		status = "PLANNED",
+		status = "SLICE",
 		damaging = false,
 		killable = false,
-		researchEvidence = {},
+		zones = { "R02.lantern_crypt", "R04.battery_store" },
+		researchEvidence = { "seen", "heard_flutter", "dispersed_by_darkness", "shielded_or_decoyed" },
+		hints = {
+			"Carry a lit light into the Lantern Crypt or the Battery Store.",
+			"Listen for wing flutter before the beam clouds over.",
+			"Switch your light off for a few seconds.",
+			"Shield a lantern, or light a flare to draw them away.",
+		},
 	},
+	-- C04: a private false mark near your own chalk in R05. It cannot touch, move or transfer a saved marker.
 	C04_ChalkHand = {
 		id = "C04",
 		name = "Chalk Hand",
-		status = "PLANNED",
+		status = "SLICE",
 		damaging = false,
 		killable = false,
-		researchEvidence = {},
+		regionId = "R05",
+		researchEvidence = { "seen", "noticed_false_mark", "checked_notebook", "confirmed_own_mark" },
+		hints = {
+			"Mark your route with chalk in the Shifting Crossroads.",
+			"Look for a fresh mark you did not draw.",
+			"Inspect it: is it in your notebook?",
+			"Inspect one of your own marks to compare.",
+		},
 	},
 	C05_Scrabbler = {
 		id = "C05",
@@ -751,13 +1255,29 @@ local Creatures: { [string]: CreatureDef } = {
 			"Stun it while it is still knocking.",
 		},
 	},
+	-- C08: stalks poorly supplied travellers; strikes and snuffs a light (charge unchanged). Flares divert it; breaking
+	-- sight loses it; a stun repels it. It never strikes before the player has read the warning (counterEvidence).
 	C08_LanternThief = {
 		id = "C08",
 		name = "Lantern Thief",
-		status = "PLANNED",
+		status = "SLICE",
 		damaging = true,
 		killable = false,
-		researchEvidence = {},
+		walkSpeed = 8,
+		approachSpeed = 15,
+		sightRadius = 50,
+		reach = 6,
+		repelSeconds = 6,
+		regions = { "R04", "R05" },
+		homes = { "R04.generator_room", "R04.map_room", "R04.battery_store", "R05.center_anchor" },
+		counterEvidence = "R04.thief_notes",
+		researchEvidence = { "seen", "heard_rattle", "decoyed_by_flare", "lost_by_breaking_sight" },
+		hints = {
+			"Something with many dim lights moves deep in the survey station.",
+			"Listen for a faint rattle of glass.",
+			"Light a flare and let it take the brighter prize.",
+			"Break its line of sight until it gives up.",
+		},
 	},
 	C09_Procession = {
 		id = "C09",
@@ -805,17 +1325,20 @@ end
 
 -- Characters (section 05). Only N01 has a placeholder presence (the depot board).
 local Characters: { [string]: CharacterDef } = {
-	N01 = {
-		name = "Mara Voss",
-		role = "expedition coordinator",
-		status = "SLICE_PLACEHOLDER",
-		pos = { x = 14, y = 60, z = -20 },
+	N01 = { name = "Mara Voss", role = "expedition coordinator", status = "SLICE", pos = { x = 14, y = 60, z = -20 } },
+	N02 = { name = "Dr Luc Moreau", role = "historian", status = "SLICE", pos = { x = -6, y = 60, z = 10 } },
+	N03 = { name = "Ines Vidal", role = "quartermaster", status = "SLICE", pos = { x = -20, y = 60, z = -14 } },
+	N04 = { name = "Amadou Diallo", role = "engineer", status = "SLICE", pos = { x = -30, y = 60, z = -12 } },
+	-- Elise Renaud appears only in recordings and notes this milestone.
+	N05 = { name = "Elise Renaud", role = "missing survey lead", status = "RECORDINGS" },
+	-- Noah Perrin waits in the Silt Works (Act II rescue, rescuePos) and stands at the depot afterwards (pos).
+	N06 = {
+		name = "Noah Perrin",
+		role = "rescued courier",
+		status = "SLICE",
+		pos = { x = 20, y = 60, z = 8 },
+		rescuePos = { x = -177, y = -43, z = 718 },
 	},
-	N02 = { name = "Dr Luc Moreau", role = "historian", status = "PLANNED" },
-	N03 = { name = "Ines Vidal", role = "quartermaster", status = "PLANNED" },
-	N04 = { name = "Amadou Diallo", role = "engineer", status = "PLANNED" },
-	N05 = { name = "Elise Renaud", role = "missing survey lead", status = "PLANNED" },
-	N06 = { name = "Noah Perrin", role = "rescued courier", status = "PLANNED" },
 }
 WorldDefs.Characters = Characters
 
@@ -823,18 +1346,108 @@ WorldDefs.Characters = Characters
 local Missions: { [string]: MissionDef } = {
 	M01 = { name = "Nearby Rescue", status = "SLICE", estimate = "5-15 min", risk = "low" },
 	M02 = { name = "Missing Survey Cache", status = "SLICE", estimate = "10-25 min", risk = "low" },
-	M03 = { name = "Medical Delivery", status = "PLANNED" },
-	M04 = { name = "Power Restoration", status = "PLANNED" },
-	M05 = { name = "Waterworks Passage", status = "PLANNED" },
+	M03 = { name = "Medical Delivery", status = "SLICE", estimate = "10-20 min", risk = "low" },
+	M04 = { name = "Power Restoration", status = "SLICE", estimate = "15-35 min", risk = "medium" },
+	M05 = { name = "Waterworks Passage", status = "SLICE", estimate = "20-45 min", risk = "medium" },
 	M06 = { name = "False Signal", status = "PLANNED" },
 	M07 = { name = "Creature Observation", status = "SLICE", estimate = "10-30 min", risk = "medium" },
 	M08 = { name = "Route Survey", status = "PLANNED" },
-	M09 = { name = "Shelter Establishment", status = "PLANNED" },
+	M09 = { name = "Shelter Establishment", status = "SLICE", estimate = "20-60 min", risk = "medium" },
 	M10 = { name = "Deep Treasure", status = "PLANNED" },
-	M11 = { name = "Lost Belongings", status = "PLANNED" },
+	M11 = { name = "Lost Belongings", status = "SLICE", estimate = "10-45 min", risk = "varies" },
 	M12 = { name = "Anomaly Chain", status = "PLANNED" },
 }
 WorldDefs.Missions = Missions
+
+-- Mission spots (section 06). Stable chambers only, never inside a variable pocket.
+local MissionSpots: { [string]: { MissionSpot } } = {
+	-- M03: where an injured (generic, unnamed) survey worker waits for supplies.
+	M03 = {
+		{ id = "M03.R01.board", chamberId = "R01.survey_board", pos = { x = 10, y = 1, z = 142 } },
+		{ id = "M03.R02.inspection", chamberId = "R02.inspection_room", pos = { x = -170, y = -23, z = 432 } },
+		{ id = "M03.R03.pumps", chamberId = "R03.pump_gallery", pos = { x = -96, y = -43, z = 732 } },
+		{ id = "M03.R04.hall", chamberId = "R04.station_hall", pos = { x = -90, y = -63, z = 940 } },
+		{ id = "M03.R05.west", chamberId = "R05.west_anchor", pos = { x = -76, y = -83, z = 1218 } },
+	},
+	-- M05: the sluice-keeper's cache (each participant opens their own copy).
+	M05 = {
+		{
+			id = "M05.vault_cache",
+			chamberId = "R03.overflow_vault",
+			pos = { x = -272, y = -43, z = 728 },
+			clue = "the sluice-keeper's cache in the Overflow Vault",
+		},
+	},
+}
+WorldDefs.MissionSpots = MissionSpots
+
+-- Readable notes and plaques with story or counter evidence. Text lives in Data/Dialogue (story package).
+local Readables: { Readable } = {
+	-- Counter evidence for C08 before its first dangerous encounter (section 10).
+	{
+		id = "R04.thief_notes",
+		chamberId = "R04.station_hall",
+		pos = { x = -99, y = -61, z = 918 },
+		facing = { x = 1, y = 0, z = 0 },
+		title = "Field note, E. Renaud",
+	},
+}
+WorldDefs.Readables = Readables
+
+-- Variable pockets (section 04, F08; docs/MILESTONE-3.md section 3). PocketService builds the active version.
+local Pockets: { [string]: PocketDef } = {
+	PK1 = {
+		id = "PK1",
+		regionId = "R05",
+		from = "R05.south_anchor",
+		to = "R05.center_anchor",
+		axis = "z",
+		bounds = { min = { x = -30, y = -84, z = 1134 }, max = { x = 42, y = -66, z = 1196 } },
+		versions = { "direct", "loop", "low" },
+		migrationAnchor = "R05.south_anchor",
+	},
+	PK2 = {
+		id = "PK2",
+		regionId = "R05",
+		from = "R05.center_anchor",
+		to = "R05.east_anchor",
+		axis = "x",
+		bounds = { min = { x = 20, y = -84, z = 1176 }, max = { x = 84, y = -66, z = 1244 } },
+		versions = { "direct", "dogleg", "low" },
+		migrationAnchor = "R05.center_anchor",
+	},
+	PK3 = {
+		id = "PK3",
+		regionId = "R05",
+		from = "R05.doorway_room",
+		to = "R05.junction",
+		axis = "z",
+		bounds = { min = { x = -14, y = -84, z = 1312 }, max = { x = 26, y = -66, z = 1376 } },
+		versions = { "left", "middle", "right" },
+		migrationAnchor = "R05.center_anchor",
+		doors = { -6, 6, 18 },
+		puzzle = "P06",
+	},
+}
+WorldDefs.Pockets = Pockets
+
+-- The pocket whose bounds contain a position (no margin), or nil.
+function WorldDefs.pocketAt(pos: V3): PocketDef?
+	for _, pk in Pockets do
+		local b = pk.bounds
+		if
+			pos.x >= b.min.x
+			and pos.x <= b.max.x
+			and pos.y >= b.min.y - 2
+			and pos.y <= b.max.y
+			and pos.z >= b.min.z
+			and pos.z <= b.max.z
+		then
+			return pk
+		end
+	end
+	return nil
+end
 
 local chamberIndex: { [string]: Chamber } = {}
 for _, c in WorldDefs.Chambers do

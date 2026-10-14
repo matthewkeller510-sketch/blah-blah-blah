@@ -1,0 +1,70 @@
+--!strict
+-- Cue captions (sections 10, 11, 17). Every essential cue has a caption so counterplay survives muted audio
+-- (captions for essential cues show even with subtitles off). Audio asset IDs are PLACEHOLDERS; see
+-- docs/AUDIO-CUES.md for the intended sounds. Pure data module, shared by server and client.
+
+export type CueDef = { text: string, essential: boolean }
+
+local CueDefs: { [string]: CueDef } = {
+	sidelooker_scrape = { text = "[a faint scrape of stone]", essential = false },
+	sidelooker_retreat = { text = "[something slips out of sight]", essential = false },
+	scrabbler_idle = { text = "[claws shifting rubble]", essential = false },
+	scrabbler_windup = { text = "[SCRAPING CLAWS — something is about to rush]", essential = true },
+	scrabbler_hit = { text = "[claws strike]", essential = true },
+	scrabbler_hurt = { text = "[a shrill hiss]", essential = false },
+	knocker_knock = { text = "[KNOCK]", essential = true },
+	knocker_impact = { text = "[a heavy impact against stone]", essential = true },
+	knocker_stunned = { text = "[the knocking stops abruptly]", essential = true },
+	weapon_ineffective = { text = "[metal glances off without effect]", essential = true },
+	shelter_probe = { text = "[scratching at an unprotected entrance]", essential = true },
+	stun_fired = { text = "[stun device discharges]", essential = false },
+	breathing = { text = "[heavy breathing]", essential = false },
+	wader_ripple = { text = "[ripples spreading across the water]", essential = false },
+	wader_drag = { text = "[A DRAGGING STEP IN THE WATER — it heard you. Stop splashing.]", essential = true },
+	wader_strike = { text = "[long arms strike from the water]", essential = true },
+	wader_lost = { text = "[the dragging steps wander away]", essential = true },
+	wader_repelled = { text = "[it recoils and wades off]", essential = true },
+	stone_splash = { text = "[a stone splashes]", essential = false },
+	stone_clatter = { text = "[a stone clatters on rock]", essential = false },
+	plaque_turn = { text = "[stone grinds as the plaque turns]", essential = false },
+	gate_open = { text = "[a heavy gate grinds open]", essential = true },
+	valve_turn = { text = "[the valve squeals; water shifts in the pipes]", essential = false },
+	valve_reset = { text = "[all valves clank shut]", essential = false },
+	water_drain = { text = "[a deep gurgle — the cistern is draining]", essential = true },
+	water_rising = { text = "[water rushes back into the cistern]", essential = true },
+	-- Milestone 3 -------------------------------------------------------------------------------------
+	pocket_shift = {
+		text = "[SURVEY CLICKS AND FALLING DUST — the passage ahead is about to change]",
+		essential = true,
+	},
+	pocket_settled = { text = "[the clicking stops — the passage is different now]", essential = true },
+	anchor_verified = { text = "[a survey lamp steadies — this door is the stable route]", essential = true },
+	miner_rhythm = { text = "[tok… tok… tok — pick strokes in an exact rhythm]", essential = false },
+	miner_fade = { text = "[the working figure is simply gone]", essential = false },
+	moth_flutter = { text = "[dry wings flutter around your light]", essential = true },
+	moth_disperse = { text = "[the moths scatter]", essential = false },
+	chalkhand_scratch = { text = "[a thin scratching inside a crack]", essential = false },
+	thief_rattle = { text = "[A FAINT RATTLE OF GLASS — something is drawn to your light]", essential = true },
+	thief_strike = { text = "[glass and cold fingers — your light is snuffed]", essential = true },
+	thief_decoyed = { text = "[the rattle turns toward the flare]", essential = true },
+	thief_lost = { text = "[the rattle fades away]", essential = true },
+	thief_repelled = { text = "[it recoils, its lights swinging]", essential = true },
+	fuse_spark = { text = "[a fuse sparks and pops out — wrong box]", essential = true },
+	power_restored = { text = "[the generator coughs, then hums — the station lights come on]", essential = true },
+	power_tripped = { text = "[a relay clacks — the station lights die]", essential = true },
+	pulley_creak = { text = "[the pulley creaks as the counterweight settles]", essential = false },
+	grate_rise = { text = "[a grate grinds upward]", essential = true },
+	grate_drop = { text = "[a grate slams down]", essential = true },
+	radio_tone = { text = "[a radio tone]", essential = false },
+	radio_wrong = { text = "[the tone slides back into static]", essential = true },
+	radio_locked = { text = "[the static clears — the frequency holds]", essential = true },
+	sluice_gate = { text = "[a sluice wheel groans — water surges loudly]", essential = true },
+	sluice_reset = { text = "[the wheels spin back — wrong order]", essential = true },
+	sluice_open = { text = "[the flooded passage drains with a roar]", essential = true },
+	sluice_flood = { text = "[water pours back into the overflow passage]", essential = true },
+	flare_lit = { text = "[a flare hisses alight]", essential = false },
+	flare_out = { text = "[the flare sputters out]", essential = false },
+	lantern_shield = { text = "[the lantern shutters click]", essential = false },
+}
+
+return CueDefs

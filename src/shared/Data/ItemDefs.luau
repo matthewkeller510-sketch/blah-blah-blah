@@ -22,9 +22,15 @@ export type ItemDef = {
 	healAmount: number?,
 	treatSeconds: number?,
 	removesInjury: boolean?,
+	-- Lantern (omni light that supports a group and exposes its carrier; shield mode is dim and draws no moths)
+	lantern: boolean?,
+	shieldedRange: number?,
 	-- Tool
 	stunCharges: number?,
 	meleeDamage: number?,
+	flareSeconds: number?, -- a placed flare burns this long
+	flareRange: number?,
+	reusable: boolean?, -- a tool that is required but never consumed (repair tool roll)
 	-- Unique claim (section 14: each participant claims their own copy)
 	unique: boolean?,
 	meshRef: string,
@@ -279,6 +285,134 @@ def({
 	sellValue = 18,
 	meshRef = "PLACEHOLDER:C04/lead_seal",
 	iconRef = "PLACEHOLDER:icon/lead_seal",
+})
+
+-- Milestone 3 (docs/MILESTONE-3.md 4.7) -------------------------------------------------------------
+def({
+	id = "light.shielded_lantern",
+	displayName = "Shielded Lantern",
+	category = "light",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 20,
+	beamRange = 22, -- omni radius when open
+	beamAngle = 180,
+	brightness = 1.1,
+	drainPerSecond = 0.7,
+	lantern = true,
+	shieldedRange = 9,
+	meshRef = "PLACEHOLDER:C01/lantern",
+	iconRef = "PLACEHOLDER:icon/lantern",
+	sound = "equip_lantern",
+})
+def({
+	id = "tool.flare",
+	displayName = "Signal Flare",
+	category = "tool",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 2,
+	flareSeconds = 45,
+	flareRange = 18,
+	meshRef = "PLACEHOLDER:C01/flare",
+	iconRef = "PLACEHOLDER:icon/flare",
+	sound = "flare_strike",
+})
+def({
+	id = "med.splint",
+	displayName = "Field Splint",
+	category = "medical",
+	stackLimit = 3,
+	protected = false,
+	sellValue = 4,
+	healAmount = 5,
+	treatSeconds = 4,
+	removesInjury = true,
+	meshRef = "PLACEHOLDER:C02/splint",
+	iconRef = "PLACEHOLDER:icon/splint",
+})
+def({
+	id = "tool.repair_roll",
+	displayName = "Repair Tool Roll",
+	category = "tool",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 8,
+	reusable = true,
+	meshRef = "PLACEHOLDER:C02/repair_roll",
+	iconRef = "PLACEHOLDER:icon/repair_roll",
+})
+def({
+	id = "tool.fuse_kit",
+	displayName = "Replacement Fuse Kit",
+	category = "tool",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 3,
+	meshRef = "PLACEHOLDER:C02/fuse_kit",
+	iconRef = "PLACEHOLDER:icon/fuse_kit",
+})
+def({
+	id = "mat.fuse_component",
+	displayName = "Fuse Components",
+	category = "material",
+	stackLimit = 20,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/fuse_component",
+	iconRef = "PLACEHOLDER:icon/fuse_component",
+})
+def({
+	id = "mat.battery_housing",
+	displayName = "Battery Housing",
+	category = "material",
+	stackLimit = 10,
+	protected = false,
+	sellValue = 1,
+	meshRef = "PLACEHOLDER:C04/battery_housing",
+	iconRef = "PLACEHOLDER:icon/battery_housing",
+})
+def({
+	id = "evidence.waterworks_log",
+	displayName = "Waterworks Log",
+	category = "evidence",
+	stackLimit = 1,
+	protected = true, -- story item (Act II): a replaced death bag can never lock the story
+	sellValue = 0,
+	unique = true,
+	meshRef = "PLACEHOLDER:C04/waterworks_log",
+	iconRef = "PLACEHOLDER:icon/journal",
+})
+def({
+	id = "evidence.station_tape",
+	displayName = "Station Tape",
+	category = "evidence",
+	stackLimit = 1,
+	protected = true, -- story item (Act II)
+	sellValue = 0,
+	unique = true,
+	meshRef = "PLACEHOLDER:C04/station_tape",
+	iconRef = "PLACEHOLDER:icon/tape",
+})
+def({
+	id = "treasure.field_photograph",
+	displayName = "Field Photograph (fictional)",
+	category = "treasure",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 15,
+	meshRef = "PLACEHOLDER:C04/photograph",
+	iconRef = "PLACEHOLDER:icon/photograph",
+})
+def({
+	id = "treasure.dated_battery",
+	displayName = "Mis-dated Battery (fictional)",
+	category = "treasure",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 8,
+	meshRef = "PLACEHOLDER:C04/dated_battery",
+	iconRef = "PLACEHOLDER:icon/dated_battery",
 })
 
 local ItemDefs = {}

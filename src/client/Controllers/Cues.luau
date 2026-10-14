@@ -18,35 +18,9 @@ local nearLight: PointLight?
 local lastVitals: any = nil
 local wasExhausted = false
 
--- id -> { caption, essential }
-local CUES: { [string]: { text: string, essential: boolean } } = {
-	sidelooker_scrape = { text = "[a faint scrape of stone]", essential = false },
-	sidelooker_retreat = { text = "[something slips out of sight]", essential = false },
-	scrabbler_idle = { text = "[claws shifting rubble]", essential = false },
-	scrabbler_windup = { text = "[SCRAPING CLAWS — something is about to rush]", essential = true },
-	scrabbler_hit = { text = "[claws strike]", essential = true },
-	scrabbler_hurt = { text = "[a shrill hiss]", essential = false },
-	knocker_knock = { text = "[KNOCK]", essential = true },
-	knocker_impact = { text = "[a heavy impact against stone]", essential = true },
-	knocker_stunned = { text = "[the knocking stops abruptly]", essential = true },
-	weapon_ineffective = { text = "[metal glances off without effect]", essential = true },
-	shelter_probe = { text = "[scratching at an unprotected entrance]", essential = true },
-	stun_fired = { text = "[stun device discharges]", essential = false },
-	breathing = { text = "[heavy breathing]", essential = false },
-	wader_ripple = { text = "[ripples spreading across the water]", essential = false },
-	wader_drag = { text = "[A DRAGGING STEP IN THE WATER — it heard you. Stop splashing.]", essential = true },
-	wader_strike = { text = "[long arms strike from the water]", essential = true },
-	wader_lost = { text = "[the dragging steps wander away]", essential = true },
-	wader_repelled = { text = "[it recoils and wades off]", essential = true },
-	stone_splash = { text = "[a stone splashes]", essential = false },
-	stone_clatter = { text = "[a stone clatters on rock]", essential = false },
-	plaque_turn = { text = "[stone grinds as the plaque turns]", essential = false },
-	gate_open = { text = "[a heavy gate grinds open]", essential = true },
-	valve_turn = { text = "[the valve squeals; water shifts in the pipes]", essential = false },
-	valve_reset = { text = "[all valves clank shut]", essential = false },
-	water_drain = { text = "[a deep gurgle — the cistern is draining]", essential = true },
-	water_rising = { text = "[water rushes back into the cistern]", essential = true },
-}
+-- id -> { caption, essential }. Shared so server packages and docs/AUDIO-CUES.md use the same ids.
+local CUES =
+	require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("CueDefs"))
 
 local function direction(pos: Vector3?): string
 	local cam = workspace.CurrentCamera

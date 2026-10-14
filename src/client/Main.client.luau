@@ -29,8 +29,20 @@ gui.IgnoreGuiInset = false
 gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets -- respect safe areas and system UI
 gui.Parent = player:WaitForChild("PlayerGui")
 
+-- Feature modules (src/client/Features/*.luau) subscribe to State channels with ctx.on(channel, fn).
+local listeners: { [string]: { (any) -> () } } = {}
+local function on(channel: string, fn: (any) -> ())
+	local list = listeners[channel]
+	if not list then
+		list = {}
+		listeners[channel] = list
+	end
+	table.insert(list, fn)
+end
+
 local ctx = {
 	send = send,
+	on = on,
 	gui = gui,
 	settings = Settings,
 	state = {} :: { [string]: any },
@@ -46,6 +58,25 @@ Panels.init(ctx)
 WorldRenderer.init(ctx)
 Cues.init(ctx)
 Input.init(ctx)
+
+-- Every ModuleScript in Features is required after the core controllers, in name order, and given ctx.
+local Features = script.Parent:FindFirstChild("Features")
+if Features then
+	local mods = Features:GetChildren()
+	table.sort(mods, function(a, b)
+		return a.Name < b.Name
+	end)
+	for _, m in mods do
+		if m:IsA("ModuleScript") then
+			local ok, err = pcall(function()
+				(require(m) :: any).init(ctx)
+			end)
+			if not ok then
+				warn("[Features] " .. m.Name .. " failed to start: " .. tostring(err))
+			end
+		end
+	end
+end
 
 stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 	ctx.state[channel] = data
@@ -108,5 +139,11 @@ stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 		Panels.story(data)
 	elseif channel == "debugPressure" then
 		Hud.debugPressure(data)
+	end
+	local list = listeners[channel]
+	if list then
+		for _, fn in list do
+			task.spawn(fn, data)
+		end
 	end
 end)

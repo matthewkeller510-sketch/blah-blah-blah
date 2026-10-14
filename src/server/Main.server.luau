@@ -25,7 +25,22 @@ local services = {
 	EconomyService = require(Services.EconomyService),
 	PuzzleService = require(Services.PuzzleService),
 	StoryService = require(Services.StoryService),
+	PocketService = require(Services.PocketService),
+	NpcService = require(Services.NpcService),
 }
+
+-- Request routing (section 19). Services may add their own validated handlers during init with
+-- services.Router.register(action, category, fn). Categories are the rate-limit buckets below.
+type Handler = { cat: string, fn: (Player, any) -> () }
+local handlers: { [string]: Handler } = {}
+local RATE_CATEGORIES = { intents = true, interact = true, place = true, party = true }
+local Router = {}
+function Router.register(action: string, cat: string, fn: (Player, any) -> ())
+	assert(handlers[action] == nil, "duplicate request action " .. action)
+	assert(RATE_CATEGORIES[cat], "unknown rate category " .. cat)
+	handlers[action] = { cat = cat, fn = fn }
+end
+(services :: any).Router = Router
 
 local ORDER = {
 	"WorldBuilder",
@@ -34,12 +49,14 @@ local ORDER = {
 	"ShelterService",
 	"NavigationService",
 	"RecoveryService",
+	"PocketService", -- after navigation and recovery: pocket changes migrate their records
 	"DiscoveryService",
 	"DirectorService",
 	"CreatureService",
 	"PuzzleService",
 	"MissionService",
 	"EconomyService",
+	"NpcService",
 	"StoryService",
 	"PlayerService", -- last: starts accepting players once everything else is ready
 }
@@ -100,7 +117,7 @@ end
 local PS, PartyS, ShelterS, NavS =
 	services.PlayerService, services.PartyService, services.ShelterService, services.NavigationService
 
-local handlers: { [string]: { cat: string, fn: (Player, any) -> () } } = {
+local CORE_HANDLERS: { [string]: Handler } = {
 	["intents"] = {
 		cat = "intents",
 		fn = function(p, d)
@@ -376,6 +393,10 @@ local handlers: { [string]: { cat: string, fn: (Player, any) -> () } } = {
 		end,
 	},
 }
+
+for action, h in CORE_HANDLERS do
+	Router.register(action, h.cat, h.fn)
+end
 
 Net.event(Net.Names.State) -- ensure it exists before clients connect
 Net.event(Net.Names.Request).OnServerEvent:Connect(function(player: Player, action: any, payload: any)

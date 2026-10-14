@@ -34,11 +34,13 @@ export type Profile = {
 		offset: { x: number, y: number, z: number },
 	}?,
 	settings: { [string]: any },
+	-- Schema 2 (Milestone 3): field experience (F24). awarded holds the dedupe keys already paid.
+	progression: { xp: number, awarded: { [string]: boolean } },
 }
 
 local Profile = {}
 
-Profile.CURRENT_VERSION = 1
+Profile.CURRENT_VERSION = 2
 
 function Profile.default(userId: number, defaultClass: string, startShelterId: string): Profile
 	return {
@@ -71,12 +73,19 @@ function Profile.default(userId: number, defaultClass: string, startShelterId: s
 		toolCharges = {},
 		checkpoint = nil,
 		settings = {},
+		progression = { xp = 0, awarded = {} },
 	}
 end
 
 -- Ordered migrations: MIGRATIONS[n] upgrades a version-n profile to n+1.
 local MIGRATIONS: { [number]: (any) -> () } = {
-	-- [1] = function(p) ... p.schemaVersion = 2 end,
+	-- 1 -> 2 (Milestone 3): add field experience. Experience for earlier play is back-filled on load by
+	-- Logic/Progression (idempotent per key), so this migration only creates the empty record.
+	[1] = function(p)
+		if type(p.progression) ~= "table" then
+			p.progression = { xp = 0, awarded = {} }
+		end
+	end,
 }
 
 -- Fills missing fields from defaults without overwriting saved values, then applies migrations.
