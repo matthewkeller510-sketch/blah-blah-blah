@@ -96,7 +96,7 @@ function EconomyService.pushShop(player: Player)
 		)
 	end
 	services.PlayerService.send(player, "shop", {
-		vendor = "Ines Vidal", -- PROPOSED UI field: the shop title (the panel still says "Quartermaster")
+		vendor = "Ines Vidal", -- the shop panel's title
 		coins = s.profile.coins,
 		buy = buy,
 		sell = sell,

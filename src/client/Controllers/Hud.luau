@@ -342,8 +342,10 @@ function Hud.discovery(d: any)
 end
 
 function Hud.mission(d: any)
-	if d.state == "done" then
+	if d.state == "done" or d.state == "ended" then
+		-- "ended": the server already sent its own notice naming the mission
 		missionObjective = ""
+		missionTitle = "Mission"
 	elseif d.state == "failed" then
 		missionObjective = ""
 		Hud.notice(string.format("%s ended: %s", d.title or missionTitle, tostring(d.reason or "failed")), "warn")

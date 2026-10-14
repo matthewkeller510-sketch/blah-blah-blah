@@ -151,7 +151,7 @@ Unlocked by completing Act I. Steps derive from profile facts in order (like Act
 | 1 | Ask Dr Luc Moreau about the old tag | `charactersMet.N02` | Depot · old expedition tag · Moreau |
 | 2 | Find the courier who saw the survey team | `storyStates["act2.noah_rescued"]` (story rescue of N06 Noah Perrin in `R03.silt_loop`, carried or escorted to any shelter) | Silt Works · courier's satchel · Noah |
 | 3 | Recover the waterworks log from the drained cistern | claim `R03.unique.waterworks_log` | Cistern (behind P02) · waterworks log · Noah's account |
-| 4 | Reach the survey station and register its shelter | `discoveries["S04.service_office"]` | Service Office |
+| 4 | Reach the survey station and register its shelter | `discoveries["shelter:S04.service_office"]` | Service Office |
 | 5 | Restore station power and lock the radio frequency | `storyStates["act2.radio_heard"]` (P03 solved on the server **and** your P05 success) | Radio room · station tape (unique, protected) · Elise Renaud's recording |
 | 6 | Compare the logs in the Map Room | `storyStates["act2.logs_compared"]` (interact at the map table carrying the waterworks log and the station tape) | Map room · both logs · the revelation journal |
 | 7 | Report to Mara Voss | `storyStates["act2.complete"]` | Depot board · +80 coins |

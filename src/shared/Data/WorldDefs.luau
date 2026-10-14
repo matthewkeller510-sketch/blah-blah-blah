@@ -1119,6 +1119,7 @@ local Creatures: { [string]: CreatureDef } = {
 		id = "C01",
 		name = "Sidelooker",
 		status = "SLICE",
+		researchCap = 3, -- stage 4 (sketch comparison) is not built yet (D29)
 		damaging = false,
 		killable = false,
 		researchEvidence = { "seen", "seen_retreat_when_watched", "seen_three_locations", "sketch_compared" },
@@ -1381,7 +1382,7 @@ local MissionSpots: { [string]: { MissionSpot } } = {
 }
 WorldDefs.MissionSpots = MissionSpots
 
--- Readable notes and plaques with story or counter evidence. Text lives in Data/Dialogue (story package).
+-- Readable notes and plaques with story or counter evidence. Text lives in Data/StoryDefs.
 local Readables: { Readable } = {
 	-- Counter evidence for C08 before its first dangerous encounter (section 10).
 	{

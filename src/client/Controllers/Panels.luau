@@ -674,6 +674,9 @@ function Panels.missionList(list)
 		)
 		if m.status ~= "SLICE" then
 			UI.label(row, "Planned — not built in this milestone.", 13, C.dim)
+		elseif m.available and type(m.locked) == "string" then
+			-- the server explains why accepting would be refused right now (it refuses with the same words)
+			UI.label(row, m.locked, 13, C.dim)
 		elseif m.available then
 			button(row, "Accept", function()
 				ctx.send("mission.accept", { id = m.id })
@@ -842,7 +845,7 @@ function Panels.shop(d: any)
 	if not mayOpenRequested() then
 		return
 	end
-	local b = open("shop", "Quartermaster (placeholder)")
+	local b = open("shop", if type(d.vendor) == "string" then d.vendor .. " — quartermaster" else "Quartermaster")
 	UI.label(b, string.format("Coins: %d. Everything here can also be found in the tunnels.", d.coins), 14)
 	UI.label(b, "Buy", 17)
 	for _, e in d.buy do
