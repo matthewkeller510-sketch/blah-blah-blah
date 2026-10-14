@@ -24,8 +24,8 @@ local folder: Folder
 local plaquePart: BasePart
 local plaqueLabel: TextLabel
 local gatePart: BasePart
-local valveParts: { BasePart } = {}
 local valveLabels: { TextLabel } = {}
+local valveHandles: { BasePart } = {}
 local gaugeFill: BasePart
 local deepWater: BasePart
 local corridorWater: BasePart
@@ -102,7 +102,7 @@ local function buildP01()
 	-- Pedestal + rotatable plaque.
 	local base = v(P01.plaque)
 	mk("P01_Pedestal", Vector3.new(2.4, 3.6, 2.4), CFrame.new(base + Vector3.new(0, 1.8, 0)), Color3.fromRGB(150, 144, 130), Enum.Material.Limestone)
-	plaquePart = mk("P01_Plaque", Vector3.new(2.6, 2.6, 0.3), CFrame.new(base + Vector3.new(0, 4.9, 0)) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(176, 150, 96), Enum.Material.Metal)
+	plaquePart = mk("P01_Plaque", Vector3.new(2.6, 2.6, 0.3), CFrame.new(base + Vector3.new(0, 4.9, 0)) * CFrame.Angles(math.rad(25), 0, 0), Color3.fromRGB(176, 150, 96), Enum.Material.Metal)
 	plaqueLabel = label(plaquePart, "⌖\n" .. Puzzles.ARROWS[p01.orientation + 1], INK)
 	-- Gate across the corridor to the sealed chapel.
 	local g = v(P01.gate)
@@ -137,11 +137,12 @@ local CISTERN = assert(WorldDefs.chamber("R03.cistern"))
 local function refreshValves()
 	for i, lbl in valveLabels do
 		lbl.Text = NUMERALS[i] .. "\n" .. (if p02.valves[i] then "OUVERT" else "FERMÉ")
-		valveParts[i].Orientation = Vector3.new(if p02.valves[i] then 90 else 0, 0, 0) -- quarter turn shows open
+		-- the handle stands upright when shut and lies horizontal when open
+		valveHandles[i].Orientation = Vector3.new(if p02.valves[i] then 90 else 0, 0, 0)
 	end
 	local n = Puzzles.correctCount(p02)
 	gaugeFill.Size = Vector3.new(0.3, math.max(0.2, 6 * (1 - n / 3)), 0.8)
-	gaugeFill.CFrame = CFrame.new(v(P02.gauge) + Vector3.new(0.2, -3 + gaugeFill.Size.Y / 2, 0))
+	gaugeFill.CFrame = CFrame.new(v(P02.gauge) + Vector3.new(-0.2, -3 + gaugeFill.Size.Y / 2, 0)) -- room side of the panel
 end
 
 local function setDrained(drained: boolean)
@@ -169,7 +170,9 @@ local function buildP02()
 	for i, pos in P02.valves do
 		local wheel = mk("P02_Valve" .. i, Vector3.new(0.4, 2.6, 2.6), CFrame.new(v(pos)), wall, Enum.Material.CorrodedMetal)
 		wheel.Shape = Enum.PartType.Cylinder -- axis along X: the wheel faces into the gallery
-		valveParts[i] = wheel
+		local handle = mk("P02_Handle" .. i, Vector3.new(0.3, 2.4, 0.3), CFrame.new(v(pos) + Vector3.new(-0.4, 0, 0)), Color3.fromRGB(180, 150, 70), Enum.Material.Metal)
+		handle.CanCollide = false
+		valveHandles[i] = handle
 		local tag = mk("P02_ValveTag" .. i, Vector3.new(2.2, 1.4, 0.2), CFrame.new(v(pos) + Vector3.new(-0.2, 2.4, 0)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(150, 146, 136), Enum.Material.Metal)
 		tag.CanCollide = false
 		valveLabels[i] = label(tag, "", Color3.fromRGB(30, 28, 24), Enum.Font.SpecialElite)
@@ -197,7 +200,9 @@ local function buildP02()
 	-- Gauge: a column of water that falls as more valves are set correctly (visible feedback).
 	local gaugeBack = mk("P02_Gauge", Vector3.new(0.2, 6.4, 1.2), CFrame.new(v(P02.gauge)), Color3.fromRGB(200, 196, 180), Enum.Material.SmoothPlastic)
 	gaugeBack.CanCollide = false
-	label(gaugeBack, "NIVEAU", Color3.fromRGB(30, 28, 24)).TextTransparency = 0.5
+	local gl = label(gaugeBack, "NIVEAU", Color3.fromRGB(30, 28, 24))
+	gl.TextTransparency = 0.5
+	;(gl.Parent :: SurfaceGui).Face = Enum.NormalId.Left -- the panel's broad face looks west into the gallery
 	gaugeFill = mk("P02_GaugeFill", Vector3.new(0.3, 6, 0.8), CFrame.new(v(P02.gauge)), Color3.fromRGB(50, 90, 110), Enum.Material.Neon)
 	gaugeFill.CanCollide = false
 	local lever = mk("P02_Reset", Vector3.new(0.6, 2, 0.6), CFrame.new(v(P02.reset)), Color3.fromRGB(150, 40, 30), Enum.Material.Metal)

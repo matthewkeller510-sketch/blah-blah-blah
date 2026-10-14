@@ -370,6 +370,10 @@ local function scrabblerTick(s: Scrabbler, dt: number)
 			for k, v in fresh :: any do
 				(s :: any)[k] = v
 			end
+			-- nil fields are not copied by the loop above; clear them explicitly
+			s.investigate = nil
+			s.lastKnown = nil
+			s.target = nil
 		end
 		return
 	end
@@ -502,7 +506,7 @@ type Wader = {
 	engaged: boolean,
 }
 
-local WADER_LIFT = 5
+local WADER_LIFT = 4.5 -- half its body height: feet on the floor, head below corridor ceilings
 local wader: Wader
 
 local function spawnWader()
@@ -603,7 +607,8 @@ local function waderTick(dt: number)
 		end
 		local arrived = w.goal == nil or travel(w.model, w.goal :: Vector3, WADER_LIFT, WADER.pursueSpeed, dt)
 		local tpos = services.PlayerService.position(t)
-		if tpos and not tsess.hiddenAt and tsess.inWater and (tpos - bp.Position).Magnitude < 5 then
+		local flat = if tpos then Vector3.new(tpos.X - bp.Position.X, 0, tpos.Z - bp.Position.Z).Magnitude else math.huge
+		if tpos and not tsess.hiddenAt and tsess.inWater and flat < 5 and math.abs(tpos.Y - bp.Position.Y) < 8 then
 			services.PlayerService.damage(t, WADER.damage, true, "wader")
 			cueAll(bp.Position, 40, "wader_strike")
 			waderEnd(true)

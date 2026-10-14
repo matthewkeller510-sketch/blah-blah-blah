@@ -253,9 +253,9 @@ WorldDefs.Puzzles = {
 	P02 = {
 		id = "P02", name = "Pump routing", status = "SLICE", regionId = "R03",
 		valves = { { x = -69, y = -40, z = 712 }, { x = -69, y = -40, z = 720 }, { x = -69, y = -40, z = 728 } },
-		clue = { x = -69, y = -39, z = 738 },
-		gauge = { x = -69, y = -37, z = 720 },
-		reset = { x = -69, y = -41, z = 702 },
+		clue = { x = -69, y = -39, z = 733 },
+		gauge = { x = -69, y = -39, z = 705 }, -- south of the valves, below the wall pipes
+		reset = { x = -69, y = -42, z = 708.5 },
 		barrier = { x = -20, y = -44, z = 820 }, -- deep water in the corridor to the cistern
 		refloodSeconds = 600,
 	},
@@ -280,10 +280,10 @@ WorldDefs.RescueSpawns = {
 WorldDefs.CacheSpots = {
 	{ id = "cache.pier", chamberId = "R01.split_pier", pos = { x = 8, y = 1, z = 222 }, clue = "beside the pier that is split down the middle" },
 	{ id = "cache.pulley", chamberId = "R01.rusted_pulley", pos = { x = -10, y = 1, z = 338 }, clue = "under the wheel that no longer turns" },
-	{ id = "cache.slope", chamberId = "R01.sloped_gallery", pos = { x = -76, y = 1, z = 222 }, clue = "where the ceiling leans down toward the floor" },
+	{ id = "cache.slope", chamberId = "R01.sloped_gallery", pos = { x = -74, y = 1, z = 238 }, clue = "where the ceiling leans down toward the floor" },
 	{ id = "cache.plaques", chamberId = "R02.plaque_hall", pos = { x = -94, y = -23, z = 518 }, clue = "beneath the wall of numbered plaques" },
 	{ id = "cache.crypt", chamberId = "R02.lantern_crypt", pos = { x = -166, y = -23, z = 522 }, clue = "in the crypt where every lamp niche is empty" },
-	{ id = "cache.pumps", chamberId = "R03.pump_gallery", pos = { x = -92, y = -43, z = 728 }, clue = "beside the three iron valves" },
+	{ id = "cache.pumps", chamberId = "R03.pump_gallery", pos = { x = -75, y = -43, z = 733 }, clue = "beside the three iron valves" },
 }
 
 -- Creatures (section 10). status: SLICE or PLANNED.

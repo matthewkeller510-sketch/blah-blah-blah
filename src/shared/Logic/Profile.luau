@@ -105,6 +105,10 @@ function Profile.reconcile(saved: any, userId: number, defaultClass: string, sta
 	if saved.inventory == nil then
 		saved.inventory = {}
 	end
+	-- Profiles saved before the starting-class briefing existed already chose their path: no free respec.
+	if saved.storyStates.onboarded == nil then
+		saved.storyStates.onboarded = "1"
+	end
 	saved.userId = userId
 	return saved :: Profile, nil
 end

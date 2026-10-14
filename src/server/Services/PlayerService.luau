@@ -835,10 +835,11 @@ function PlayerService.start()
 				applySpeed(s)
 				-- Splash noise for water-sensitive hearing (C06 Wader): crouch-wading and dry footing are silent.
 				s.inWater = services.WorldBuilder.inWater(r.Position - Vector3.new(0, 3, 0))
-				local splash = Director.splashNoise(s.mode, s.inWater)
+				-- hidden players make no noise even if they press movement keys while held in the niche
+				local splash = if s.hiddenAt then 0 else Director.splashNoise(s.mode, s.inWater)
 				if splash > 0 and os.clock() - s.lastSplash > 0.4 then
 					s.lastSplash = os.clock()
-					services.CreatureService.noise(r.Position, "splash", splash, player)
+					services.CreatureService.noise(r.Position - Vector3.new(0, 3, 0), "splash", splash, player)
 				end
 				-- region & grounded checkpoint
 				local region = services.WorldBuilder.regionAt(r.Position)

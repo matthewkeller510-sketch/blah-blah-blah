@@ -393,7 +393,7 @@ local function buildWaterworks()
 		part(f, "PumpPipe", Vector3.new(1.4, 12, 1.4), CFrame.new(pg.pos.x + i * 8, pg.pos.y + 9, pg.pos.z + 8), RUST, Enum.Material.CorrodedMetal)
 	end
 	for i = 0, 2 do
-		deco(f, "WallPipe", Vector3.new(1, 1, 30), CFrame.new(pg.pos.x + 15.3, pg.pos.y + 7 + i * 1.6, pg.pos.z), RUST, Enum.Material.CorrodedMetal)
+		deco(f, "WallPipe", Vector3.new(1, 1, 30), CFrame.new(pg.pos.x + 15.3, pg.pos.y + 9 + i * 1.6, pg.pos.z), RUST, Enum.Material.CorrodedMetal)
 	end
 	-- Pump platform: a raised iron deck (the shelter exterior is literally above the water)
 	local pp = assert(WorldDefs.chamber("R03.pump_platform"))

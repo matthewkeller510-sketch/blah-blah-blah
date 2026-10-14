@@ -559,27 +559,40 @@ function MissionService.collectCache(player: Player, m: Mission)
 	if m.state ~= "collect" then
 		return
 	end
+	if m.collected[player.UserId] then
+		services.PlayerService.notify(player, "You already took your copy.", "info")
+		return
+	end
 	if not m.participants[player.UserId] then
-		if m.owner and services.PartyService.sameParty(player, m.owner) then
+		if m.owner and services.PartyService.sameParty(player, m.owner) and not missionFor(player) then
 			m.participants[player.UserId] = true -- late join
 		else
 			services.PlayerService.notify(player, "This cache belongs to another group's survey.", "info")
 			return
 		end
 	end
-	if m.collected[player.UserId] then
-		services.PlayerService.notify(player, "You already took your copy.", "info")
-		return
-	end
 	if not services.PlayerService.hold(player, 1.5) then
 		return
 	end
+	-- re-check after the hold: the mission may have ended or the player abandoned meanwhile
+	if m.state ~= "collect" or not m.participants[player.UserId] or m.collected[player.UserId] then
+		return
+	end
 	m.collected[player.UserId] = true
+	-- the collector is finished: free them for new missions (collected[] still blocks a second copy)
+	m.participants[player.UserId] = nil
 	reward(player, "M02", M02_REWARD.coins, M02_REWARD.items)
 	local lore = LORE[math.random(1, #LORE)]
 	services.PlayerService.notify(player, string.format("Cache recovered (+%d coins). %s", M02_REWARD.coins, lore), "info")
 	services.PlayerService.send(player, "mission", { id = m.id, state = "done" })
-	-- the case stays until every participant has their copy
+	MissionService.closeCacheIfFinished(m)
+end
+
+-- The case stays until every remaining participant has their copy (or has left).
+function MissionService.closeCacheIfFinished(m: Mission)
+	if m.template ~= "M02" or m.state ~= "collect" then
+		return
+	end
 	for uid in m.participants do
 		if not m.collected[uid] and Players:GetPlayerByUserId(uid) then
 			return
@@ -657,6 +670,12 @@ local function handOver(player: Player, reason: string)
 		return
 	end
 	m.participants[player.UserId] = nil
+	if m.template == "M02" then
+		MissionService.closeCacheIfFinished(m)
+		if m.state ~= "collect" then
+			return
+		end
+	end
 	if m.owner == player then
 		local nextOwner: Player? = nil
 		for uid in m.participants do
