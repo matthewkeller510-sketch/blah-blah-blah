@@ -1,7 +1,8 @@
 --!strict
 -- Input (section 07, 17): touch first, then keyboard/mouse and gamepad. Sends intents and requests only.
 -- Touch layout: landscape, default Roblox left thumbstick for movement, right side for look, separated action
--- buttons (~52 px) clustered above the jump button, inside safe areas.
+-- buttons (48-52 px) clustered just above the default jump button, whose size and place depend on the screen size
+-- (UIRules.touchGrid), inside safe areas.
 -- Milestone 3 bindings (docs/MILESTONE-3.md 4.7): lantern shield V / ButtonL1 / touch "Shield"; place a flare
 -- N / ButtonR1 / touch "Flare"; character and field experience K. Gamepad also gains Menu (DPadUp), medical
 -- (DPadDown, moved off ButtonX, the default ProximityPrompt key), swap cell (DPadLeft), throw (DPadRight),
@@ -11,6 +12,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
 local UI = require(script.Parent.UI)
+local UIRules = require(script.Parent.UIRules)
 
 local Input = {}
 local ctx: any
@@ -300,26 +302,36 @@ local function releaseTouchSprint()
 	end
 end
 
--- Touch grid: 4 columns x 4 rows of 52 px buttons (13 used), filled from the bottom-right corner so the most
--- used actions (Sprint, Crouch, Use, Med) sit nearest the thumb, above the jump button. It stays on the right
--- side: the left thumbstick zone is never covered. PROPOSED, to be checked on real phones (T21).
+-- Touch grid: 5 columns x 3 rows (13 used), filled from the bottom-right corner so the most used actions (Sprint,
+-- Crouch, Use, Med, Light) sit nearest the thumb. It sits just above the default jump button, which is 70 px on
+-- phones and 120 px and higher up on tablets, so the offset follows the screen size. At 52 px it fits a 390-px-tall
+-- phone; cells shrink only on shorter screens and never below 48 px (UIRules.touchGrid). It stays on the right side:
+-- the left thumbstick zone is never covered, and the HUD strips and popups keep clear of it (UI.setTouchReserve).
+-- PROPOSED (D79 revised from 4 x 4), to be checked on real phones (T21).
 local function buildTouch()
-	local COLS, ROWS = 4, 4
 	local frame = UI.frame(ctx.gui, {
 		Name = "TouchActions",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -16, 1, -150), -- above the default jump button
-		Size = UDim2.fromOffset(UI.TOUCH * COLS + 8 * (COLS - 1), UI.TOUCH * ROWS + 8 * (ROWS - 1)),
 		BackgroundTransparency = 1,
 	})
 	local grid = Instance.new("UIGridLayout")
-	grid.CellSize = UDim2.fromOffset(UI.TOUCH, UI.TOUCH)
-	grid.CellPadding = UDim2.fromOffset(8, 8)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	grid.StartCorner = Enum.StartCorner.BottomRight
 	grid.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	grid.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	grid.Parent = frame
+	-- Size and place the grid for the current screen; tell the HUD how much of the right edge it takes.
+	local function place()
+		local s = ctx.gui.AbsoluteSize
+		local cam = workspace.CurrentCamera
+		local view = if cam then cam.ViewportSize else s
+		local g = UIRules.touchGrid(s.X, s.Y, view.X, view.Y)
+		frame.Position = UDim2.new(1, -g.right, 1, -g.bottom)
+		frame.Size = UDim2.fromOffset(g.width, g.height)
+		grid.CellSize = UDim2.fromOffset(g.cell, g.cell)
+		grid.CellPadding = UDim2.fromOffset(g.gap, g.gap)
+		UI.setTouchReserve(if frame.Visible then g.reserve else 0)
+	end
 	local order = 0
 	local function btn(text: string, onDown: (InputObject) -> (), onUp: (() -> ())?): TextButton
 		local b = Instance.new("TextButton")
@@ -352,7 +364,7 @@ local function buildTouch()
 		table.insert(touchButtons, b)
 		return b
 	end
-	-- bottom row, right to left
+	-- bottom row, right to left: Sprint, Crouch, Use, Med, Light
 	btn("Sprint", function(io)
 		if ctx.settings.get("sprintToggle") then
 			sprintToggled = not sprintToggled
@@ -375,10 +387,10 @@ local function buildTouch()
 	btn("Med", function()
 		useMedical()
 	end)
-	-- second row
 	btn("Light", function()
 		ctx.send("light.toggle")
 	end)
+	-- second row: Cell, Throw, Mark, Flare, Shield
 	btn("Cell", function()
 		ctx.send("light.swap")
 	end)
@@ -388,20 +400,19 @@ local function buildTouch()
 	btn("Mark", function()
 		placeMarker("chalk")
 	end)
-	-- third row
 	flareButton = btn("Flare", function()
 		placeFlare()
 	end)
 	shieldButton = btn("Shield", function()
 		shieldLantern()
 	end)
+	-- top row: Help, Ping, Menu
 	btn("Help", function()
 		rescueAction()
 	end)
 	btn("Ping", function()
 		ctx.send("party.ping")
 	end)
-	-- top row
 	btn("Menu", function()
 		ctx.panels.toggle("menu")
 	end)
@@ -416,10 +427,13 @@ local function buildTouch()
 		end
 	end)
 	frame.Visible = UserInputService.TouchEnabled
+	place()
 	UserInputService.LastInputTypeChanged:Connect(function(t)
 		frame.Visible = t == Enum.UserInputType.Touch
 			or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
+		place()
 	end)
+	ctx.gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
 end
 
 function Input.init(c)

@@ -3,6 +3,10 @@
 -- small party list, notices and save status. No enemy radar and no map of unexplored space.
 -- Milestone 3: lantern open/shielded, flares carried and burning, the injury penalty (text, never colour alone)
 -- and the field-experience rank (docs/MILESTONE-3.md 4.7, 4.8).
+-- Layout: the party list and a pending party invitation sit in the left Status column, and notices stay left of the
+-- touch action grid, so the grid on the right never hides them (T21). An invitation is answered in the Party screen
+-- (Accept / Decline there): a box with buttons on the HUD would sit under the grid on phones, cannot be clicked with
+-- the first-person PC cursor, and must not interrupt movement (section 14). PROPOSED.
 
 local TweenService = game:GetService("TweenService")
 local UI = require(script.Parent.UI)
@@ -29,12 +33,14 @@ local holdBack: Frame
 local holdFill: Frame
 local crosshair: Frame
 local pressureText: TextLabel
-local inviteBox: Frame
+local inviteText: TextLabel
 local downedText: TextLabel
 local missionObjective = ""
 local storyObjective = ""
 local inShelter = false
 local inviteToken = 0
+type Invite = { fromUserId: number, fromName: string, expiresAt: number }
+local pendingInvite: Invite? = nil
 local missionTitle = "Mission" -- the active mission's title, so a failure names the right mission
 
 -- Priority: active mission, then the story objective, then the shelter reminder.
@@ -78,6 +84,19 @@ function Hud.init(c)
 	injuryText = UI.label(status, "+ Injured: sprint slowed — a bandage or splint fixes it", 13, C.warn)
 	injuryText.Visible = false
 	rankText = UI.label(status, "Field rank 0", 12, C.dim)
+	-- Party conditions under the player's own status (the right side belongs to the touch grid).
+	partyBox = UI.frame(status, {
+		Name = "Party",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 10,
+		Visible = false,
+	})
+	UI.list(partyBox, 2)
+	inviteText = UI.label(status, "", 13, C.teal)
+	inviteText.LayoutOrder = 11
+	inviteText.Visible = false
 
 	objective = UI.label(gui, "", 16)
 	objective.AnchorPoint = Vector2.new(0.5, 0)
@@ -85,18 +104,6 @@ function Hud.init(c)
 	objective.Size = UDim2.new(0.5, 0, 0, 0)
 	objective.TextXAlignment = Enum.TextXAlignment.Center
 	objective.TextStrokeTransparency = 0.6
-
-	partyBox = UI.frame(gui, {
-		Name = "Party",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.fromOffset(190, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Visible = false,
-	})
-	UI.corner(partyBox)
-	UI.pad(partyBox, 6)
-	UI.list(partyBox, 2)
 
 	noticeBox = UI.frame(gui, {
 		Name = "Notices",
@@ -109,6 +116,7 @@ function Hud.init(c)
 	local l = UI.list(noticeBox, 4)
 	l.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	UI.keepClearOfTouch(noticeBox, gui, 0.55)
 
 	saveText = UI.label(gui, "", 12, C.dim)
 	saveText.AnchorPoint = Vector2.new(0, 1)
@@ -137,24 +145,14 @@ function Hud.init(c)
 	downedText.Size = UDim2.new(0.7, 0, 0, 0)
 	downedText.TextXAlignment = Enum.TextXAlignment.Center
 	downedText.TextStrokeTransparency = 0.4
+	-- the DOWN / HIDDEN instructions stay readable over the touch grid (text only: taps still reach the buttons)
+	downedText.ZIndex = 50
 
 	pressureText = UI.label(gui, "", 12, C.dim)
 	pressureText.AnchorPoint = Vector2.new(1, 1)
 	pressureText.Position = UDim2.new(1, -12, 1, -8)
 	pressureText.Size = UDim2.fromOffset(200, 0)
 	pressureText.TextXAlignment = Enum.TextXAlignment.Right
-
-	inviteBox = UI.frame(gui, {
-		Name = "Invite",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 140),
-		Size = UDim2.fromOffset(220, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Visible = false,
-	})
-	UI.corner(inviteBox)
-	UI.pad(inviteBox, 8)
-	UI.list(inviteBox, 4)
 
 	ctx.settings.onChanged(function(k, v)
 		if k == "crosshair" then
@@ -312,26 +310,50 @@ function Hud.party(d: any)
 	end
 end
 
+local function clearInvite()
+	inviteToken += 1
+	pendingInvite = nil
+	inviteText.Visible = false
+	ctx.panels.refreshIf("party")
+end
+
 function Hud.invite(d: any)
-	UI.clear(inviteBox)
-	inviteBox.Visible = true
-	UI.label(inviteBox, d.fromName .. " invites you to explore together.", 14, C.teal)
-	UI.button(inviteBox, "Accept", function()
-		ctx.send("party.accept", { fromUserId = d.fromUserId })
-		inviteBox.Visible = false
-	end, { Size = UDim2.new(1, 0, 0, 48) })
-	UI.button(inviteBox, "Decline", function()
-		ctx.send("party.decline", { fromUserId = d.fromUserId })
-		inviteBox.Visible = false
-	end, { Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = C.dim })
-	-- Only this invite's timer may hide the box (an older invite's timer must not hide a newer one).
+	if type(d) ~= "table" or type(d.fromUserId) ~= "number" then
+		return
+	end
+	local name = if type(d.fromName) == "string" then d.fromName else "Someone"
+	local seconds = if type(d.seconds) == "number" then d.seconds else 60
+	pendingInvite = { fromUserId = d.fromUserId, fromName = name, expiresAt = os.clock() + seconds }
+	inviteText.Text = string.format("%s invites you to explore together. Answer in Menu → Party (P).", name)
+	inviteText.Visible = true
+	Hud.notice(name .. " invites you to explore together. Answer in Menu → Party.", "info")
+	ctx.panels.refreshIf("party")
+	-- Only this invite's timer may clear it (an older invite's timer must not clear a newer one).
 	inviteToken += 1
 	local token = inviteToken
-	task.delay(d.seconds, function()
+	task.delay(seconds, function()
 		if inviteToken == token then
-			inviteBox.Visible = false
+			clearInvite()
 		end
 	end)
+end
+
+-- The invitation still open, if any (shown with Accept / Decline in the Party screen).
+function Hud.pendingInvite(): Invite?
+	local p = pendingInvite
+	if p and os.clock() < p.expiresAt then
+		return p
+	end
+	return nil
+end
+
+function Hud.answerInvite(accept: boolean)
+	local p = Hud.pendingInvite()
+	if not p then
+		return
+	end
+	ctx.send(if accept then "party.accept" else "party.decline", { fromUserId = p.fromUserId })
+	clearInvite()
 end
 
 function Hud.discovery(d: any)

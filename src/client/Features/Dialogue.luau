@@ -4,12 +4,17 @@
 -- and steps aside for threats: it closes when the player goes down or an approach cue for a dangerous creature
 -- arrives, so it never covers the screen during a chase. Important instructions are echoed as a journal notice;
 -- the persistent journal lives in the notebook (story channel).
+-- Next is Modal while the strip shows, so the first-person PC cursor is free to click it. The buttons are full touch
+-- targets. A line too long for the strip at the chosen text size (it may take up to 60% of the screen height) is
+-- shown in pages, so nothing falls off the screen; the strip stays left of the touch grid (UIRules).
 -- Also applies per-player character visibility (`"npcs"` channel): a figure the server marks hidden for this
 -- player (Noah at the depot before you rescued him) is hidden locally. Purely cosmetic; the server decides talk.
 
 local CollectionService = game:GetService("CollectionService")
+local TextService = game:GetService("TextService")
 
 local UI = require(script.Parent.Parent.Controllers.UI)
+local UIRules = require(script.Parent.Parent.Controllers.UIRules)
 
 local Dialogue = {}
 local ctx: any
@@ -25,6 +30,8 @@ local autoButton: TextButton
 local queue: { Conversation } = {}
 local current: Conversation? = nil
 local index = 0
+local pages: { string } = {} -- the current line, split to fit the strip
+local page = 0 -- 0 = the current line is not split yet
 local auto = false -- per session; off by default
 local token = 0
 -- Until the server's first "npcs" message arrives, Noah's depot figure stays hidden (he appears only after a rescue).
@@ -50,8 +57,11 @@ local function close()
 	token += 1
 	current = nil
 	index = 0
+	page = 0
+	pages = {}
 	table.clear(queue)
 	panel.Visible = false
+	nextButton.Modal = false
 end
 
 local showLine: () -> ()
@@ -61,8 +71,14 @@ local function advance()
 	if not conv then
 		return
 	end
+	if page < #pages then
+		page += 1
+		showLine()
+		return
+	end
 	if index < #conv.lines then
 		index += 1
+		page = 0
 		showLine()
 		return
 	end
@@ -71,10 +87,30 @@ local function advance()
 	if nextConv then
 		current = nextConv
 		index = 1
+		page = 0
 		showLine()
 	else
 		close()
 	end
+end
+
+-- Width of the line text: the laid-out label, or (before the first layout) the strip's computed width.
+local function lineWidth(): number
+	local w = lineLabel.AbsoluteSize.X
+	if w >= 40 then
+		return w
+	end
+	local _, bw = UIRules.band(ctx.gui.AbsoluteSize.X, UI.touchReserve, 0.56, 620, UIRules.EDGE)
+	return math.max(40, bw - 2 * UIRules.DIALOGUE_PAD - 116)
+end
+
+-- Splits a line into pages that fit the strip's height limit at this text size (UIRules.dialogueLineCap).
+local function split(text: string, size: number): { string }
+	local width = lineWidth()
+	local cap = UIRules.dialogueLineCap(ctx.gui.AbsoluteSize.Y, math.ceil(14 * UI.TextScale) + 2)
+	return UIRules.paginate(text, function(candidate: string): boolean
+		return TextService:GetTextSize(candidate, size, UI.font(), Vector2.new(width, 100000)).Y <= cap
+	end)
 end
 
 showLine = function()
@@ -84,14 +120,20 @@ showLine = function()
 	end
 	token += 1
 	local my = token
-	local text = conv.lines[index] or ""
-	nameLabel.Text = conv.name
-	lineLabel.Text = text
-	lineLabel.TextSize = math.floor(18 * UI.TextScale)
+	local size = math.floor(18 * UI.TextScale)
+	lineLabel.TextSize = size
 	nameLabel.TextSize = math.floor(14 * UI.TextScale)
-	local last = index >= #conv.lines and #queue == 0
+	nameLabel.Text = conv.name
+	if page == 0 then
+		pages = split(conv.lines[index] or "", size)
+		page = 1
+	end
+	local text = pages[page] or ""
+	lineLabel.Text = text
+	local last = index >= #conv.lines and page >= #pages and #queue == 0
 	nextButton.Text = if last then "Done" else "Next ▸"
 	panel.Visible = true
+	nextButton.Modal = true
 	if auto then
 		task.delay(readSeconds(text), function()
 			if token == my then
@@ -122,13 +164,14 @@ local function receive(d: any)
 		if #queue < 4 then
 			table.insert(queue, conv)
 		end
-		if index >= #(current :: Conversation).lines then
+		if index >= #(current :: Conversation).lines and page >= #pages then
 			nextButton.Text = "Next ▸"
 		end
 		return
 	end
 	current = conv
 	index = 1
+	page = 0
 	showLine()
 end
 
@@ -169,12 +212,14 @@ function Dialogue.init(c: any)
 		Visible = false,
 		ZIndex = 0, -- creature captions stay readable on top of it
 	})
+	-- No height cap: pages keep a line within 60% of the screen height, and a capped strip would push text off-screen.
 	local cons = Instance.new("UISizeConstraint")
-	cons.MaxSize = Vector2.new(620, 220)
+	cons.MaxSize = Vector2.new(620, math.huge)
 	cons.Parent = panel
 	UI.corner(panel, 8)
-	UI.pad(panel, 8)
+	UI.pad(panel, UIRules.DIALOGUE_PAD)
 	UI.list(panel, 8, true)
+	UI.keepClearOfTouch(panel, ctx.gui, 0.56, 620)
 	local textCol = UI.frame(panel, {
 		Size = UDim2.new(1, -116, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -192,16 +237,22 @@ function Dialogue.init(c: any)
 		BackgroundTransparency = 1,
 		LayoutOrder = 2,
 	})
-	UI.list(buttons, 4)
-	nextButton = UI.button(buttons, "Next ▸", advance, { Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 1 })
-	UI.button(buttons, "Close", close, { Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = C.dim, LayoutOrder = 2 })
+	-- Three full touch targets with 8 px between them (UIRules.DIALOGUE_BUTTONS = 172 px).
+	UI.list(buttons, 8)
+	nextButton = UI.button(buttons, "Next ▸", advance, { Size = UDim2.new(1, 0, 0, UI.TOUCH), LayoutOrder = 1 })
+	UI.button(
+		buttons,
+		"Close",
+		close,
+		{ Size = UDim2.new(1, 0, 0, UI.TOUCH), BackgroundColor3 = C.dim, LayoutOrder = 2 }
+	)
 	autoButton = UI.button(buttons, "Auto: off", function()
 		auto = not auto
 		autoButton.Text = if auto then "Auto: on" else "Auto: off"
 		if auto and current then
 			showLine()
 		end
-	end, { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = C.dim, LayoutOrder = 3 })
+	end, { Size = UDim2.new(1, 0, 0, UI.TOUCH), BackgroundColor3 = C.dim, LayoutOrder = 3 })
 
 	ctx.on("dialogue", receive)
 	ctx.on("cue", function(d: any)

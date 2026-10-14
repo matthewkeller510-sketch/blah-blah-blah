@@ -14,6 +14,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.Parent.Controllers.UI)
+local UIRules = require(script.Parent.Parent.Controllers.UIRules)
 
 local CreatureFX = {}
 local ctx: any
@@ -217,12 +218,16 @@ local function closePanel()
 	end
 end
 
+-- A compact strip at the top of the screen, kept left of the touch action grid (no button lies over a grid button)
+-- and, at default text size, above the bottom-left thumbstick area. Close is Modal so the first-person PC cursor can
+-- click it. It closes after one choice, after 20 s, on a dangerous creature's approach cue and when the player goes
+-- down. PROPOSED.
 local function showInspect(id: string)
 	closePanel()
 	local f = UI.frame(ctx.gui, {
 		Name = "FalseMarkInspect",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -160),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
 		Size = UDim2.new(0.8, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 	})
@@ -232,13 +237,18 @@ local function showInspect(id: string)
 	UI.corner(f, 8)
 	UI.pad(f, 10)
 	UI.list(f, 8)
+	UI.keepClearOfTouch(f, ctx.gui, 0.8, 420)
 	local t = UI.label(f, "This mark is not in your notebook.", 17)
 	t.TextXAlignment = Enum.TextXAlignment.Center
-	UI.button(f, "Compare with my own mark", function()
+	t.LayoutOrder = 1
+	local row = UI.frame(f, { Size = UDim2.new(1, 0, 0, UI.TOUCH), BackgroundTransparency = 1, LayoutOrder = 2 })
+	UI.list(row, 8, true)
+	UI.button(row, "Compare with my own mark", function()
 		ctx.send("chalkhand.compare", { id = id })
 		closePanel()
-	end, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
-	UI.button(f, "Close", closePanel, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
+	end, { Size = UDim2.new(1, -96, 0, UI.TOUCH), TextWrapped = true, LayoutOrder = 1 })
+	local closeButton = UI.button(row, "Close", closePanel, { Size = UDim2.new(0, 88, 0, UI.TOUCH), LayoutOrder = 2 })
+	closeButton.Modal = true
 	inspectPanel = f
 	task.delay(20, function()
 		if inspectPanel == f then
@@ -371,6 +381,17 @@ function CreatureFX.init(c: any)
 		swarmState = "clear"
 		clearFlecks(false)
 		closePanel()
+	end)
+	-- the inspect strip steps aside for danger, like the other screens
+	ctx.on("cue", function(d: any)
+		if type(d) == "table" and UIRules.THREAT_CUES[d.id] then
+			closePanel()
+		end
+	end)
+	ctx.on("vitals", function(d: any)
+		if type(d) == "table" and d.condition == "downed" then
+			closePanel()
+		end
 	end)
 end
 

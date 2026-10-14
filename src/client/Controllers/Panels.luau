@@ -4,9 +4,12 @@
 -- Every list has an explicit empty state; actions show insufficient-resource text instead of failing silently.
 -- One modal at a time. Panels pushed by the server never replace the class briefing, and the shelter panel
 -- (pushed to every occupant after any upgrade) never replaces another open screen: it waits in the menu.
+-- Any screen but the briefing steps aside when a dangerous creature's approach cue arrives or the player goes down.
+-- Pending party invitations are answered on the Party screen.
 
 local Players = game:GetService("Players")
 local UI = require(script.Parent.UI)
+local UIRules = require(script.Parent.UIRules)
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local ItemDefs = require(Shared:WaitForChild("Data"):WaitForChild("ItemDefs"))
@@ -20,6 +23,7 @@ local root: Frame? = nil
 local cache: { [string]: any } = { discoveries = {}, research = {}, story = nil, onboarding = nil, shelter = nil }
 local partySignature = ""
 local extraMenu: { { label: string, name: string } } = {}
+local wasDowned = false
 
 local BTN = 48 -- minimum touch target height for panel buttons (section 17: 48-56 px)
 
@@ -251,9 +255,23 @@ renderers.inventory = function()
 			g.CellPadding = UDim2.fromOffset(4, 4)
 			g.Parent = holder
 			local presetButtons: { [string]: TextButton } = {}
+			-- The chosen preset carries a tick and an outline as well as the amber fill (never colour alone).
 			local function recolor()
+				local cur = ctx.state[key] or presets[1]
 				for p, pb in presetButtons do
-					pb.BackgroundColor3 = if (ctx.state[key] or presets[1]) == p then C.amber else C.dim
+					local sel = cur == p
+					pb.BackgroundColor3 = if sel then C.amber else C.dim
+					pb.Text = (if sel then "✓ " else "") .. nice(p)
+					local stroke = pb:FindFirstChildOfClass("UIStroke")
+					if sel and not stroke then
+						local s = Instance.new("UIStroke")
+						s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+						s.Color = C.bone
+						s.Thickness = 2
+						s.Parent = pb
+					elseif not sel and stroke then
+						stroke:Destroy()
+					end
 				end
 			end
 			for _, p in presets do
@@ -261,7 +279,7 @@ renderers.inventory = function()
 					ctx.state[key] = p
 					recolor() -- the highlight follows the choice at once
 					ctx.hud.notice("Marker: " .. nice(p), "info")
-				end)
+				end, { TextWrapped = true })
 			end
 			recolor()
 		end
@@ -392,6 +410,17 @@ end
 
 renderers.party = function()
 	local b = open("party", "Party")
+	-- A pending invitation is answered here (the HUD only names it).
+	local invite = ctx.hud.pendingInvite()
+	if invite then
+		UI.label(b, invite.fromName .. " invites you to explore together.", 16, C.teal)
+		button(b, "Accept invitation", function()
+			ctx.hud.answerInvite(true)
+		end, { BackgroundColor3 = C.teal })
+		button(b, "Decline invitation", function()
+			ctx.hud.answerInvite(false)
+		end, { BackgroundColor3 = C.dim })
+	end
 	local party = ctx.state.party
 	if party and #party.members > 0 then
 		UI.label(b, "Current party (this session only)", 16, C.teal)
@@ -506,6 +535,19 @@ function Panels.init(c)
 		-- leaving the shelter forgets its panel snapshot (the menu entry disappears with it)
 		if type(d) == "table" and d.inShelter == nil then
 			cache.shelter = nil
+		end
+		-- going down closes the open screen so the DOWN text and the world stay visible (not the first-join briefing);
+		-- only on the change, so a screen can still be opened while waiting for help
+		local downed = type(d) == "table" and d.condition == "downed"
+		if downed and not wasDowned and current ~= nil and current ~= "onboarding" then
+			close()
+		end
+		wasDowned = downed
+	end)
+	-- A screen never covers the view during a chase: a dangerous creature's approach cue closes it (PROPOSED).
+	ctx.on("cue", function(d: any)
+		if type(d) == "table" and UIRules.THREAT_CUES[d.id] and current ~= nil and current ~= "onboarding" then
+			close()
 		end
 	end)
 end
