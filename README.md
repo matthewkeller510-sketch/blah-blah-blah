@@ -33,6 +33,10 @@ rojo build -o catacombs.rbxlx # build a place file
 rojo serve                    # live-sync into an open Studio place
 ```
 
+### Ready-made place file
+
+`build/CatacombsUntitled.rbxl` contains every script in one place file. Open it directly in Roblox Studio (File → Open from File) and press **Play**. The Workspace looks empty in edit mode because `WorldBuilder` generates the depot, quarry and shelter when the server starts. Rebuild it after code changes with `rojo build -o build/CatacombsUntitled.rbxl`.
+
 ### Importing into Studio
 
 Work only in a **new or explicitly designated** place (spec section 01). Never sync into Delivery Dash, Creature Cafe, Mine it All, Root & Rise or any other existing experience.

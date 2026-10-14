@@ -1,5 +1,6 @@
 *.rbxl
 *.rbxlx
+!build/CatacombsUntitled.rbxl
 *.rbxm
 *.rbxmx
 sourcemap.json
