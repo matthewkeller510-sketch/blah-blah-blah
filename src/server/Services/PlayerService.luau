@@ -19,6 +19,7 @@ local Director = require(Shared.Logic.Director)
 local Progress = require(Shared.Logic.Progress)
 local Progression = require(Shared.Logic.Progression)
 local PlayerRules = require(Shared.Logic.PlayerRules)
+PlayerRules.SHIELDED_BRIGHTNESS = Config.Lantern.shieldedBrightness
 local Story = require(Shared.Logic.Story)
 
 local PlayerService = {}

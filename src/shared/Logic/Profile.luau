@@ -29,7 +29,9 @@ export type Profile = {
 	-- Durable expedition checkpoint (section 20): last valid grounded position for crash reconciliation.
 	checkpoint: {
 		regionId: string,
-		pocketVersion: number,
+		-- 1 outside variable pockets (Milestones 1-2 records); inside a pocket, the pocket's version id (D31).
+		pocketVersion: number | string,
+		pocketId: string?,
 		anchorId: string,
 		offset: { x: number, y: number, z: number },
 	}?,

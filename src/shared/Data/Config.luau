@@ -134,6 +134,7 @@ Config.Injury = {
 -- 08/09. Lanterns and flares (PROPOSED/TUNE)
 Config.Lantern = {
 	exposureMultiplier = 1.5, -- an open lantern widens how far creatures notice its carrier
+	shieldedBrightness = 0.45, -- brightness multiplier with the shutters closed (range drops to shieldedRange)
 }
 Config.Flare = {
 	maxActivePerPlayer = 2,

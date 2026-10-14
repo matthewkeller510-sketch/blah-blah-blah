@@ -9,6 +9,9 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.UI)
+local LOW_LIGHT_FRACTION = (require(
+	game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("Config")
+) :: any).Light.flickerWarningFraction
 
 local Cues = {}
 local ctx: any
@@ -177,7 +180,7 @@ function Cues.init(c)
 		local head = player.Character and player.Character:FindFirstChild("Head")
 		local spot = head and head:FindFirstChild("ExpeditionLight") :: SpotLight?
 		if spot and lastVitals and lastVitals.lightOn then
-			local low = lastVitals.lightCharge < 15
+			local low = lastVitals.lightCharge < 100 * LOW_LIGHT_FRACTION
 			local base = spot:GetAttribute("BaseBrightness") or 1
 			if low then
 				local wave = if ctx.settings.get("reduceFlashes")

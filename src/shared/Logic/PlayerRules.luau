@@ -27,7 +27,7 @@ export type LightInput = {
 export type LightState = { on: boolean, itemId: string?, isLantern: boolean, shielded: boolean, range: number }
 
 -- PROPOSED/TUNE: a shuttered lantern is dimmer as well as shorter (ItemDefs.shieldedRange sets the radius).
-PlayerRules.SHIELDED_BRIGHTNESS = 0.45
+PlayerRules.SHIELDED_BRIGHTNESS = 0.45 -- default; PlayerService sets it from Config.Lantern.shieldedBrightness
 -- A moth factor is clamped to this range so a swarm shortens the light but never removes it.
 PlayerRules.MOTH_FACTOR_MIN = 0.1
 

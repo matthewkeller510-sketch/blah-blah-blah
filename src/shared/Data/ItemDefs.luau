@@ -33,6 +33,8 @@ export type ItemDef = {
 	reusable: boolean?, -- a tool that is required but never consumed (repair tool roll)
 	-- Unique claim (section 14: each participant claims their own copy)
 	unique: boolean?,
+	-- Short inventory text (fictional and game-oriented; no real medical instruction). Panels falls back to its own.
+	description: string?,
 	meshRef: string,
 	iconRef: string,
 	sound: string?,
