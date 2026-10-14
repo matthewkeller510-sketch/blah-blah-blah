@@ -130,10 +130,15 @@ function Inventory.extractForLogout(inv: Inventory, lookup: DefLookup): Contents
 end
 
 -- Recovered bag contents return as expedition loot: they must be carried home again to bank.
--- Returns what did not fit so the bag can keep it (no silent destruction).
+-- Returns what did not fit so the bag can keep it (no silent destruction). An id with no definition (a retired
+-- item) or an invalid count is never added and never throws: it stays in the leftover so the record keeps it.
 function Inventory.addContents(inv: Inventory, lookup: DefLookup, contents: Contents, provenance: Provenance): Contents
 	local leftover: Contents = {}
 	for id, n in contents do
+		if lookup(id) == nil or type(n) ~= "number" or n < 0 or n ~= math.floor(n) then
+			leftover[id] = n
+			continue
+		end
 		local added = Inventory.add(inv, lookup, id, n, provenance)
 		if added < n then
 			leftover[id] = n - added

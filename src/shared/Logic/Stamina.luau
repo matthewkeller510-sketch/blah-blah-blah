@@ -20,6 +20,7 @@ export type State = {
 	value: number,
 	exhausted: boolean,
 	sinceSprint: number,
+	max: number?, -- per-player maximum (base + field-experience bonus); nil means cfg.max
 }
 
 export type Modifiers = {
@@ -32,7 +33,17 @@ export type Mode = "walk" | "sprint" | "crouch" | "idle"
 local Stamina = {}
 
 function Stamina.new(cfg: StaminaConfig): State
-	return { value = cfg.max, exhausted = false, sinceSprint = math.huge }
+	return { value = cfg.max, exhausted = false, sinceSprint = math.huge, max = cfg.max }
+end
+
+function Stamina.maxOf(cfg: StaminaConfig, state: State): number
+	return state.max or cfg.max
+end
+
+-- Raises (or lowers) the maximum. Current stamina is kept, only clamped: a rank-up is no free refill.
+function Stamina.setMax(cfg: StaminaConfig, state: State, max: number)
+	state.max = math.max(1, max)
+	state.value = math.min(state.value, Stamina.maxOf(cfg, state))
 end
 
 local function combine(list: { number }?, lo: number, hi: number): number
@@ -68,6 +79,7 @@ function Stamina.step(
 	wantsCrouch: boolean,
 	mods: Modifiers?
 ): Mode
+	local max = Stamina.maxOf(cfg, state)
 	local mode: Mode
 	if not moving then
 		mode = "idle"
@@ -89,9 +101,9 @@ function Stamina.step(
 	else
 		state.sinceSprint += dt
 		if state.sinceSprint >= cfg.regenDelaySeconds then
-			state.value = math.min(cfg.max, state.value + cfg.regenPerSecond * Stamina.regenMultiplier(cfg, mods) * dt)
+			state.value = math.min(max, state.value + cfg.regenPerSecond * Stamina.regenMultiplier(cfg, mods) * dt)
 		end
-		if state.exhausted and state.value >= cfg.max * cfg.exhaustionRecoverFraction then
+		if state.exhausted and state.value >= max * cfg.exhaustionRecoverFraction then
 			state.exhausted = false
 		end
 	end
@@ -101,7 +113,7 @@ end
 
 -- Visible only when relevant (section 07: "show the stamina bar when relevant").
 function Stamina.shouldShowBar(cfg: StaminaConfig, state: State): boolean
-	return state.exhausted or state.value < cfg.max
+	return state.exhausted or state.value < Stamina.maxOf(cfg, state)
 end
 
 return Stamina

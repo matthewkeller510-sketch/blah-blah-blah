@@ -2,6 +2,10 @@
 -- Input (section 07, 17): touch first, then keyboard/mouse and gamepad. Sends intents and requests only.
 -- Touch layout: landscape, default Roblox left thumbstick for movement, right side for look, separated action
 -- buttons (~52 px) clustered above the jump button, inside safe areas.
+-- Milestone 3 bindings (docs/MILESTONE-3.md 4.7): lantern shield V / ButtonL1 / touch "Shield"; place a flare
+-- N / ButtonR1 / touch "Flare"; character and field experience K. Gamepad also gains Menu (DPadUp), medical
+-- (DPadDown, moved off ButtonX, the default ProximityPrompt key), swap cell (DPadLeft), throw (DPadRight),
+-- rescue (ButtonB) and party ping (ButtonR3); touch gains "Ping" (the verified party ping).
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -18,6 +22,14 @@ local crouch = false
 local lastSent = { sprint = false, crouch = false }
 local ropeStart: Vector3? = nil
 local selectedTool = "tool.iron_bar"
+-- Only hand weapons cycle as the "Use" tool; flares, fuse kits and the repair roll have their own actions.
+local WEAPONS = { "tool.iron_bar", "tool.stun_device" }
+local WEAPON_NAMES: { [string]: string } =
+	{ ["tool.iron_bar"] = "Short Iron Bar", ["tool.stun_device"] = "Stun Device" }
+local sprintTouch: InputObject? = nil -- the touch that holds Sprint (released wherever that finger lifts)
+local touchButtons: { TextButton } = {}
+local flareButton: TextButton? = nil
+local shieldButton: TextButton? = nil
 
 local function aim(range: number): RaycastResult?
 	local cam = workspace.CurrentCamera
@@ -60,12 +72,30 @@ local function inv(): { [string]: number }
 	return out
 end
 
+-- Picks the medical item that fits the need (the server re-checks everything and never wastes an item):
+-- an injury on a mostly full health bar wants the splint (it removes the injury), otherwise the biggest heal.
+local function pickMedical(have: { [string]: number }, v: any): string?
+	local injured = v ~= nil and v.injured == true
+	local mostlyHealthy = v ~= nil and type(v.maxHealth) == "number" and v.health >= v.maxHealth * 0.7
+	local order: { string } = if injured and mostlyHealthy
+		then { "med.splint", "med.bandage", "med.cloth_dressing" }
+		elseif injured then { "med.bandage", "med.splint", "med.cloth_dressing" }
+		else { "med.bandage", "med.cloth_dressing", "med.splint" }
+	for _, id in order do
+		if (have[id] or 0) > 0 then
+			return id
+		end
+	end
+	return nil
+end
+
 local function useMedical()
-	local have = inv()
-	local id = if (have["med.bandage"] or 0) > 0
-		then "med.bandage"
-		elseif (have["med.cloth_dressing"] or 0) > 0 then "med.cloth_dressing"
-		else nil
+	local v = ctx.state.vitals
+	if v and not v.injured and v.health >= v.maxHealth and v.condition ~= "downed" then
+		ctx.hud.notice("You are not hurt.", "info")
+		return
+	end
+	local id = pickMedical(inv(), v)
 	if id then
 		ctx.send("med.use", { itemId = id })
 	else
@@ -76,20 +106,38 @@ end
 local function useTool()
 	local have = inv()
 	if (have[selectedTool] or 0) <= 0 then
-		local other = if selectedTool == "tool.iron_bar" then "tool.stun_device" else "tool.iron_bar"
-		if (have[other] or 0) > 0 then
-			selectedTool = other
-		else
+		local found = nil
+		for _, id in WEAPONS do
+			if (have[id] or 0) > 0 then
+				found = id
+				break
+			end
+		end
+		if not found then
 			ctx.hud.notice("No tool in hand.", "info")
 			return
 		end
+		selectedTool = found
 	end
 	ctx.send("tool.use", { itemId = selectedTool })
 end
 
 local function cycleTool()
-	selectedTool = if selectedTool == "tool.iron_bar" then "tool.stun_device" else "tool.iron_bar"
-	ctx.hud.notice("Tool: " .. (if selectedTool == "tool.iron_bar" then "Short Iron Bar" else "Stun Device"), "info")
+	local i = table.find(WEAPONS, selectedTool) or 0
+	selectedTool = WEAPONS[i % #WEAPONS + 1]
+	ctx.hud.notice("Tool: " .. (WEAPON_NAMES[selectedTool] or selectedTool), "info")
+end
+
+local function shieldLantern()
+	ctx.send("light.shield")
+end
+
+local function placeFlare()
+	if (inv()["tool.flare"] or 0) <= 0 then
+		ctx.hud.notice("You have no flares.", "info")
+		return
+	end
+	ctx.send("flare.place")
 end
 
 local function placeMarker(kind: string)
@@ -199,34 +247,87 @@ local KEYMAP: { [Enum.KeyCode]: () -> () } = {
 	[Enum.KeyCode.C] = function()
 		setCrouch(not crouch)
 	end,
+	[Enum.KeyCode.V] = shieldLantern,
+	[Enum.KeyCode.N] = placeFlare,
+	[Enum.KeyCode.K] = function()
+		ctx.panels.toggle("character")
+	end,
 	[Enum.KeyCode.ButtonL3] = function()
 		setCrouch(not crouch)
 	end,
 	[Enum.KeyCode.ButtonY] = function()
 		ctx.send("light.toggle")
 	end,
-	[Enum.KeyCode.ButtonX] = useMedical,
+	[Enum.KeyCode.ButtonL1] = shieldLantern,
+	[Enum.KeyCode.ButtonR1] = placeFlare,
+	[Enum.KeyCode.ButtonB] = rescueAction,
+	[Enum.KeyCode.ButtonR3] = function()
+		ctx.send("party.ping")
+	end,
+	[Enum.KeyCode.DPadUp] = function()
+		ctx.panels.toggle("menu")
+	end,
+	[Enum.KeyCode.DPadDown] = useMedical,
+	[Enum.KeyCode.DPadLeft] = function()
+		ctx.send("light.swap")
+	end,
+	[Enum.KeyCode.DPadRight] = function()
+		ctx.send("throw")
+	end,
 }
 
+local function refreshTouchLabels()
+	local fb = flareButton
+	if fb then
+		local n = inv()["tool.flare"] or 0
+		fb.Text = if n > 0 then string.format("Flare %d", n) else "Flare"
+		fb.TextTransparency = if n > 0 then 0 else 0.45
+	end
+	local sb = shieldButton
+	if sb then
+		local v = ctx.state.vitals
+		local lantern = v ~= nil and v.isLantern == true
+		sb.Text = if lantern and v.shielded then "Open" else "Shield"
+		sb.TextTransparency = if lantern then 0 else 0.45
+	end
+end
+
+local function releaseTouchSprint()
+	sprintTouch = nil
+	if not ctx.settings.get("sprintToggle") then
+		sprintHeld = false
+		sendIntents()
+	end
+end
+
+-- Touch grid: 4 columns x 4 rows of 52 px buttons (13 used), filled from the bottom-right corner so the most
+-- used actions (Sprint, Crouch, Use, Med) sit nearest the thumb, above the jump button. It stays on the right
+-- side: the left thumbstick zone is never covered. PROPOSED, to be checked on real phones (T21).
 local function buildTouch()
+	local COLS, ROWS = 4, 4
 	local frame = UI.frame(ctx.gui, {
 		Name = "TouchActions",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -150), -- above the default jump button
-		Size = UDim2.fromOffset(UI.TOUCH * 3 + 16, UI.TOUCH * 4 + 24), -- 3 columns x 4 rows,
+		Size = UDim2.fromOffset(UI.TOUCH * COLS + 8 * (COLS - 1), UI.TOUCH * ROWS + 8 * (ROWS - 1)),
 		BackgroundTransparency = 1,
 	})
 	local grid = Instance.new("UIGridLayout")
 	grid.CellSize = UDim2.fromOffset(UI.TOUCH, UI.TOUCH)
 	grid.CellPadding = UDim2.fromOffset(8, 8)
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.StartCorner = Enum.StartCorner.BottomRight
 	grid.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	grid.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	grid.Parent = frame
-	local function btn(text: string, onDown: () -> (), onUp: (() -> ())?)
+	local order = 0
+	local function btn(text: string, onDown: (InputObject) -> (), onUp: (() -> ())?): TextButton
 		local b = Instance.new("TextButton")
+		order += 1
+		b.LayoutOrder = order
 		b.Text = text
 		b.Font = UI.font()
-		b.TextSize = 13
+		b.TextSize = math.floor(13 * UI.TextScale)
 		b.TextWrapped = true
 		b.TextColor3 = UI.Colors.bone
 		b.BackgroundColor3 = UI.Colors.charcoal
@@ -235,7 +336,7 @@ local function buildTouch()
 		b.Parent = frame
 		b.InputBegan:Connect(function(io)
 			if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
-				onDown()
+				onDown(io)
 			end
 		end)
 		if onUp then
@@ -248,41 +349,71 @@ local function buildTouch()
 				end
 			end)
 		end
+		table.insert(touchButtons, b)
 		return b
 	end
-	btn("Menu", function()
-		ctx.panels.toggle("menu")
-	end)
-	btn("Med", useMedical)
-	btn("Mark", function()
-		placeMarker("chalk")
-	end)
-	btn("Light", function()
-		ctx.send("light.toggle")
-	end)
-	btn("Use", useTool)
-	btn("Help", rescueAction)
-	btn("Crouch", function()
-		setCrouch(not crouch)
-	end)
-	btn("Sprint", function()
+	-- bottom row, right to left
+	btn("Sprint", function(io)
 		if ctx.settings.get("sprintToggle") then
 			sprintToggled = not sprintToggled
 		else
 			sprintHeld = true
+			sprintTouch = io
 		end
 		sendIntents()
 	end, function()
-		if not ctx.settings.get("sprintToggle") then
-			sprintHeld = false
-			sendIntents()
+		if sprintHeld then
+			releaseTouchSprint()
 		end
+	end)
+	btn("Crouch", function()
+		setCrouch(not crouch)
+	end)
+	btn("Use", function()
+		useTool()
+	end)
+	btn("Med", function()
+		useMedical()
+	end)
+	-- second row
+	btn("Light", function()
+		ctx.send("light.toggle")
 	end)
 	btn("Cell", function()
 		ctx.send("light.swap")
 	end)
 	btn("Throw", function()
 		ctx.send("throw")
+	end)
+	btn("Mark", function()
+		placeMarker("chalk")
+	end)
+	-- third row
+	flareButton = btn("Flare", function()
+		placeFlare()
+	end)
+	shieldButton = btn("Shield", function()
+		shieldLantern()
+	end)
+	btn("Help", function()
+		rescueAction()
+	end)
+	btn("Ping", function()
+		ctx.send("party.ping")
+	end)
+	-- top row
+	btn("Menu", function()
+		ctx.panels.toggle("menu")
+	end)
+	refreshTouchLabels()
+	ctx.on("inventory", refreshTouchLabels)
+	ctx.on("vitals", refreshTouchLabels)
+	ctx.settings.onChanged(function(k, v)
+		if k == "textScale" then
+			for _, b in touchButtons do
+				b.TextSize = math.floor(13 * v)
+			end
+		end
 	end)
 	frame.Visible = UserInputService.TouchEnabled
 	UserInputService.LastInputTypeChanged:Connect(function(t)
@@ -327,6 +458,9 @@ function Input.init(c)
 		then
 			sprintHeld = false
 			sendIntents()
+		elseif sprintTouch ~= nil and (io :: any) == sprintTouch then
+			-- the finger holding touch Sprint lifted somewhere else on the screen: release, never stick
+			releaseTouchSprint()
 		end
 	end)
 	buildTouch()
