@@ -168,6 +168,31 @@ Shelters.ENTRANCE_SLOTS = {
 	{ wall = "S", along = 5.5, width = 4, y = 4 },
 } :: { EntranceSlot }
 
+-- Interior cell geometry shared with ShelterService (studs; offsets are from the cell origin, the floor centre).
+export type Offset = { x: number, y: number, z: number }
+Shelters.ROOM = { x = 28, y = 12, z = 22 } :: Offset
+
+-- Centre of an entrance slot's frame, half a stud inside its wall. The entrance visuals are built here and the
+-- unsecured-shelter probe aims at it.
+function Shelters.slotOffset(slot: EntranceSlot): Offset
+	local hx, hz = Shelters.ROOM.x / 2, Shelters.ROOM.z / 2
+	if slot.wall == "W" then
+		return { x = -hx + 0.5, y = slot.y, z = slot.along }
+	elseif slot.wall == "E" then
+		return { x = hx - 0.5, y = slot.y, z = slot.along }
+	elseif slot.wall == "S" then
+		return { x = slot.along, y = slot.y, z = -hz + 0.5 }
+	end
+	return { x = slot.along, y = slot.y, z = hz - 0.5 }
+end
+
+-- The probe (D14) damages only someone whose root is closer than this to an unprotected entrance.
+Shelters.PROBE_RADIUS = 5
+-- PROPOSED: where an arriving or respawning player's root is placed. It stays more than PROBE_RADIUS + 3 studs from
+-- every entrance slot (tested), so arriving never counts as "standing right at" an unprotected entrance, even when a
+-- party arrives together and jostles apart.
+Shelters.ARRIVAL = { x = -4, y = 3, z = 0 } :: Offset
+
 -- Definition problems that would break interiors or panels (empty when the def is sound). Checked by the tests for
 -- every WorldDefs shelter and logged by ShelterService at start.
 function Shelters.validate(def: ShelterDef, itemExists: ((string) -> boolean)?): { string }

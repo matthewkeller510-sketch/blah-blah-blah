@@ -5,8 +5,9 @@
 -- P02 Pump routing (R03 Old Pumps): set three valves per the clue plate; drains the cistern (optional treasure).
 -- P03 Fuse bridge (R04 Generator Room): trace the dead line to its junction box and fit a fuse. Station power lasts
 --     Config.Puzzles.stationPowerSeconds, then trips only when the generator room is empty (a new layout follows).
--- P04 Weight and pulley (R01 Rusted Pulley): load the counterweight, then latch it or hold the lever. The grate to the
---     Pulley Store never closes on or behind anyone, and the inner lever always raises it.
+-- P04 Weight and pulley (R01 Rusted Pulley): load the counterweight, then latch it; or, as a party, one member holds
+--     the lever while another crosses. The grate to the Pulley Store never closes on or behind anyone, and the inner
+--     lever always raises it.
 -- P05 Echo sequence (R04 Radio Room): repeat the radio's short/long pattern in PuzzleUI. With station power on, the
 --     set plays Elise Renaud's interrupted log and records the station tape (Act II step 5). Each client blinks the
 --     set's lamp (tag P05Lamp) from its Pattern / Powered / Epoch attributes, so Reduce flashes applies.
@@ -169,11 +170,18 @@ local function safeCall(serviceName: string, fnName: string, ...: any)
 	end
 end
 
--- The acting player is present, up, not carried, and within reach of the thing they work on (server-side checks on
--- top of the prompt's own distance).
+-- The acting player is present, up, not carried, not hidden, and within reach of the thing they work on (server-side
+-- checks on top of the prompt's own distance). Every puzzle prompt handler calls this first.
 local function canAct(player: Player, at: Vector3, range: number): any
 	local s = services.PlayerService.get(player)
-	if not s or not s.alive or s.vitals.condition == "downed" or s.vitals.condition == "dead" or s.carriedBy then
+	if
+		not s
+		or not s.alive
+		or s.vitals.condition == "downed"
+		or s.vitals.condition == "dead"
+		or s.carriedBy
+		or s.hiddenAt
+	then
 		return nil
 	end
 	local pos = services.PlayerService.position(player)
@@ -333,6 +341,9 @@ local function buildP01()
 	label(gateSign, "SCELLÉ — ALIGNER LE RELEVÉ", INK)
 	local pp = prompt(plaquePart, "Turn plaque", "Survey plaque")
 	pp.Triggered:Connect(function(player)
+		if not canAct(player, plaquePart.Position, 10) then
+			return
+		end
 		if state.solved then
 			notify(player, "The plaque is locked in place. The chapel is open.")
 			return
@@ -427,6 +438,9 @@ local function buildP02()
 		valveLabels[i] = label(tag, "", Color3.fromRGB(30, 28, 24), Enum.Font.SpecialElite)
 		local pp = prompt(wheel, "Turn valve " .. Puzzles.roman(i), "Pump valve", 0.6)
 		pp.Triggered:Connect(function(player)
+			if not canAct(player, wheel.Position, 10) then
+				return
+			end
 			if state.drained then
 				-- locked while drained: no misleading "n of 3" caption
 				notify(player, "The valves are locked while the cistern is drained. It refloods on its own later.")
@@ -479,7 +493,10 @@ local function buildP02()
 		Color3.fromRGB(150, 40, 30),
 		Enum.Material.Metal
 	)
-	prompt(lever, "Reset valves", "Pump controls").Triggered:Connect(function()
+	prompt(lever, "Reset valves", "Pump controls").Triggered:Connect(function(player)
+		if not canAct(player, lever.Position, 10) then
+			return
+		end
 		if state.drained then
 			return -- the drained state holds until the cistern refloods on its own
 		end
@@ -845,6 +862,7 @@ local grateBlocker: BasePart
 local grateGen = 0
 local gratePos: Vector3
 local p04Boxes: { Puzzles.Box } = {}
+local p04CrossArea: { Puzzles.Box } = {} -- the pulley room plus p04Boxes: where a lever partner can cross from
 local pileStones: { BasePart } = {}
 local basketStones: { BasePart } = {}
 local basketPart: BasePart
@@ -950,7 +968,7 @@ local function toggleLatch(player: Player)
 		notify(
 			player,
 			string.format(
-				"The latch only holds a raised grate. Load the counterweight basket (%d/%d), or have someone hold the lever.",
+				"The latch only holds the grate on a full counterweight. Load the counterweight basket (%d/%d).",
 				p04.stones,
 				p04.required
 			)
@@ -972,9 +990,43 @@ local function toggleLatch(player: Player)
 	end
 end
 
+-- PROPOSED: the lever is the party way past the stones, so it only works while another able member of the holder's
+-- party is in the pulley room or the grate area to cross. Otherwise one player could hold it from inside the area
+-- (the latch post is within prompt reach of it) and walk through without a single stone.
+local function leverPartnerPresent(player: Player): boolean
+	for other, ts in services.PlayerService.all() do
+		if
+			other ~= player
+			and ts.alive
+			and ts.vitals.condition ~= "downed"
+			and ts.vitals.condition ~= "dead"
+			and not ts.carriedBy
+			and not ts.hiddenAt
+			and services.PartyService.sameParty(player, other)
+		then
+			local pos = services.PlayerService.position(other)
+			if pos and Puzzles.inAnyBox(p04CrossArea, pos.X, pos.Y, pos.Z) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 -- A party member holds the lever (a cancelable hold: moving away lets go) while the others cross.
 local function holdLever(player: Player)
 	if leverHolding[player] or not canAct(player, latchHandle.Position, 10) then
+		return
+	end
+	if not leverPartnerPresent(player) then
+		notify(
+			player,
+			string.format(
+				"The lever is for a party: hold it while a party member crosses. On your own, fill the counterweight basket (%d/%d) and pull the latch.",
+				p04.stones,
+				p04.required
+			)
+		)
 		return
 	end
 	leverHolding[player] = true
@@ -991,7 +1043,7 @@ local function holdLever(player: Player)
 	)
 	services.PlayerService.hold(player, LEVER_HOLD_SECONDS)
 	leverHolding[player] = nil
-	Puzzles.leverRelease(p04, os.clock(), P04_SLIP_SECONDS)
+	Puzzles.leverRelease(p04)
 	refreshP04()
 end
 
@@ -1015,6 +1067,7 @@ local function buildP04()
 	local W, H = WorldDefs.CORRIDOR_WIDTH, WorldDefs.CORRIDOR_HEIGHT
 	-- Nobody under the grate (4 studs either side), in the corridor or anywhere in the store.
 	p04Boxes = { Puzzles.corridorBox(room, store, W, H, 1, 4), Puzzles.chamberBox(store, 1) }
+	p04CrossArea = { Puzzles.chamberBox(room, 1), p04Boxes[1], p04Boxes[2] }
 	-- Stone pile
 	local pile = v(P04.stonePile)
 	for i = 1, state.required + 2 do
