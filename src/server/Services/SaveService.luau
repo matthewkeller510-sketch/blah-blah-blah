@@ -35,7 +35,7 @@ end
 local LOCK = lockId()
 
 -- UserIds whose release (final commit) is still in flight on this server. A same-server rejoin waits for it so
--- it never loads the data the release is about to overwrite.
+-- it never loads the data the release is about to overwrite; if it outlasts the wait, the load is refused.
 local releasing: { [number]: boolean } = {}
 
 local function withRetry<T>(fn: () -> T): (boolean, T | string)
@@ -100,7 +100,8 @@ function SaveService.isAvailable(): boolean
 end
 
 -- Loads and session-locks a profile. Returns (profile?, err?). A live lock held by another server makes the
--- load wait and retry; a stale lock (older than sessionLockStaleSeconds) is taken over.
+-- load wait and retry; a stale lock (older than sessionLockStaleSeconds) is taken over. A release of the same
+-- user still in flight on this server after 35 s fails the load with "previous_session_saving".
 function SaveService.load(player: Player): (Profile.Profile?, string?)
 	local key = "u_" .. player.UserId
 	local result: any = nil
@@ -108,6 +109,12 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 	local waited = os.clock()
 	while releasing[player.UserId] and os.clock() - waited < 35 do
 		task.wait(0.25)
+	end
+	-- Never load while this server's release for the same user is still in flight: the load would read data the
+	-- release is about to overwrite, and the release would then clear the new session's lock (both use this
+	-- server's lock id), so every later save of the new session would fail. The caller kicks with a retry message.
+	if releasing[player.UserId] then
+		return nil, "previous_session_saving"
 	end
 	if available and store then
 		for attempt = 1, 6 do

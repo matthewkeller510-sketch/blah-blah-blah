@@ -295,6 +295,11 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 	if not os_ or not rs or not owner then
 		return
 	end
+	-- Only a requester who can act (alive, not downed, not dead, not carried) recovers anything: a body waiting to
+	-- respawn never takes its own new death bag home (F16; review round 2, findings 14 and 16).
+	if not services.PlayerService.canAct(requester) then
+		return
+	end
 	local bag = os_.profile.bags[kind]
 	if not bag then
 		return
@@ -306,8 +311,13 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 	if not services.PlayerService.hold(requester, 1.5) then
 		return
 	end
-	-- The owner may have left, or the bag been replaced, during the hold.
-	if services.PlayerService.get(owner) ~= os_ or os_.profile.bags[kind] ~= bag then
+	-- The owner may have left, the bag been replaced, or the requester gone down or died, during the hold.
+	if
+		services.PlayerService.get(owner) ~= os_
+		or os_.profile.bags[kind] ~= bag
+		or services.PlayerService.get(requester) ~= rs
+		or not services.PlayerService.canAct(requester)
+	then
 		return
 	end
 	local ctx = { ownerOnline = true, ownerPartyMemberIds = partyIdsOf(owner) }
@@ -358,19 +368,28 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 	RecoveryService.pushAll()
 end
 
+-- Nothing changes (no bag, or the user was never authorized): no save and no push. Otherwise only the owner and
+-- the revoked user can see a different bag list, so only they are sent one.
 function RecoveryService.revoke(owner: Player, kind: string, userId: number)
 	local s = services.PlayerService.get(owner)
-	if s and (kind == "death" or kind == "logout") then
-		RecoveryBags.revoke(s.profile, kind, userId)
-		services.SaveService.markDirty(owner)
-		RecoveryService.pushAll()
+	if not s or (kind ~= "death" and kind ~= "logout") then
+		return
+	end
+	if not RecoveryBags.revoke(s.profile, kind :: RecoveryBags.BagKind, userId) then
+		return
+	end
+	services.SaveService.markDirty(owner)
+	RecoveryService.pushBags(owner)
+	local target = Players:GetPlayerByUserId(userId)
+	if target and target ~= owner and services.PlayerService.get(target) then
+		RecoveryService.pushBags(target)
 	end
 end
 
 -- Owner collects escrow at a shelter; items are banked immediately because the owner is in a shelter.
 function RecoveryService.claimEscrow(player: Player)
 	local s = services.PlayerService.get(player)
-	if not s or not s.insideShelterId then
+	if not s or not s.insideShelterId or not services.PlayerService.canAct(player) then
 		return
 	end
 	local c = RecoveryBags.takeEscrow(s.profile)
