@@ -53,7 +53,7 @@ local entering: { [Player]: boolean } = {}
 local gone: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
 local POWER = "station_power"
-local ROOM = Vector3.new(28, 12, 22)
+local ROOM = Vector3.new(Shelters.ROOM.x, Shelters.ROOM.y, Shelters.ROOM.z)
 local STONE = Color3.fromRGB(176, 166, 146)
 local WOOD = Color3.fromRGB(92, 70, 48)
 local RUST = Color3.fromRGB(110, 62, 38)
@@ -298,18 +298,13 @@ local FAMILY_DECOR: { [string]: (Model, Vector3) -> () } = {
 
 -- Entrance frame at a wall slot. Local -Z (LookVector) points into the room.
 local function slotFrame(origin: Vector3, slot: Shelters.EntranceSlot): CFrame
-	local hx, hz = ROOM.X / 2, ROOM.Z / 2
-	local pos, inward
-	if slot.wall == "W" then
-		pos, inward = Vector3.new(-hx + 0.5, slot.y, slot.along), Vector3.xAxis
-	elseif slot.wall == "E" then
-		pos, inward = Vector3.new(hx - 0.5, slot.y, slot.along), -Vector3.xAxis
-	elseif slot.wall == "S" then
-		pos, inward = Vector3.new(slot.along, slot.y, -hz + 0.5), Vector3.zAxis
-	else
-		pos, inward = Vector3.new(slot.along, slot.y, hz - 0.5), -Vector3.zAxis
-	end
-	local p = origin + pos
+	local o = Shelters.slotOffset(slot)
+	local inward = if slot.wall == "W"
+		then Vector3.xAxis
+		elseif slot.wall == "E" then -Vector3.xAxis
+		elseif slot.wall == "S" then Vector3.zAxis
+		else -Vector3.zAxis
+	local p = origin + Vector3.new(o.x, o.y, o.z)
 	return CFrame.lookAt(p, p + inward)
 end
 
@@ -769,29 +764,69 @@ local function cellOf(player: Player): Cell?
 	return nil
 end
 
--- Streams the cell in, then teleports the player into it. The cell is reserved (pending) during the stream yield so
--- it cannot be released under the arriving player.
+-- PROPOSED: stream passes before placement stops waiting for the target to settle (see placeInside).
+local PLACE_PASSES = 4
+
+-- The cell that should hold this player now: `cell` while it still carries their current group's key, otherwise that
+-- group's cell (built if needed).
+local function currentCell(player: Player, cell: Cell): Cell
+	local want = keyFor(player, cell.shelterId)
+	if cell.key == want and cells[want] == cell then
+		return cell
+	end
+	return getCellByKey(want, cell.shelterId)
+end
+
+-- Streams the cell in, then teleports the player into it. Every cell streamed on the way stays reserved (pending)
+-- until the player has landed, so none is released under the arriving player (or under one still standing in it
+-- during a regroup move). A party change during a stream yield can re-key or replace the target (regroupAll only sees
+-- occupants, not pending players), so the player's own cell is re-resolved after every stream and occupancy is
+-- committed only to a cell carrying their current key (F11, D68). If the party keeps changing for PLACE_PASSES
+-- streams, the player still goes to their current group's cell, without waiting for one more stream.
 local function placeInside(player: Player, cell: Cell)
-	cell.pending[player] = true
-	pcall(function()
-		player:RequestStreamAroundAsync(cell.origin, 5)
-	end)
-	cell.pending[player] = nil
+	local reserved: { Cell } = {}
+	for _ = 1, PLACE_PASSES do
+		cell.pending[player] = true
+		table.insert(reserved, cell)
+		pcall(function()
+			player:RequestStreamAroundAsync(cell.origin, 5)
+		end)
+		if gone[player] or player.Parent == nil or not services.PlayerService.get(player) then
+			break
+		end
+		local now = currentCell(player, cell)
+		if now == cell then
+			break
+		end
+		cell = now
+	end
+	local function unreserve()
+		for _, c in reserved do
+			c.pending[player] = nil
+		end
+		for _, c in reserved do
+			releaseIfEmpty(c)
+		end
+	end
 	local r = services.PlayerService.rootPart(player)
 	local s = services.PlayerService.get(player)
 	if not r or not s or gone[player] or player.Parent == nil or cell.model.Parent == nil then
+		unreserve()
 		releaseIfEmpty(cell)
 		return
 	end
+	cell = currentCell(player, cell) -- no yield from here to the commit
 	local old = cellOf(player)
 	if old and old ~= cell then
 		old.occupants[player] = nil
 		releaseIfEmpty(old)
 	end
-	r.CFrame = CFrame.new(cell.origin + Vector3.new(-ROOM.X / 2 + 5, 3, 0)) * CFrame.Angles(0, -math.pi / 2, 0)
+	local a = Shelters.ARRIVAL
+	r.CFrame = CFrame.new(cell.origin + Vector3.new(a.x, a.y, a.z)) * CFrame.Angles(0, -math.pi / 2, 0)
 	cell.occupants[player] = true
 	s.insideShelterId = cell.shelterId
 	s.dirtyState = true
+	unreserve()
 	refreshCellVisuals(cell)
 end
 
@@ -903,6 +938,22 @@ function ShelterService.exit(player: Player)
 	local cell = cellOf(player)
 	local s = services.PlayerService.get(player)
 	if not cell or not s then
+		return
+	end
+	-- A carried teammate is welded to the carrier, so teleporting either root moves both while only the caller leaves
+	-- the cell's occupancy: the other would walk the tunnels still flagged as inside. PROPOSED: neither may leave
+	-- mid-carry (the carrier sets the teammate down first; they stay inside, flagged correctly), and a downed player
+	-- cannot open the door, as on entry.
+	if s.carrying and s.carrying.kind == "player" then
+		services.PlayerService.notify(
+			player,
+			"Set your teammate down before you leave. They stay in the shelter, where you can treat them.",
+			"warn"
+		)
+		return
+	end
+	if not able(s) then -- downed, carried or dead
+		services.PlayerService.notify(player, "You cannot open the door while down.", "warn")
 		return
 	end
 	cell.occupants[player] = nil
@@ -1291,10 +1342,11 @@ local function regroupAll()
 			cell.pending[player] = true -- still standing here until the teleport lands
 			target.pending[player] = true -- reserved; placeInside clears it
 			task.spawn(function()
-				placeInside(player, target)
+				placeInside(player, target) -- may land in another cell if the party changed again meanwhile
 				cell.pending[player] = nil
 				releaseIfEmpty(cell)
-				if cellOf(player) == target then
+				local now = cellOf(player)
+				if now ~= nil and now ~= cell then
 					services.PlayerService.notify(
 						player,
 						"Your group changed: you are now in your own group's shelter.",
@@ -1363,7 +1415,7 @@ local function probeCell(cell: Cell)
 	task.delay(2.5, function()
 		for p in cell.occupants do
 			local pos = services.PlayerService.position(p)
-			if pos and (pos - spot).Magnitude < 5 then
+			if pos and (pos - spot).Magnitude < Shelters.PROBE_RADIUS then
 				services.PlayerService.damage(p, 8, false, "shelter_probe")
 			end
 		end

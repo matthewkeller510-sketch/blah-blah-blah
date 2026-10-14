@@ -361,8 +361,10 @@ end
 -- P04 weight and pulley ------------------------------------------------------------------------------------
 -- PROPOSED: a full basket raises the grate, but the worn brake only holds it for `slipSeconds` on its own. Pulling the
 -- latch holds it until someone releases the latch; releasing starts the drop timer (Config.Puzzles.pulleyDropSeconds).
--- A party can skip the stones: one member holds the lever while the others cross. Whatever the timers say, the grate
--- only drops when the occupancy check is clear, and a drop tips the stones back out of the basket.
+-- The latch only holds a full basket. A party can skip the stones: one member holds the lever while the others cross
+-- (PuzzleService only lets a player hold it while a party member is there to cross); a lever raise lasts only while
+-- someone holds it. Whatever the timers say, the grate only drops when the occupancy check is clear, and a drop tips
+-- the stones back out of the basket.
 export type P04State = {
 	stones: number,
 	required: number,
@@ -401,7 +403,9 @@ function Puzzles.toggleLatch(s: P04State, now: number, dropSeconds: number): Lat
 		s.holdUntil = math.max(s.holdUntil, now + dropSeconds) -- unlatching starts the drop timer
 		return "unlatched"
 	end
-	if not s.raised then
+	-- Only a full counterweight can be latched: a grate held up by the lever or the inner lever is not latchable, or
+	-- the person holding the lever could latch it and skip the stones.
+	if not s.raised or s.stones < s.required then
 		return "not_raised"
 	end
 	s.latched = true
@@ -418,11 +422,10 @@ function Puzzles.leverHold(s: P04State): boolean
 	return false
 end
 
-function Puzzles.leverRelease(s: P04State, now: number, slipSeconds: number)
+-- Letting go adds no slip time: once nobody holds the lever the grate drops as soon as the area is empty (anyone who
+-- crossed keeps it up through the occupancy rule and the inner lever). A full basket keeps its own slip (loadStone).
+function Puzzles.leverRelease(s: P04State)
 	s.holders = math.max(0, s.holders - 1)
-	if s.holders == 0 then
-		s.holdUntil = math.max(s.holdUntil, now + slipSeconds)
-	end
 end
 
 -- The lever inside the store always raises the grate (nobody can be shut in). Returns true if this raised it.
