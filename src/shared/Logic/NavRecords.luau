@@ -178,35 +178,6 @@ function NavRecords.inRegion(store: NavStore, regionId: string): { NavRecord }
 	return out
 end
 
--- Legacy anchor-map migration (Milestone 1 helper, kept for existing callers): moves records of `regionId` at
--- `fromVersion` whose anchor is listed in `anchorMap`. Records whose anchor is not listed are left untouched (the
--- earlier version re-versioned them without moving them). Pocket changes use migratePocketRecords instead.
--- Never deletes. Returns the number of migrated records.
-function NavRecords.migratePocket(
-	store: NavStore,
-	regionId: string,
-	fromVersion: number,
-	toVersion: number,
-	anchorMap: { [string]: { anchorId: string, position: Vec } }
-): number
-	local n = 0
-	local page = store.pages[regionId]
-	if not page then
-		return 0
-	end
-	for _, r in page do
-		local target = anchorMap[r.anchorId]
-		if r.pocketVersion == fromVersion and target then
-			r.anchorId = target.anchorId
-			r.position = { x = target.position.x, y = target.position.y, z = target.position.z }
-			r.endPosition = nil -- a moved rope collapses to a coil at the recovery anchor
-			r.pocketVersion = toVersion
-			n += 1
-		end
-	end
-	return n
-end
-
 export type MigrationTarget = {
 	regionId: string, -- region of the anchor chamber (the page the records move to)
 	anchorId: string, -- the pocket's documented migration anchor (a stable chamber)

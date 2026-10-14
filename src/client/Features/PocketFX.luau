@@ -39,8 +39,6 @@ local function stopDust(pocketId: string)
 	end
 end
 
--- NumberRange, NumberSequence and ColorSequence are Roblox globals missing from the repo's minimal selene std.
--- selene: allow(undefined_variable)
 local function startDust(pocketId: string, mouths: { any }, endsAt: number)
 	stopDust(pocketId)
 	local emitters: { BasePart } = {}

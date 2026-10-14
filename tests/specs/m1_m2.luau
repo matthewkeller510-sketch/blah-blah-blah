@@ -356,18 +356,6 @@ return function(T: any)
 		eq(err, "placement_limit")
 		eq(NavRecords.countOwned(st), 3)
 	end)
-	test("pocket migration moves, never deletes", function()
-		local st = NavRecords.newStore()
-		place(st, 1, 1)
-		local n = NavRecords.migratePocket(st, "R01", 1, 2, {
-			["R01.split_pier"] = { anchorId = "R01.split_pier_v2", position = { x = 9, y = 9, z = 9 } },
-		})
-		eq(n, 1)
-		local recs = NavRecords.inRegion(st, "R01")
-		eq(#recs, 1)
-		eq(recs[1].pocketVersion, 2)
-		eq(recs[1].anchorId, "R01.split_pier_v2")
-	end)
 
 	print("Director (F06, section 11)")
 	local D = Config.Director

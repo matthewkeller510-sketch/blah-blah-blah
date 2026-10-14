@@ -804,37 +804,6 @@ return function(T: any)
 		eq(NavRecords.isRouteId(3), false)
 	end)
 
-	test("the legacy anchor-map migration no longer re-versions records it does not move", function()
-		local st = NavRecords.newStore()
-		local function put(anchorId: string)
-			return assert(NavRecords.place(st, {
-				ownerId = 1,
-				kind = "chalk",
-				itemId = "nav.chalk",
-				regionId = "R05",
-				pocketVersion = 1,
-				anchorId = anchorId,
-				position = { x = 0, y = 0, z = 0 },
-				facing = { x = 0, y = 1, z = 0 },
-				content = "x",
-				units = 1,
-			}, 400))
-		end
-		local a, b = put("R05.south_anchor"), put("R05.east_anchor")
-		eq(
-			NavRecords.migratePocket(
-				st,
-				"R05",
-				1,
-				2,
-				{ ["R05.south_anchor"] = { anchorId = "X", position = a.position } }
-			),
-			1
-		)
-		eq(b.pocketVersion, 1, "unmapped record keeps its version")
-		eq(a.pocketVersion, 2)
-	end)
-
 	print("Discovery and scavenging fixes (sections 08, 14)")
 
 	test("searching needs a live, free, nearby player outside a shelter", function()
