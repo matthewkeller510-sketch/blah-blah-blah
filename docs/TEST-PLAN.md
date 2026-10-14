@@ -67,9 +67,12 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 53 | Lantern and flares | Equip the lantern, toggle shield (V); place flares (N) three times; try in a shelter | Omni light seen by others; range 9 shielded; two flares land, the third is refused; refused in shelters and at the depot |
 | 54 | Injury and splint | Take an injuring hit, sprint, then apply a splint | Sprint about 14.5, walk 11; HUD injury line; splint clears it |
 | 55 | Field experience (F24, T23) | Explore past 50 experience; rejoin an older profile | Rank-up notice, max health and stamina +2, no free heal; one back-fill notice for older profiles and no second payment on rejoin |
-| 56 | Touch and gamepad | Phone landscape; gamepad | 4 × 4 grid clear of the thumbstick, 52 px buttons; Sprint never sticks; shoulder and D-pad bindings work |
+| 56 | Touch and gamepad | Phone landscape (390 px tall) and tablet; gamepad | 5 × 3 grid clear of the thumbstick and above the jump button, 52 px buttons; party list in the left column; Sprint never sticks; shoulder and D-pad bindings work |
 | 57 | Notebook after rejoin | Rejoin | Discoveries and research listed, sorted, with no notice burst |
 | 58 | Schema 2 rollout | Join a schema-2 profile on an old (schema-1) server, then a new one | Old server refuses with a clear message and releases the lock; the new server loads at once |
 | 59 | Ray-blocking barriers | Aim a chalk mark into the flooded W05 corridor and at the closed P04 grate | The mark lands on the floor or wall, never on an invisible mid-air plane |
 | 60 | Overlapping pocket volumes | Walk PK1's loop version near its east side chamber | Only the PK1 passage is discovered, never PK2 |
 | 61 | No heal on rejoin (F18) | Drop to low health in a tunnel and rejoin; get downed and leave; rejoin | Same health as before leaving, no heal; back injured at 15 health after leaving while downed |
+| 62 | Mouse cursor in first person (PC) | Open every screen: inventory, notebook, shelter, missions, shop, onboarding, dialogue, radio, M03 chooser, Chalk Hand popup | The cursor is free while each is open and every button can be clicked; it locks again when the screen closes |
+| 63 | Screens close in danger | Open a panel, the radio or dialogue, then trigger a chase cue or get downed | They close; captions stay visible above everything |
+| 64 | Dialogue at large text | Text size 1.6 on a 390-px phone; talk to every character | Lines page instead of being cut off; buttons stay 52 px |
