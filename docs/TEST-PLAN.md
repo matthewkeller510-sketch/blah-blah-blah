@@ -79,3 +79,8 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 65 | Creatures through pockets | Force each pocket version; lead the Lantern Thief through PK1, PK2 and PK3; watch a creature turn corners in R01 and R04 | It follows the open passage (never through walls or the low ceiling), takes a bypass when a pocket is closed to it, and turns at chamber centres; the pocket never changes while it is inside |
 | 66 | Knocker research and tools | Watch the Knocker; swing the bar and fire the stun through a wall | "Seen" is recorded; tools do nothing through walls and prefer a threat over a moth roost |
 | 67 | Shelter exits and arrivals | Try to leave while carrying or being carried; arrive or respawn in an unsecured shelter during a probe | Leaving is refused until the teammate is set down; arrivals are never hit by the probe |
+| 68 | Death costs its loot (F16) | Die next to loot, then try to recover your own new bag before respawning; recover it after respawning | Refused while dead; works after walking back |
+| 69 | Death inside a shelter | Die inside an interior (e.g. a probe at an open entrance) | The bag is just outside that shelter's door; the notice says so |
+| 70 | Abandon while carrying | Carry a survivor, then abandon the mission (solo and in a party) | The survivor is set down first; you can sprint, hide and use tools; nobody is welded to anyone |
+| 71 | Prompt keys | On keyboard and gamepad, use the Carry (J) and lever (U) prompts and the escort prompt | Each prompt fires without also toggling the light or another action; note any gamepad clash |
+| 72 | Marker pacing | Four players in a party place markers quickly | Lists update within a few seconds; leaving the party hides markers at once |

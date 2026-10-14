@@ -926,6 +926,9 @@ function ShelterService.enter(player: Player, shelterId: string)
 		services.PlayerService.notify(player, "You cannot open the gate while down.", "warn")
 		return
 	end
+	if not services.PlayerService.canAct(player) then
+		return -- dead (waiting to respawn) or being carried: a carrier brings a teammate in
+	end
 	-- One entry at a time per player (the stream-in yields); the guard is always cleared, even if a step errors.
 	entering[player] = true
 	xpcall(admit, function(err)

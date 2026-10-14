@@ -1138,7 +1138,7 @@ local function buildP04()
 	latchPrompt = prompt(latchHandle, "Pull latch", "Pulley latch", 0.5)
 	latchPrompt.Triggered:Connect(toggleLatch)
 	local leverPrompt = prompt(latchHandle, "Hold the lever", "Pulley lever (party)", 0.3)
-	leverPrompt.KeyboardKeyCode = Enum.KeyCode.F
+	leverPrompt.KeyboardKeyCode = Enum.KeyCode.U -- not F: F toggles the light
 	leverPrompt.GamepadKeyCode = Enum.KeyCode.ButtonY
 	leverPrompt.UIOffset = Vector2.new(0, 60)
 	leverPrompt.Triggered:Connect(holdLever)

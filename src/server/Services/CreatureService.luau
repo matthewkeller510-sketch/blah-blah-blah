@@ -110,6 +110,7 @@ function CreatureService.useTool(player: Player, itemId: string)
 		not sess
 		or Inventory.count(sess.profile.inventory, itemId) < 1
 		or sess.vitals.condition == "downed"
+		or sess.vitals.condition == "dead"
 		or sess.hiddenAt
 		or sess.carrying
 		or sess.carriedBy

@@ -114,7 +114,7 @@ end
 
 function EconomyService.buy(player: Player, itemId: string)
 	local s = services.PlayerService.get(player)
-	if not s or not nearQuartermaster(player) then
+	if not s or not services.PlayerService.canAct(player) or not nearQuartermaster(player) then
 		return
 	end
 	local entry
@@ -147,7 +147,14 @@ end
 function EconomyService.sell(player: Player, itemId: string)
 	local s = services.PlayerService.get(player)
 	local d = ItemDefs.get(itemId)
-	if not s or not d or d.category ~= "treasure" or d.unique or not nearQuartermaster(player) then
+	if
+		not s
+		or not d
+		or d.category ~= "treasure"
+		or d.unique
+		or not services.PlayerService.canAct(player)
+		or not nearQuartermaster(player)
+	then
 		return
 	end
 	if not Inventory.remove(s.profile.inventory, itemId, 1) then
