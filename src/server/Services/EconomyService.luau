@@ -1,6 +1,7 @@
 --!strict
 -- Earned-coin trade and developer-product receipts (section 21).
--- Quartermaster: a PLACEHOLDER counter in the depot equipment room standing in for N03 Ines Vidal.
+-- Quartermaster: N03 Ines Vidal in the depot equipment room (docs/MILESTONE-3.md 4.6). Talking to her
+-- (NpcService) opens the shop; trades are accepted only within range of her. Earned coins only.
 -- Developer products: navigation packs only. No product IDs are configured in this repository; the store stays
 -- disabled until an authorized test/live configuration sets them. Prices are read from the platform, never
 -- hard-coded. Receipts are deduplicated and granted only after a durable save.
@@ -17,7 +18,8 @@ local Commerce = require(Shared.Logic.Commerce)
 local EconomyService = {}
 local services: any
 
--- Coin prices (PROPOSED, see docs/ECONOMY.md). Everything here is also obtainable by scavenging.
+-- Coin prices (PROPOSED, see docs/ECONOMY.md). Everything here is also obtainable through play (F20): each row
+-- has an organic source in WorldDefs.ScavengeSites or a recipe. Unique story items are never sold.
 local SHOP = {
 	{ itemId = "power.cell", price = 15 },
 	{ itemId = "med.cloth_dressing", price = 6 },
@@ -27,6 +29,12 @@ local SHOP = {
 	{ itemId = "nav.rope", price = 4 },
 	{ itemId = "light.expedition_flashlight", price = 120 },
 	{ itemId = "tool.stun_device", price = 90 },
+	-- Milestone 3 (docs/MILESTONE-3.md 4.7, TUNE)
+	{ itemId = "light.shielded_lantern", price = 140 }, -- Battery Store shelf (R04, needs light)
+	{ itemId = "tool.flare", price = 10 }, -- station hall desk, overflow vault cache
+	{ itemId = "med.splint", price = 12 }, -- station medical shelves; crafting
+	{ itemId = "tool.fuse_kit", price = 9 }, -- generator locker; crafting
+	{ itemId = "tool.repair_roll", price = 30 }, -- Battery Store shelf, generator locker
 }
 
 -- Developer products: productId -> contents. EMPTY on purpose (do not create live products from this brief).
@@ -36,10 +44,19 @@ local PRODUCTS: { [number]: { name: string, contents: { [string]: number } } } =
 
 local TRADE_RANGE = 14
 
+local function quartermasterPosition(): Vector3
+	local ines = WorldDefs.Characters.N03
+	local at = ines and ines.pos
+	if at then
+		return Vector3.new(at.x, at.y + 2, at.z)
+	end
+	local er = WorldDefs.Depot.equipmentRoom
+	return Vector3.new(er.pos.x, er.pos.y + 2, er.pos.z)
+end
+
 local function nearQuartermaster(player: Player): boolean
 	local p = services.PlayerService.position(player)
-	local er = WorldDefs.Depot.equipmentRoom
-	return p ~= nil and (p - Vector3.new(er.pos.x, er.pos.y + 2, er.pos.z)).Magnitude < TRADE_RANGE
+	return p ~= nil and (p - quartermasterPosition()).Magnitude < TRADE_RANGE
 end
 
 function EconomyService.pushShop(player: Player)
@@ -79,12 +96,20 @@ function EconomyService.pushShop(player: Player)
 		)
 	end
 	services.PlayerService.send(player, "shop", {
+		vendor = "Ines Vidal", -- PROPOSED UI field: the shop title (the panel still says "Quartermaster")
 		coins = s.profile.coins,
 		buy = buy,
 		sell = sell,
 		products = products,
 		storeConfigured = next(PRODUCTS) ~= nil,
 	})
+end
+
+-- Talking to Ines Vidal opens the shop (NpcService). Out of range, nothing opens.
+function EconomyService.openShop(player: Player)
+	if nearQuartermaster(player) then
+		EconomyService.pushShop(player)
+	end
 end
 
 function EconomyService.buy(player: Player, itemId: string)
@@ -184,17 +209,7 @@ end
 
 function EconomyService.start()
 	MarketplaceService.ProcessReceipt = processReceipt
-	local room = services.WorldBuilder.folder("R00"):FindFirstChild("EquipmentRoom")
-	local shelf = room and room:FindFirstChild("Shelf")
-	if shelf then
-		local pp = Instance.new("ProximityPrompt")
-		pp.ActionText = "Trade"
-		pp.ObjectText = "Quartermaster (placeholder)"
-		pp.MaxActivationDistance = 10
-		pp.RequiresLineOfSight = false
-		pp.Parent = shelf
-		pp.Triggered:Connect(EconomyService.pushShop)
-	end
+	-- The placeholder shelf prompt is gone: Ines Vidal's Talk prompt (NpcService) opens the shop.
 end
 
 return EconomyService
