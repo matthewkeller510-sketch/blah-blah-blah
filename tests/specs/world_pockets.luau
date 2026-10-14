@@ -882,7 +882,7 @@ return function(T: any)
 		end
 		eq(Discovery.isPlaceDiscovery("R04.station_hall", isClaim), true)
 		eq(Discovery.isPlaceDiscovery("R00.descent_ramp", isClaim), true)
-		eq(Discovery.isPlaceDiscovery("R05.p06_verified", isClaim), true)
+		eq(Discovery.isPlaceDiscovery("R05.p06_verified", isClaim), false, "the P06 puzzle record (D78)")
 		eq(Discovery.isPlaceDiscovery("R01.found_survey_tag", isClaim), false)
 		eq(Discovery.isPlaceDiscovery("shelter:S04.service_office", isClaim), false)
 		eq(Discovery.isPlaceDiscovery("P01.solved", isClaim), false)

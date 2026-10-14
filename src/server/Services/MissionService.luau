@@ -10,7 +10,8 @@
 --     sluice-keeper's cache, then reach any shelter.
 -- M07 Creature Observation: gain one new research stage on a reachable creature, then return to any shelter.
 -- M09 Shelter Establishment: personal; register a known shelter and build stage 1 of any safety upgrade.
--- M11 Lost Belongings: personal; return to your own death or departure bag. Experience only, never coins.
+-- M11 Lost Belongings: personal; return to your own death or departure bag. Never coins; experience only for your
+--     own recovery (a party member's escrow recovery ends it without), at most once per M11 experience cooldown.
 -- A2.rescue: Act II step 2, the rescue of Noah Perrin in the Silt Works, reusing the M01 rescue rules.
 -- Objectives are generated only where they are reachable from the player's last shelter (closed gates are walls).
 -- Rules live in Logic/MissionRules; failure, abandonment, disconnect and late join are documented in docs/MISSIONS.md.
@@ -108,6 +109,9 @@ local reservedSpots: { [string]: boolean } = {} -- spots held while an objective
 local starting: { [Player]: boolean } = {} -- one accept at a time per player
 local m05Cache: BasePart? = nil
 local idleNoah: Model? = nil
+-- M11: bag ids each owner recovered themselves this session (RecoveryService.recover reports them). A bag that left
+-- its slot without this mark went to the owner's shelter escrow through a party member (no experience).
+local ownerRecovered: { [Player]: { [string]: boolean } } = {}
 
 -- Helpers ------------------------------------------------------------------------------------------
 
@@ -330,7 +334,12 @@ local function objectiveFor(m: Mission, p: Player): string
 			return ""
 		end
 		local label = chamberLabel(bag.anchor.anchorId)
-		return MissionRules.m11Objective(m.targetKind or "death", regionName(bag.anchor.regionId), label)
+		return MissionRules.m11Objective(
+			m.targetKind or "death",
+			regionName(bag.anchor.regionId),
+			label,
+			MissionRules.m11XpCooldownSeconds(Config.Missions)
+		)
 	end
 	return ""
 end
@@ -1696,14 +1705,43 @@ local function evaluateM09(player: Player, s: any, m: Mission, f: Story.Facts)
 	end
 end
 
-local function evaluateM11(player: Player, m: Mission)
-	local status = MissionRules.m11Status(bagsOf(player), m.targetKind or "", m.target or "")
+local function evaluateM11(player: Player, s: any, m: Mission)
+	local target = m.target or ""
+	local marks = ownerRecovered[player]
+	local status = MissionRules.m11Status(bagsOf(player), m.targetKind or "", target, marks ~= nil and marks[target])
+	if marks and (status == "recovered" or status == "delegated") then
+		marks[target] = nil
+	end
 	if status == "recovered" then
-		-- Never coins (no incentive to die); field experience once per bag.
-		grantXp(player, MissionRules.bagXpKey(m.target or ""), Config.Progression.xp.bag)
+		-- Never coins (no incentive to die); field experience once per bag, at most once per cooldown (D37).
+		local now = os.time()
+		local wait = MissionRules.m11XpWait(s.profile.missionCooldowns, now)
+		if wait <= 0 then
+			s.profile.missionCooldowns[MissionRules.M11_XP_COOLDOWN_KEY] = now
+				+ MissionRules.m11XpCooldownSeconds(Config.Missions)
+			services.SaveService.markDirty(player)
+			grantXp(player, MissionRules.bagXpKey(target), Config.Progression.xp.bag)
+			notify(
+				player,
+				"Lost Belongings: you recovered your own bag. Field experience recorded — no coins, this was your own journey.",
+				"info"
+			)
+		else
+			notify(
+				player,
+				string.format(
+					"Lost Belongings: you recovered your own bag. No field experience this time: a recovered bag pays at most once every %d minutes (again in %d min).",
+					math.ceil(MissionRules.m11XpCooldownSeconds(Config.Missions) / 60),
+					math.ceil(wait / 60)
+				),
+				"info"
+			)
+		end
+		clearMission(m, "done")
+	elseif status == "delegated" then
 		notify(
 			player,
-			"Lost Belongings: you recovered your own bag. Field experience recorded — no coins, this was your own journey.",
+			"Lost Belongings: a party member moved your bag to your shelter escrow; claim it at any shelter. No field experience: only recovering it yourself earns it.",
 			"info"
 		)
 		clearMission(m, "done")
@@ -1731,11 +1769,25 @@ function MissionService.evaluate(player: Player)
 		elseif t == "M09" then
 			evaluateM09(player, s, m, f)
 		else
-			evaluateM11(player, m)
+			evaluateM11(player, s, m)
 		end
 	elseif s.insideShelterId and (t == "M07" or t == "M05") then
 		reachedShelter(player, m)
 	end
+end
+
+-- Called by RecoveryService.recover after the owner recovered their own bag (not a delegate's escrow recovery), so
+-- M11 can tell the two apart. Completes the journey at once instead of on the next poll.
+function MissionService.noteOwnerRecovered(owner: Player, bagId: string)
+	local marks = ownerRecovered[owner] or {}
+	ownerRecovered[owner] = marks
+	marks[bagId] = true
+	task.defer(function()
+		local ok, err = try(MissionService.evaluate, owner)
+		if not ok then
+			warn("[MissionService] evaluate after a recovery failed: " .. tostring(err))
+		end
+	end)
 end
 
 -- Called by ShelterService.enter (after registration and banking, before the player is placed inside).
@@ -1900,6 +1952,7 @@ function MissionService.start()
 	end)
 	Players.PlayerRemoving:Connect(function(p)
 		starting[p] = nil
+		ownerRecovered[p] = nil
 	end)
 end
 

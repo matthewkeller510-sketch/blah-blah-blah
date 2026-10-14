@@ -64,7 +64,9 @@ function MissionRules.cooldownSeconds(template: string, missions: { [string]: an
 	elseif template == "M07" then
 		return 240 -- TUNE (Milestone 2 value)
 	end
-	return 0 -- M04, M09, M11 and story objectives: once-only rewards instead of cooldowns
+	-- M04, M09 and story objectives: once-only rewards instead of cooldowns. M11 is never locked on the board; only its
+	-- experience has a limit (m11XpWait).
+	return 0
 end
 
 -- Coins paid per participant on completion (TUNE; `missions` is Config.Missions). M11 pays none: a lost bag must
@@ -344,12 +346,19 @@ function MissionRules.m11Pick(bags: { death: BagLike?, logout: BagLike? }): BagL
 	return bags.death or bags.logout
 end
 
--- "pending" while the bag exists, "recovered" once the owner (or their escrow) emptied it, "replaced" when a newer
--- bag of the same kind took its slot (F16: only the latest death bag persists).
-function MissionRules.m11Status(bags: { death: BagLike?, logout: BagLike? }, kind: string, bagId: string): string
+-- "pending" while the bag exists; once the slot is empty, "recovered" when the owner recovered it themselves
+-- (`ownerRecovered`: the server saw the owner's own recovery of this bag id) or "delegated" when a party member moved
+-- it to the owner's shelter escrow; "replaced" when a newer bag of the same kind took its slot (F16: only the latest
+-- death bag persists). Only "recovered" earns field experience (D37: own bag recovered).
+function MissionRules.m11Status(
+	bags: { death: BagLike?, logout: BagLike? },
+	kind: string,
+	bagId: string,
+	ownerRecovered: boolean?
+): string
 	local cur: BagLike? = if kind == "death" then bags.death elseif kind == "logout" then bags.logout else nil
 	if cur == nil then
-		return "recovered"
+		return if ownerRecovered then "recovered" else "delegated"
 	elseif cur.bagId == bagId then
 		return "pending"
 	end
@@ -360,12 +369,43 @@ function MissionRules.bagXpKey(bagId: string): string
 	return "bag:" .. bagId
 end
 
-function MissionRules.m11Objective(kind: string, regionName: string, chamberLabel: string): string
+-- M11 experience is bounded per player (D37 "bounded by mission cooldowns"): a new logout bag can be made at will
+-- next to a shelter, so "once per bag" alone does not limit it. The cooldown gates the experience only, never the
+-- journey itself (the objective still locates the bag). Stored in profile.missionCooldowns under its own key so the
+-- M11 board entry never shows a cooldown.
+MissionRules.M11_XP_COOLDOWN_KEY = "M11.xp"
+MissionRules.M11_XP_COOLDOWN_SECONDS = 900 -- PROPOSED / TUNE (Config.Missions.lostBelongingsXpCooldownSeconds wins)
+
+function MissionRules.m11XpCooldownSeconds(missions: { [string]: any }): number
+	local v = missions.lostBelongingsXpCooldownSeconds
+	return if type(v) == "number" and v >= 0 then v else MissionRules.M11_XP_COOLDOWN_SECONDS
+end
+
+-- Seconds until an own recovery pays field experience again (0 = it pays now).
+function MissionRules.m11XpWait(cooldowns: { [string]: number }, now: number): number
+	local readyAt = cooldowns[MissionRules.M11_XP_COOLDOWN_KEY]
+	if type(readyAt) ~= "number" or readyAt ~= readyAt then
+		return 0
+	end
+	return math.max(0, readyAt - now)
+end
+
+-- `xpCooldownSeconds` (optional) states the experience limit in the objective (transparent cooldowns).
+function MissionRules.m11Objective(
+	kind: string,
+	regionName: string,
+	chamberLabel: string,
+	xpCooldownSeconds: number?
+): string
+	local limit = if xpCooldownSeconds and xpCooldownSeconds > 0
+		then string.format(", at most once every %d minutes", math.ceil(xpCooldownSeconds / 60))
+		else ""
 	return string.format(
-		"Your own journey, not a paid recovery service: your %s bag lies in %s, near %s. Recover it yourself, or let a party member move it to your shelter escrow.",
+		"Your own journey, not a paid recovery service: your %s bag lies in %s, near %s. Recovering it yourself earns field experience (once per bag%s). A party member can move it to your shelter escrow instead, but that earns none.",
 		if kind == "death" then "death" else "departure",
 		regionName,
-		chamberLabel
+		chamberLabel,
+		limit
 	)
 end
 

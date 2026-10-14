@@ -154,10 +154,17 @@ function Discovery.writeSite(cooldowns: { [string]: number }, siteId: string, st
 	end
 end
 
--- Field experience for places (D37): chamber ids, depot landmarks and other "Rxx." place ids, but never the
--- discovery that accompanies an item claim (that would pay for loot rather than exploration).
+-- Puzzle records that carry a place-like "Rxx." id but pay no place experience (D78: "not item claims or puzzle
+-- records"). The ids stay as saved. Shared by the live grant (isPlaceDiscovery) and the back-fill (PlayerService
+-- passes this set to Progression.factAwards).
+Discovery.PUZZLE_RECORDS = {
+	["R05.p06_verified"] = true, -- P06 impossible doorway (docs/MILESTONE-3.md section 3 rule 8)
+} :: { [string]: boolean }
+
+-- Field experience for places (D37): chamber ids, depot landmarks and other "Rxx." place ids, but never a puzzle
+-- record or the discovery that accompanies an item claim (that would pay for loot rather than exploration).
 function Discovery.isPlaceDiscovery(id: string, isItemClaim: (string) -> boolean): boolean
-	if isItemClaim(id) then
+	if Discovery.PUZZLE_RECORDS[id] or isItemClaim(id) then
 		return false
 	end
 	return string.match(id, "^R%d%d%.") ~= nil

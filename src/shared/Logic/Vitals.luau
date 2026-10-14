@@ -172,4 +172,36 @@ function Vitals.respawn(cfg: HealthConfig, s: State)
 	refreshCondition(cfg, s)
 end
 
+export type Saved = { health: number, injured: boolean }
+
+-- What a session saves for the next join (profile.vitals), so leaving and rejoining is never a free heal (F18).
+-- PROPOSED: a downed player who leaves comes back injured at the stabilized health (low, never dead, never healed);
+-- a dead player who leaves before respawning comes back exactly as the respawn would place them (the F18 cap).
+function Vitals.persisted(cfg: HealthConfig, s: State): Saved
+	if s.condition == "downed" then
+		return { health = math.min(cfg.stabilizedHealth, s.max), injured = true }
+	elseif s.condition == "dead" then
+		return { health = Vitals.passiveCap(cfg, s), injured = false }
+	end
+	return { health = s.health, injured = s.injuryFlag }
+end
+
+-- Starts a session from the saved record, clamped to the current (progression-raised) maximum and never below 1.
+-- A missing or malformed record (a brand-new profile, or one saved before the field existed) starts at full health.
+-- Call after the maximum is set. The condition is derived again: a low or injured player starts "injured".
+function Vitals.restore(cfg: HealthConfig, s: State, saved: any)
+	local h = if type(saved) == "table" then saved.health else nil
+	if type(h) == "number" and h == h then
+		s.health = math.clamp(h, 1, s.max)
+		s.injuryFlag = saved.injured == true
+	else
+		s.health = s.max
+		s.injuryFlag = false
+	end
+	s.condition = "healthy"
+	s.downedRemaining = 0
+	s.stabilized = false
+	refreshCondition(cfg, s)
+end
+
 return Vitals

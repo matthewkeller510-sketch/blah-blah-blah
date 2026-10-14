@@ -12,7 +12,14 @@
 --   "story:" .. stepId                        a completed story step (Logic/Story step ids, e.g. "A1.3"), xp.story
 --   "mission:" .. templateId .. ":" .. n      the n-th completion of a mission template (e.g. "mission:M01:2"), xp.mission
 --   "bag:" .. bagIdOrOpId                     M11: a lost bag recovered by its owner, once per bag, xp.bag
--- Keys are stored in profile.progression.awarded (DataStore-safe string keys).
+-- One-off keys (disc, shelter, research, story) are stored in profile.progression.awarded (DataStore-safe string
+-- keys); they are bounded by world content. Repeatable sources are stored compactly so the saved profile does not
+-- grow with play time:
+--   mission keys raise a per-template high-water mark, progression.missionPaid[templateId] = n. A key pays once,
+--   when its n is above the mark; an n at or below the mark pays nothing.
+--   bag keys go to progression.bagsPaid, a FIFO of the last MAX_BAGS_PAID keys (bag ids are unique, and a recovered
+--   bag is never targeted again).
+-- normalize folds keys of both kinds that older records kept in `awarded` into these, idempotently.
 
 export type Config = {
 	rankDivisor: number,
@@ -22,7 +29,12 @@ export type Config = {
 	xp: { [string]: number },
 }
 
-export type Record = { xp: number, awarded: { [string]: boolean } }
+export type Record = {
+	xp: number,
+	awarded: { [string]: boolean },
+	missionPaid: { [string]: number },
+	bagsPaid: { string },
+}
 
 export type Snapshot = {
 	xp: number,
@@ -35,7 +47,9 @@ export type Snapshot = {
 	healthCap: number,
 }
 
-export type Award = { key: string, amount: number }
+-- A mission back-fill award also carries `template` and `through`: every completion above that template's mark,
+-- up to `through`, pays `amount` once. Its key names the last of them ("mission:<T>:<through>").
+export type Award = { key: string, amount: number, template: string?, through: number? }
 
 -- Facts the back-fill reads (a subset of the profile; the profile itself satisfies it).
 export type Facts = {
@@ -48,18 +62,87 @@ local Progression = {}
 
 -- PROPOSED: one grant never exceeds this, so a faulty caller cannot hand out a whole career at once.
 Progression.MAX_GRANT = 100
--- PROPOSED: mission back-fill reads at most this many completions per template (bounded work on load).
+-- PROPOSED: mission back-fill pays at most this many completions per template (one award per template).
 Progression.MAX_MISSION_BACKFILL = 500
 Progression.MAX_KEY_LENGTH = 128
+-- PROPOSED: how many paid bag keys are remembered (like RecoveryBags' 64 applied operation ids).
+Progression.MAX_BAGS_PAID = 64
 
 local function finite(n: any): boolean
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
 end
 
--- Repairs a missing or damaged record in place and returns it (schema 2 creates it; this guards odd saves).
+-- "mission:<template>:<n>" with a whole n >= 1 -> (template, n); anything else -> nil (a plain one-off key).
+local function parseMissionKey(key: string): (string?, number?)
+	local template, digits = string.match(key, "^mission:(.+):(%d+)$")
+	local n = tonumber(digits)
+	if template == nil or n == nil or not finite(n) or n < 1 then
+		return nil, nil
+	end
+	return template, n
+end
+
+local function isBagKey(key: string): boolean
+	return #key > 4 and string.sub(key, 1, 4) == "bag:"
+end
+
+-- The compact tables may be missing on a record that skipped normalize (tests, odd saves).
+local function compact(rec: Record)
+	if type(rec.missionPaid) ~= "table" then
+		rec.missionPaid = {}
+	end
+	if type(rec.bagsPaid) ~= "table" then
+		rec.bagsPaid = {}
+	end
+end
+
+local function paidOf(rec: Record, template: string): number
+	local v = rec.missionPaid[template]
+	return if finite(v) and v > 0 then math.floor(v) else 0
+end
+
+local function trimBags(rec: Record)
+	while #rec.bagsPaid > Progression.MAX_BAGS_PAID do
+		table.remove(rec.bagsPaid, 1)
+	end
+end
+
+-- Moves "mission:" and "bag:" keys that older records kept in `awarded` into the compact tables (idempotent: a
+-- second call finds nothing to move). The mark becomes the highest n paid, so nothing is ever paid twice.
+local function foldLegacy(rec: Record)
+	local moved: { string } = {}
+	local bags: { string } = {}
+	for key in rec.awarded do
+		if type(key) == "string" then
+			local template, n = parseMissionKey(key)
+			if template and n then
+				if n > paidOf(rec, template) then
+					rec.missionPaid[template] = n
+				end
+				table.insert(moved, key)
+			elseif isBagKey(key) then
+				table.insert(bags, key)
+				table.insert(moved, key)
+			end
+		end
+	end
+	for _, key in moved do
+		rec.awarded[key] = nil
+	end
+	table.sort(bags) -- deterministic order for keys that had none
+	for _, key in bags do
+		if not table.find(rec.bagsPaid, key) then
+			table.insert(rec.bagsPaid, key)
+		end
+	end
+	trimBags(rec)
+end
+
+-- Repairs a missing or damaged record in place and returns it (schema 2 creates it; this guards odd saves), and
+-- folds older per-completion mission keys and bag keys into the compact tables.
 function Progression.normalize(p: any): Record
 	if type(p.progression) ~= "table" then
-		p.progression = { xp = 0, awarded = {} }
+		p.progression = { xp = 0, awarded = {}, missionPaid = {}, bagsPaid = {} }
 	end
 	local rec = p.progression
 	if not finite(rec.xp) or rec.xp < 0 then
@@ -68,6 +151,8 @@ function Progression.normalize(p: any): Record
 	if type(rec.awarded) ~= "table" then
 		rec.awarded = {}
 	end
+	compact(rec)
+	foldLegacy(rec)
 	return rec :: Record
 end
 
@@ -110,6 +195,8 @@ end
 
 -- Pays `amount` once for `key`. Returns true only when the key was new and something was paid.
 -- Invalid keys or amounts (non-string, empty, too long, non-finite, <= 0) pay nothing and do not consume the key.
+-- "mission:<T>:<n>" pays when n is above the template's high-water mark and raises the mark to n; "bag:<id>" pays
+-- when the key is not among the remembered paid bag keys (see the header).
 function Progression.grant(rec: Record, key: any, amount: any): boolean
 	if type(key) ~= "string" or #key == 0 or #key > Progression.MAX_KEY_LENGTH then
 		return false
@@ -117,25 +204,59 @@ function Progression.grant(rec: Record, key: any, amount: any): boolean
 	if not finite(amount) or amount <= 0 then
 		return false
 	end
-	if rec.awarded[key] then
-		return false
+	compact(rec)
+	local template, n = parseMissionKey(key)
+	if template and n then
+		if n <= paidOf(rec, template) then
+			return false
+		end
+		rec.missionPaid[template] = n
+	elseif isBagKey(key) then
+		if table.find(rec.bagsPaid, key) then
+			return false
+		end
+		table.insert(rec.bagsPaid, key)
+		trimBags(rec)
+	else
+		if rec.awarded[key] then
+			return false
+		end
+		rec.awarded[key] = true
 	end
-	rec.awarded[key] = true
 	rec.xp += math.min(math.floor(amount), Progression.MAX_GRANT)
 	return true
 end
 
+-- Mission back-fill: raises the template's mark to `through` and pays `amount` (capped like one grant) for every
+-- completion above the old mark. Returns the experience added (0 when the mark already covers `through`).
+function Progression.grantMissionThrough(rec: Record, template: string, through: number, amount: number): number
+	if type(template) ~= "string" or #template == 0 or not finite(through) or not finite(amount) or amount <= 0 then
+		return 0
+	end
+	compact(rec)
+	local n = math.floor(through)
+	local paid = paidOf(rec, template)
+	if n <= paid then
+		return 0
+	end
+	rec.missionPaid[template] = n
+	local added = (n - paid) * math.min(math.floor(amount), Progression.MAX_GRANT)
+	rec.xp += added
+	return added
+end
+
 -- Which key a discovery pays, if any. Shelter records ("shelter:<id>") pay the shelter amount; place ids
--- (chamber ids and other "R0x." place ids) pay the discovery amount; item-claim discoveries (unique pickups)
--- and non-place records (e.g. "P01.solved") pay nothing here.
-function Progression.discoveryAward(cfg: Config, discoveryId: string, itemClaimIds: { [string]: boolean }): Award?
+-- (chamber ids and other "R0x." place ids) pay the discovery amount; non-place records (e.g. "P01.solved") and the
+-- ids in `noPlaceIds` pay nothing here. Callers pass the item-claim discoveries (unique pickups) plus
+-- Logic/Discovery's PUZZLE_RECORDS (D78), the same exclusion Discovery.isPlaceDiscovery applies to live grants.
+function Progression.discoveryAward(cfg: Config, discoveryId: string, noPlaceIds: { [string]: boolean }): Award?
 	if string.sub(discoveryId, 1, 8) == "shelter:" then
 		if #discoveryId > 8 then
 			return { key = discoveryId, amount = cfg.xp.shelter }
 		end
 		return nil
 	end
-	if itemClaimIds[discoveryId] then
+	if noPlaceIds[discoveryId] then
 		return nil
 	end
 	if string.match(discoveryId, "^R%d%d%.") then
@@ -164,17 +285,18 @@ function Progression.completedStepIds(acts: { { any } }, facts: any): { string }
 end
 
 -- Every award the existing profile facts justify (used for the load-time back-fill and periodic re-sync).
--- Sorted by key so the result is deterministic.
+-- Sorted by key so the result is deterministic. `noPlaceIds` as in discoveryAward. Missions give one award per
+-- template (its completions, at most MAX_MISSION_BACKFILL), paid against the template's high-water mark.
 function Progression.factAwards(
 	cfg: Config,
 	facts: Facts,
-	itemClaimIds: { [string]: boolean },
+	noPlaceIds: { [string]: boolean },
 	storyStepIds: { string }
 ): { Award }
 	local out: { Award } = {}
 	for id, v in facts.discoveries do
 		if v == true and type(id) == "string" then
-			local a = Progression.discoveryAward(cfg, id, itemClaimIds)
+			local a = Progression.discoveryAward(cfg, id, noPlaceIds)
 			if a then
 				table.insert(out, a)
 			end
@@ -193,8 +315,14 @@ function Progression.factAwards(
 		local template = string.match(k, "^(M%d%d)%.completions$")
 		local n = tonumber(v)
 		if template and n then
-			for i = 1, math.min(math.floor(n), Progression.MAX_MISSION_BACKFILL) do
-				table.insert(out, { key = "mission:" .. template .. ":" .. i, amount = cfg.xp.mission })
+			local through = math.min(math.floor(n), Progression.MAX_MISSION_BACKFILL)
+			if through >= 1 then
+				table.insert(out, {
+					key = "mission:" .. template .. ":" .. through,
+					amount = cfg.xp.mission,
+					template = template,
+					through = through,
+				})
 			end
 		end
 	end
@@ -208,7 +336,12 @@ end
 function Progression.applyAwards(rec: Record, awards: { Award }): number
 	local before = rec.xp
 	for _, a in awards do
-		Progression.grant(rec, a.key, a.amount)
+		local template, through = a.template, a.through
+		if template ~= nil and through ~= nil then
+			Progression.grantMissionThrough(rec, template, through, a.amount)
+		else
+			Progression.grant(rec, a.key, a.amount)
+		end
 	end
 	return rec.xp - before
 end

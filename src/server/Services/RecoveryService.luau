@@ -326,6 +326,11 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 			services.PlayerService.notify(owner, "Some items did not fit and stay in the bag.", "warn")
 		end
 		services.PlayerService.pushInventory(owner)
+		-- M11 pays field experience only for the owner's own recovery, never for a delegate's escrow recovery.
+		local missions = services.MissionService
+		if missions and missions.noteOwnerRecovered then
+			missions.noteOwnerRecovered(owner, bag.bagId)
+		end
 	end
 	services.SaveService.markDirty(owner)
 	local toEscrow = res.toEscrow ~= nil
