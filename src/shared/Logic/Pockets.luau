@@ -78,6 +78,7 @@ export type NavInput = { kind: string, pos: V3, endPos: V3?, ownerOnline: boolea
 export type BlockerInputs = {
 	characters: { V3 }?, -- every player character: alive, downed, hidden or carried
 	tagged: { V3 }?, -- instances tagged PocketBlocker (rescue survivors, carried NPCs)
+	flares: { V3 }?, -- lit flares (PlayerService.activeFlares); each burns at most 45 s
 	bags: { BagInput }?,
 	nav: { NavInput }?,
 }
@@ -180,10 +181,13 @@ end
 
 -- Rule 2 (section 3): the first reason this pocket may not change now, or nil when it is empty.
 -- Any player character (alive, downed, hidden or carried) or PocketBlocker inside bounds + margin blocks; so does a
--- bag or a rope of an ONLINE owner. Chalk and signs never block (they migrate instead).
+-- bag or a rope of an ONLINE owner. Chalk and signs never block (they migrate instead). PROPOSED: a lit flare
+-- inside bounds + margin blocks too, whoever owns it, so a burning flare is never left floating in void or inside
+-- a new wall; it burns out within 45 s, so it only delays a change briefly.
 function Pockets.blocker(def: PocketDef, inputs: BlockerInputs, margin: number): string?
 	local characters: { V3 } = inputs.characters or {}
 	local tagged: { V3 } = inputs.tagged or {}
+	local flares: { V3 } = inputs.flares or {}
 	local bags: { BagInput } = inputs.bags or {}
 	local nav: { NavInput } = inputs.nav or {}
 	for _, p in characters do
@@ -194,6 +198,11 @@ function Pockets.blocker(def: PocketDef, inputs: BlockerInputs, margin: number):
 	for _, p in tagged do
 		if Pockets.inBounds(def, p, margin) then
 			return "blocker"
+		end
+	end
+	for _, p in flares do
+		if Pockets.inBounds(def, p, margin) then
+			return "flare"
 		end
 	end
 	for _, bag in bags do

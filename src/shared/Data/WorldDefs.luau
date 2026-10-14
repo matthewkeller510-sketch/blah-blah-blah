@@ -1030,7 +1030,7 @@ local RescueSpawns: { RescueSpawn } = {
 		cue = "chalk_scrawl",
 	},
 	{ id = "R03.rescue.silt", chamberId = "R03.silt_loop", pos = { x = -168, y = -42, z = 714 }, cue = "rope_end" },
-	-- Milestone 3 (stable chambers only; never inside a variable pocket)
+	-- Milestone 3 (stable chambers only; never inside a variable pocket's bounds + occupancy margin)
 	{
 		id = "R04.rescue.battery",
 		chamberId = "R04.battery_store",
@@ -1038,10 +1038,12 @@ local RescueSpawns: { RescueSpawn } = {
 		cue = "dropped_lamp",
 	},
 	{ id = "R04.rescue.radio", chamberId = "R04.radio_room", pos = { x = -3, y = -63, z = 920 }, cue = "rope_end" },
+	-- south-west corner, clear of PK1's bounds + occupancy margin (a waiting survivor is a PocketBlocker), the two
+	-- doorways and the east wall's hiding niche and cache
 	{
 		id = "R05.rescue.south",
 		chamberId = "R05.south_anchor",
-		pos = { x = 16, y = -83, z = 1130 },
+		pos = { x = -4, y = -83, z = 1110 },
 		cue = "chalk_scrawl",
 	},
 	{
