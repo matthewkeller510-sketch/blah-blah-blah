@@ -6,14 +6,14 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 
 | Label | Meaning |
 | --- | --- |
-| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 295 tests in `tests/specs`). |
+| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 341 tests in `tests/specs`). |
 | `CODED` | Roblox code exists, compiles, passes the strict type check against the Roblox API definitions and lints clean, but **has not been run in Studio or on a device**. |
 | `PARTIAL` | Part of the requirement is coded; the gap is stated. |
 | `PLANNED` | Specified, not built. |
 
 **Environment facts for this commit**
 
-- Exercised: `sh scripts/check-all.sh` — Lune 0.11 unit tests, a Luau compile of every file, a strict type check with luau-lsp 1.53 and its Roblox definitions (0 diagnostics), selene 0.31, StyLua 2.6; `rojo build` to `build/CatacombsUntitled.rbxl`; a scripted cross-package check (every service call resolves, every client request has a handler, every cue id exists, every server channel has a client listener); and two rounds of multi-lens review with independent verification of every finding (Milestone 3: round one confirmed 26 findings, all fixed; round two confirmed 17, fixes being merged).
+- Exercised: `sh scripts/check-all.sh` — Lune 0.11 unit tests, a Luau compile of every file, a strict type check with luau-lsp 1.53 and its Roblox definitions (0 diagnostics), selene 0.31, StyLua 2.6; `rojo build` to `build/CatacombsUntitled.rbxl`; a scripted cross-package check (every service call resolves, every client request has a handler, every cue id exists, every server channel has a client listener); and two rounds of multi-lens review with independent verification of every finding (Milestone 3: round one confirmed 26 findings and round two 17, all fixed; a regression review of those fixes confirmed 10 more, all fixed; 6 findings were refuted). Fixes that change behaviour carry a test that fails on the old code where the rule is pure logic.
 - Not exercised: Roblox Studio, DataStores, replication, streaming, touch devices, performance. **No Studio run has been reported back yet.** There is no tested place identity.
 
 ## Milestones
@@ -22,7 +22,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | --- | --- | --- |
 | M1 systems slice (sec 23) | R00 + R01 greybox, Worker's Alcove, M01, Scrabbler, Knocker, Sidelooker, scarcity, parties, death/logout recovery, saving | CODED / LOGIC-TESTED |
 | M2 depth and story | R02 Ossuary Galleries and R03 Flooded Works (greybox), shelters S02 and S03, puzzles P01 and P02, C06 Wader, a second Scrabbler, hiding niches, thrown stones, Act I story with journal, first-join class choice, M02 and M07, world sources for every shop item | CODED / LOGIC-TESTED |
-| M3 Contradictory Records (`docs/MILESTONE-3.md`) | R04 Abandoned Survey Station and R05 Shifting Crossroads (greybox) with three variable pockets (F08) and pocket-versioned records; shelters S04 and S05; puzzles P03, P04, P05, P06 and W05; creatures C02 Borrowed Miner, C03 Wick Moth, C04 Chalk Hand, C08 Lantern Thief; missions M03, M04, M05, M09, M11; Act II with NPC figures N01–N04 and N06 and Elise Renaud's recordings; shielded lantern, flares, splint, fuse kits, repair tool roll; injury penalty; field-experience progression (F24); schema 2; item protection table | CODED / LOGIC-TESTED |
+| M3 Contradictory Records (`docs/MILESTONE-3.md`) | R04 Abandoned Survey Station and R05 Shifting Crossroads (greybox) with three variable pockets (F08) and pocket-versioned records; shelters S04 and S05; puzzles P03, P04, P05, P06 and W05; creatures C02 Borrowed Miner, C03 Wick Moth, C04 Chalk Hand, C08 Lantern Thief; missions M03, M04, M05, M09, M11; Act II with NPC figures N01–N04 and N06 and Elise Renaud's recordings; shielded lantern, flares, splint, fuse kits, repair tool roll; injury penalty; field-experience progression (F24); schema 3; item protection table | CODED / LOGIC-TESTED |
 
 ## Owner rules (section 02)
 
@@ -43,7 +43,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | F13 Shared shelter upgrades permanently inherited | LOGIC-TESTED | Includes the grant-only `station_power`. |
 | F14 Individual inventories; collect your own copy | LOGIC-TESTED / CODED | Station tape, waterworks log and the M05 cache are per-player claims. |
 | F15 Only groupmates interact with a grouped player | LOGIC-TESTED / CODED | |
-| F16 One latest death bag; coins + protected items survive | LOGIC-TESTED | Protection table in `docs/PROTECTION-TABLE.md` (D33); a fix stopping a dead player from recovering their own new bag before respawning is being merged. |
+| F16 One latest death bag; coins + protected items survive | LOGIC-TESTED | Protection table in `docs/PROTECTION-TABLE.md` (D33); a dead, downed or carried player can no longer act (so a body cannot recover its own new bag before respawning). |
 | F17 Logout bag; login at last shelter | LOGIC-TESTED / CODED | |
 | F18 Auto-heal stops at half max | LOGIC-TESTED | Health is now saved, so a rejoin never heals (D81); the cap follows the progression-raised maximum. |
 | F19 No hard lock when broke or unequipped | PARTIAL | Every Milestone 3 objective, puzzle and story step has organic sources and needs no money; needs a T02 device check. |
@@ -73,7 +73,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | 17 UI, accessibility, audio | PARTIAL | Dialogue, mission and puzzle screens; captions above panels; Reduce flashes respected by every new effect. Still no audio assets. |
 | 18 Visual production | PLANNED | Greybox only. |
 | 19 Performance / client–server | PARTIAL | No device profiling. |
-| 20 Save model | CODED | Schema 2 (`docs/SAVE-SCHEMA.md`). |
+| 20 Save model | CODED | Schema 3 (`docs/SAVE-SCHEMA.md`): field experience, pocket-versioned records, saved health. |
 | 21 Economy and purchases | CODED (store disabled) | |
 | 22 Content rating / history | PLANNED | All plaque, sign, log and note texts are fictional. |
 
@@ -117,7 +117,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | Economy sheet | `docs/ECONOMY.md` |
 | Audio cue list | `docs/AUDIO-CUES.md` |
 | Localization strings | PLANNED. Strings are still inline (story text in `src/shared/Data/StoryDefs.luau`). |
-| Save schema and migration plan | `docs/SAVE-SCHEMA.md` (schema 2) |
+| Save schema and migration plan | `docs/SAVE-SCHEMA.md` (schema 3) |
 | Item protection table | `docs/PROTECTION-TABLE.md` |
 | Ledger | This file |
 | Import instructions | `README.md` |

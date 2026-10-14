@@ -2,7 +2,7 @@
 
 This is the build contract for Milestone 3. It fixes the scope, every new stable ID, the shared data, the cross-package APIs and the decisions taken where the specification left a choice. The owner asked implementation to proceed using best judgement; every such judgement is recorded in [`DECISIONS.md`](DECISIONS.md) (D31 onward) and labelled **PROPOSED** or **TUNE**. Nothing here changes a **CONFIRMED** owner rule.
 
-Status at writing: specified, not built. The ledger records what is actually built.
+Status: built as CODED / LOGIC-TESTED (greybox), reviewed in two rounds plus a regression review, **not yet run in Roblox Studio**. The ledger ([`IMPLEMENTATION-LEDGER.md`](IMPLEMENTATION-LEDGER.md)) records what is actually built; decisions taken while building and fixing are D48–D107 in [`DECISIONS.md`](DECISIONS.md).
 
 ## 1. Scope
 
@@ -16,7 +16,7 @@ Status at writing: specified, not built. The ledger records what is actually bui
 | Story | Act II "Contradictory Records" (seven steps); NPC figures N01–N04 and N06 at the depot; N05 Elise Renaud in recordings only | 05 |
 | Equipment | Shielded lantern, flare, splint, repair tool roll, replacement fuse kit, fuse components, battery housing; an injury penalty that medical items remove | 07, 08, 09 |
 | Progression | Field experience and ranks with diminishing returns on max stamina and max health (F24, T23) | 09 |
-| Records | Pocket-versioned navigation and bag records with documented migration; checkpoint pocket version | 04, 15, 16 |
+| Records | Pocket-versioned navigation and bag records with documented migration; checkpoint pocket version; saved health; profile schema 3 | 04, 15, 16, 20 |
 
 Out of scope (stay PLANNED): R06–R09, C09–C12, M06, M08, M10, M12, Acts III–V, recharge bench, survey compass, anchor stake, real assets and audio, localization.
 
