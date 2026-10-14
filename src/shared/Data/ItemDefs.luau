@@ -53,6 +53,22 @@ def({
 	meshRef = "PLACEHOLDER:C01/flashlight", iconRef = "PLACEHOLDER:icon/flashlight", sound = "equip_flashlight",
 })
 
+def({
+	id = "light.compact_headlamp",
+	displayName = "Compact Headlamp",
+	category = "light",
+	stackLimit = 1,
+	protected = false,
+	sellValue = 22,
+	beamRange = 36,
+	beamAngle = 50,
+	brightness = 1.4,
+	drainPerSecond = 0.5,
+	meshRef = "PLACEHOLDER:C01/headlamp",
+	iconRef = "PLACEHOLDER:icon/headlamp",
+	sound = "equip_headlamp",
+})
+
 -- Power
 def({
 	id = "power.cell", displayName = "Replaceable Cell", category = "power",
@@ -138,6 +154,28 @@ def({
 	id = "treasure.brass_rule", displayName = "Brass Measuring Rule", category = "treasure",
 	stackLimit = 5, protected = false, sellValue = 12,
 	meshRef = "PLACEHOLDER:C04/brass_rule", iconRef = "PLACEHOLDER:icon/brass_rule",
+})
+
+def({
+	id = "treasure.old_expedition_tag",
+	displayName = "Old Expedition Tag",
+	category = "treasure",
+	stackLimit = 1,
+	protected = true, -- story item: protected so a replaced death bag can never lock Act I
+	sellValue = 0,
+	unique = true,
+	meshRef = "PLACEHOLDER:C04/old_tag",
+	iconRef = "PLACEHOLDER:icon/old_tag",
+})
+def({
+	id = "treasure.lead_seal",
+	displayName = "Lead Seal (fictional)",
+	category = "treasure",
+	stackLimit = 5,
+	protected = false,
+	sellValue = 18,
+	meshRef = "PLACEHOLDER:C04/lead_seal",
+	iconRef = "PLACEHOLDER:icon/lead_seal",
 })
 
 local ItemDefs = {}

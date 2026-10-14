@@ -23,11 +23,14 @@ local services = {
 	CreatureService = require(Services.CreatureService),
 	MissionService = require(Services.MissionService),
 	EconomyService = require(Services.EconomyService),
+	PuzzleService = require(Services.PuzzleService),
+	StoryService = require(Services.StoryService),
 }
 
 local ORDER = {
 	"WorldBuilder", "SaveService", "PartyService", "ShelterService", "NavigationService", "RecoveryService",
-	"DiscoveryService", "DirectorService", "CreatureService", "MissionService", "EconomyService",
+	"DiscoveryService", "DirectorService", "CreatureService", "PuzzleService", "MissionService", "EconomyService",
+	"StoryService",
 	"PlayerService", -- last: starts accepting players once everything else is ready
 }
 
@@ -88,6 +91,9 @@ local PS, PartyS, ShelterS, NavS = services.PlayerService, services.PartyService
 
 local handlers: { [string]: { cat: string, fn: (Player, any) -> () } } = {
 	["intents"] = { cat = "intents", fn = function(p, d) PS.setIntents(p, d) end },
+	["throw"] = { cat = "interact", fn = function(p) PS.throwStone(p) end },
+	["onboard.choose"] = { cat = "interact", fn = function(p, d) local c = str(d.className) if c then PS.chooseStartingClass(p, c) end end },
+	["hide.exit"] = { cat = "interact", fn = function(p) PS.unhide(p) end },
 	["light.toggle"] = { cat = "interact", fn = function(p) PS.toggleLight(p) end },
 	["light.swap"] = { cat = "interact", fn = function(p) PS.swapCell(p) end },
 	["light.equip"] = { cat = "interact", fn = function(p, d) local id = str(d.itemId) if id then PS.equipLight(p, id) end end },

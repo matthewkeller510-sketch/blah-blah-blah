@@ -40,7 +40,7 @@ function DirectorService.pressure(player: Player): number
 		exertionFraction = s.exertion,
 		secondsSinceThreat = os.clock() - s.lastThreatAt,
 		partySize = #services.PartyService.members(player),
-		inShelter = s.insideShelterId ~= nil or s.regionId ~= "R01",
+		inShelter = s.insideShelterId ~= nil or not WorldDefs.isTunnel(s.regionId),
 	})
 end
 

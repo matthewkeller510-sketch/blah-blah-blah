@@ -162,6 +162,7 @@ local KEYMAP: { [Enum.KeyCode]: () -> () } = {
 	[Enum.KeyCode.T] = function() placeMarker("sign") end,
 	[Enum.KeyCode.Y] = function() placeMarker("rope") end,
 	[Enum.KeyCode.Z] = function() ctx.send("party.ping") end,
+	[Enum.KeyCode.B] = function() ctx.send("throw") end,
 	[Enum.KeyCode.X] = rescueAction,
 	[Enum.KeyCode.Q] = cycleTool,
 	[Enum.KeyCode.Tab] = function() ctx.panels.toggle("notebook") end,
@@ -179,7 +180,7 @@ local function buildTouch()
 		Name = "TouchActions",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -150), -- above the default jump button
-		Size = UDim2.fromOffset(UI.TOUCH * 3 + 16, UI.TOUCH * 3 + 16),
+		Size = UDim2.fromOffset(UI.TOUCH * 3 + 16, UI.TOUCH * 4 + 24), -- 3 columns x 4 rows,
 		BackgroundTransparency = 1,
 	})
 	local grid = Instance.new("UIGridLayout")
@@ -234,6 +235,7 @@ local function buildTouch()
 		end
 	end)
 	btn("Cell", function() ctx.send("light.swap") end)
+	btn("Throw", function() ctx.send("throw") end)
 	frame.Visible = UserInputService.TouchEnabled
 	UserInputService.LastInputTypeChanged:Connect(function(t)
 		frame.Visible = t == Enum.UserInputType.Touch or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)

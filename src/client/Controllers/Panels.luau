@@ -11,7 +11,14 @@ local ctx: any
 local C = UI.Colors
 local current: string? = nil
 local root: Frame? = nil
-local cache: { [string]: any } = { discoveries = {}, research = {} }
+local cache: { [string]: any } = { discoveries = {}, research = {}, story = nil, onboarding = nil }
+
+local CLASS_TEXT = {
+	Explorer = "Lights last about 5% longer.",
+	Medic = "Treats wounds about 5% faster.",
+	Runner = "Recovers stamina about 5% faster.",
+	Technician = "Repairs and crafts about 5% faster.",
+}
 
 local CHALK_PRESETS = { "arrow", "danger", "shelter", "exit", "water", "x", "route_a", "route_b", "route_c" }
 local SIGN_PRESETS = { "to_shelter", "to_exit", "danger_ahead", "water_crossing", "dead_end", "rescue_here" }
@@ -111,6 +118,16 @@ end
 
 renderers.notebook = function()
 	local b = open("notebook", "Field notebook")
+	local story = cache.story
+	if story then
+		UI.label(b, story.act, 17)
+		for _, e in story.journal do
+			UI.label(b, (if e.done then "✓ " else "• ") .. e.text, 14, if e.done then C.dim else C.bone)
+		end
+		if not story.complete then
+			UI.label(b, "Now: " .. story.objective, 14, C.amber)
+		end
+	end
 	UI.label(b, "Discovered places", 17)
 	local n = 0
 	for _, label in cache.discoveries do
@@ -124,6 +141,9 @@ renderers.notebook = function()
 	local r = 0
 	for _, e in cache.research do
 		UI.label(b, string.format("• %s — %s (%d/%d)", e.name, nice(e.stageName), e.stage, e.stages), 14)
+		if e.nextHint then
+			UI.label(b, "    next: " .. e.nextHint, 13, C.dim)
+		end
 		r += 1
 	end
 	if r == 0 then
@@ -269,6 +289,33 @@ end
 function Panels.research(d)
 	cache.research[d.id] = d
 	refreshIf("notebook")
+end
+
+function Panels.story(d)
+	cache.story = d
+	refreshIf("notebook")
+end
+
+-- First join: choose a starting class (free once; later changes cost earned coins at a shelter).
+function Panels.onboarding(d)
+	if d.done then
+		if current == "onboarding" then
+			close()
+		end
+		return
+	end
+	local b = open("onboarding", "Before you descend")
+	UI.label(b, "You are joining the search for a survey team that vanished below the recorded quarries.", 15)
+	UI.label(b, "• Light and medical supplies keep you alive. Running low makes things bolder.", 14, C.dim)
+	UI.label(b, "• Loot you pick up is EXPEDITION loot until you reach a shelter. Die or log out first and it stays behind in a bag.", 14, C.dim)
+	UI.label(b, "• Chalk, signs and rope are PROTECTED: you always keep unused ones.", 14, C.dim)
+	UI.label(b, "• Run, hide in niches, or throw a stone to draw attention away. Not everything can be fought.", 14, C.dim)
+	UI.label(b, "Choose a starting class. Every class can do everything; each starts with a small edge.", 15)
+	for _, name in { "Explorer", "Medic", "Runner", "Technician" } do
+		UI.button(b, name .. " — " .. CLASS_TEXT[name], function()
+			ctx.send("onboard.choose", { className = name })
+		end, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
+	end
 end
 
 function Panels.missionList(list)

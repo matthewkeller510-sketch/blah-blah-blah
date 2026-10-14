@@ -1,5 +1,6 @@
 --!strict
--- Builds the Milestone 1 BLOCKOUT for R00 Surface Survey Depot and R01 Old Quarry from primitive parts.
+-- Builds the BLOCKOUT for R00 Surface Survey Depot, R01 Old Quarry, R02 Ossuary Galleries and R03 Flooded Works
+-- from primitive parts.
 -- This is greybox geometry for testing scale, routes and systems, not production art (section 18 pipeline).
 -- Every generated part is tagged BLOCKOUT so it can be replaced by modular kit pieces later.
 
@@ -23,6 +24,9 @@ local STONE = Color3.fromRGB(176, 166, 146)
 local STONE_DARK = Color3.fromRGB(120, 112, 98)
 local RUST = Color3.fromRGB(110, 62, 38)
 local WOOD = Color3.fromRGB(92, 70, 48)
+local BONE = Color3.fromRGB(214, 202, 176)
+local WET = Color3.fromRGB(96, 98, 92)
+local WATER = Color3.fromRGB(38, 58, 56)
 
 local function v(t: { x: number, y: number, z: number }): Vector3
 	return Vector3.new(t.x, t.y, t.z)
@@ -123,8 +127,41 @@ local function buildChamber(c: any)
 	return f
 end
 
+-- A corridor joining chambers at different heights: a straight sloped gallery with treads.
+local function buildSlopedCorridor(f: Folder, a: any, b: any)
+	local alongZ = a.pos.x == b.pos.x
+	local lo, hi
+	if alongZ then
+		lo, hi = if a.pos.z < b.pos.z then a else b, if a.pos.z < b.pos.z then b else a
+	else
+		lo, hi = if a.pos.x < b.pos.x then a else b, if a.pos.x < b.pos.x then b else a
+	end
+	local s0, s1
+	if alongZ then
+		s0 = Vector3.new(lo.pos.x, lo.pos.y, lo.pos.z + lo.size.z / 2 + WALL)
+		s1 = Vector3.new(hi.pos.x, hi.pos.y, hi.pos.z - hi.size.z / 2 - WALL)
+	else
+		s0 = Vector3.new(lo.pos.x + lo.size.x / 2 + WALL, lo.pos.y, lo.pos.z)
+		s1 = Vector3.new(hi.pos.x - hi.size.x / 2 - WALL, hi.pos.y, hi.pos.z)
+	end
+	local len = (s1 - s0).Magnitude
+	local look = CFrame.lookAt((s0 + s1) / 2, s1)
+	local wet = a.regionId == "R03" and b.regionId == "R03"
+	part(f, "Floor", Vector3.new(W + WALL * 2, 1, len + 2), look * CFrame.new(0, -0.5, 0), if wet then WET else STONE_DARK, Enum.Material.Slate)
+	part(f, "Ceiling", Vector3.new(W + WALL * 2, 2, len + 2), look * CFrame.new(0, H + 1, 0), STONE)
+	part(f, "WallA", Vector3.new(WALL, H + 2, len + 2), look * CFrame.new(W / 2 + WALL / 2, H / 2, 0), STONE)
+	part(f, "WallB", Vector3.new(WALL, H + 2, len + 2), look * CFrame.new(-W / 2 - WALL / 2, H / 2, 0), STONE)
+	for i = 1, math.floor(len / 4) - 1 do
+		deco(f, "Tread", Vector3.new(W - 1, 0.25, 0.4), look * CFrame.new(0, 0.1, -len / 2 + i * 4), STONE)
+	end
+end
+
 local function buildCorridor(a: any, b: any)
 	local f = folder(regionFolders[a.regionId], a.id .. "__" .. b.id)
+	if a.pos.y ~= b.pos.y then
+		buildSlopedCorridor(f, a, b)
+		return f
+	end
 	local alongZ = a.pos.x == b.pos.x
 	local p0, p1
 	if alongZ then
@@ -213,6 +250,222 @@ local function buildLandmarks()
 	CollectionService:AddTag(noisy, "NoisyFloor")
 end
 
+-- Ossuary inserts: authored panels of arranged bone, never wall-to-wall skull wallpaper (section 04, R02).
+local function boneInsert(parent: Instance, center: Vector3, facing: Vector3, width: number)
+	local cf = CFrame.lookAt(center, center + facing)
+	part(parent, "OssuaryInsert", Vector3.new(width, 5, 0.8), cf * CFrame.new(0, 0, 0.4), BONE, Enum.Material.Pebble)
+	local cols = math.max(3, math.floor(width / 1.6))
+	for row = 0, 1 do
+		for col = 0, cols - 1 do
+			local x = -width / 2 + 0.8 + col * ((width - 1.6) / (cols - 1))
+			local skull = deco(parent, "Skull", Vector3.new(1.1, 1.1, 1.1), cf * CFrame.new(x, -1 + row * 2.2, -0.2), BONE, Enum.Material.SmoothPlastic)
+			skull.Shape = Enum.PartType.Ball
+		end
+	end
+	deco(parent, "Femurs", Vector3.new(width, 0.5, 0.5), cf * CFrame.new(0, 0.1, -0.1), BONE, Enum.Material.SmoothPlastic)
+end
+
+local function plaque(parent: Instance, cf: CFrame, text: string, size: Vector2?)
+	local sz = size or Vector2.new(3.2, 1.6)
+	local p = part(parent, "Plaque", Vector3.new(sz.X, sz.Y, 0.25), cf, Color3.fromRGB(150, 146, 136), Enum.Material.Marble)
+	p.CanCollide = false
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.LightInfluence = 1
+	gui.Parent = p
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.TextScaled = true
+	t.Font = Enum.Font.Antique
+	t.TextColor3 = Color3.fromRGB(40, 38, 34)
+	t.Text = text
+	t.Parent = gui
+	return p
+end
+
+local function buildOssuary()
+	local f = folder(regionFolders.R02, "Landmarks")
+	-- Bone Gate: two bone-faced piers flanking the way north
+	local bg = assert(WorldDefs.chamber("R02.bone_gate"))
+	local y0 = bg.pos.y
+	for _, dx in { -9, 9 } do
+		local pier = part(f, "BoneGatePier", Vector3.new(4, 12, 4), CFrame.new(bg.pos.x + dx, y0 + 6, bg.pos.z + 10), BONE, Enum.Material.Pebble)
+		pier.Name = "BoneGatePier"
+	end
+	part(f, "BoneGateLintel", Vector3.new(22, 2, 4), CFrame.new(bg.pos.x, y0 + 12, bg.pos.z + 10), BONE, Enum.Material.Pebble)
+	plaque(f, CFrame.new(bg.pos.x, y0 + 9, bg.pos.z + 7.8), "OSSUAIRE — SECTEUR NORD", Vector2.new(8, 1.4))
+	boneInsert(f, Vector3.new(bg.pos.x - 13.6, y0 + 3.5, bg.pos.z - 10), Vector3.new(1, 0, 0), 6)
+	-- Hall of Plaques: numbered plaques in rows (histories identify places; one row is the P01 clue context)
+	local ph = assert(WorldDefs.chamber("R02.plaque_hall"))
+	local yh = ph.pos.y
+	for i = 0, 3 do
+		plaque(f, CFrame.new(ph.pos.x + 14.6, yh + 4 + (i % 2) * 2, ph.pos.z - 16 + i * 2.4) * CFrame.Angles(0, math.pi / 2, 0),
+			string.format("GALERIE %d\nRELEVÉ %d", 31 + i, 1786 + i * 3))
+	end
+	for i = 0, 3 do
+		plaque(f, CFrame.new(ph.pos.x - 14.6, yh + 4 + (i % 2) * 2, ph.pos.z + 9 + i * 2.4) * CFrame.Angles(0, -math.pi / 2, 0),
+			string.format("SECTEUR %s", string.char(65 + i)))
+	end
+	-- inserts avoid the doorways and the P01 carvings (south-west and north-east)
+	boneInsert(f, Vector3.new(ph.pos.x - 10, yh + 3.5, ph.pos.z + 19.4), Vector3.new(0, 0, -1), 7)
+	boneInsert(f, Vector3.new(ph.pos.x + 10, yh + 3.5, ph.pos.z - 19.4), Vector3.new(0, 0, 1), 7)
+	-- Lantern Crypt: empty lamp niches
+	local lc = assert(WorldDefs.chamber("R02.lantern_crypt"))
+	for i = -1, 1 do
+		local nx = lc.pos.x - 12.4
+		deco(f, "LampNiche", Vector3.new(0.4, 2, 1.6), CFrame.new(nx, lc.pos.y + 5, lc.pos.z + i * 6), Color3.fromRGB(14, 12, 10), Enum.Material.SmoothPlastic)
+		part(f, "NicheSill", Vector3.new(1, 0.3, 2.2), CFrame.new(nx + 0.3, lc.pos.y + 4, lc.pos.z + i * 6), STONE)
+	end
+	boneInsert(f, Vector3.new(lc.pos.x, lc.pos.y + 3.5, lc.pos.z + 12.4), Vector3.new(0, 0, -1), 10)
+	-- Sealed Chapel: altar and a tarnished cross-free reliquary shelf (neutral, fictional)
+	local ch = assert(WorldDefs.chamber("R02.sealed_chapel"))
+	part(f, "Altar", Vector3.new(6, 3, 3), CFrame.new(ch.pos.x, ch.pos.y + 1.5, ch.pos.z + 8), STONE, Enum.Material.Marble)
+	plaque(f, CFrame.new(ch.pos.x, ch.pos.y + 6, ch.pos.z + 11.6), "RELEVÉ SCELLÉ — ÉQUIPE 7", Vector2.new(6, 1.4))
+	-- Long Ossuary: inserts along both walls
+	local lo = assert(WorldDefs.chamber("R02.ossuary_long"))
+	boneInsert(f, Vector3.new(lo.pos.x - 11.6, lo.pos.y + 3.5, lo.pos.z - 4), Vector3.new(1, 0, 0), 8)
+	boneInsert(f, Vector3.new(lo.pos.x + 11.6, lo.pos.y + 3.5, lo.pos.z + 4), Vector3.new(-1, 0, 0), 8)
+end
+
+local function waterVolume(parent: Instance, center: Vector3, size: Vector3)
+	-- Shallow water: non-colliding, unqueryable volume whose top is 1.2 studs above the floor.
+	local w = part(parent, "ShallowWater", Vector3.new(size.X, 1.2, size.Z), CFrame.new(center.X, center.Y + 0.6, center.Z), WATER, Enum.Material.Glass)
+	w.Transparency = 0.35
+	w.Reflectance = 0.15
+	w.CanCollide = false
+	w.CanQuery = false
+	w.CastShadow = false
+	CollectionService:AddTag(w, "ShallowWater")
+	return w
+end
+
+local function stone(parent: Instance, x: number, y: number, z: number)
+	-- Stepping stone: dry footing above the water line (silent to water-sensitive hearing).
+	part(parent, "SteppingStone", Vector3.new(3.2, 1.7, 3.2), CFrame.new(x, y + 0.85, z) * CFrame.Angles(0, math.rad((x * 37 + z) % 40), 0), WET, Enum.Material.Slate)
+end
+
+local function buildWaterworks()
+	local f = folder(regionFolders.R03, "Landmarks")
+	for _, c in WorldDefs.Chambers do
+		if c.regionId == "R03" and not c.dry and c.id ~= "R03.cistern" then
+			waterVolume(f, v(c.pos), Vector3.new(c.size.x, 0, c.size.z))
+		end
+		if c.regionId == "R03" then
+			-- silt lines: old water marks painted along each wall
+			local silt = Color3.fromRGB(70, 64, 50)
+			local y = c.pos.y + 2.6
+			deco(f, "SiltLine", Vector3.new(c.size.x, 0.25, 0.1), CFrame.new(c.pos.x, y, c.pos.z + c.size.z / 2 - 0.05), silt, Enum.Material.Mud)
+			deco(f, "SiltLine", Vector3.new(c.size.x, 0.25, 0.1), CFrame.new(c.pos.x, y, c.pos.z - c.size.z / 2 + 0.05), silt, Enum.Material.Mud)
+			deco(f, "SiltLine", Vector3.new(0.1, 0.25, c.size.z), CFrame.new(c.pos.x + c.size.x / 2 - 0.05, y, c.pos.z), silt, Enum.Material.Mud)
+			deco(f, "SiltLine", Vector3.new(0.1, 0.25, c.size.z), CFrame.new(c.pos.x - c.size.x / 2 + 0.05, y, c.pos.z), silt, Enum.Material.Mud)
+		end
+	end
+	for _, cor in WorldDefs.Corridors do
+		local a, b = assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to))
+		if a.regionId == "R03" and b.regionId == "R03" and a.pos.y == b.pos.y and not (a.dry and b.dry) and cor.gate == nil then
+			-- exact corridor span between the two chamber walls
+			if a.pos.x == b.pos.x then
+				local lo, hi = if a.pos.z < b.pos.z then a else b, if a.pos.z < b.pos.z then b else a
+				local z0, z1 = lo.pos.z + lo.size.z / 2, hi.pos.z - hi.size.z / 2
+				waterVolume(f, Vector3.new(a.pos.x, a.pos.y, (z0 + z1) / 2), Vector3.new(W, 0, z1 - z0))
+			else
+				local lo, hi = if a.pos.x < b.pos.x then a else b, if a.pos.x < b.pos.x then b else a
+				local x0, x1 = lo.pos.x + lo.size.x / 2, hi.pos.x - hi.size.x / 2
+				waterVolume(f, Vector3.new((x0 + x1) / 2, a.pos.y, a.pos.z), Vector3.new(x1 - x0, 0, W))
+			end
+		end
+	end
+	-- Stepping-stone routes: slow, dry, silent alternatives across the sluice and the silt works.
+	local sl = assert(WorldDefs.chamber("R03.sluice"))
+	for _, o in { { 0, -14 }, { -2, -9 }, { -5, -5 }, { -9, -1 }, { -12, 0 } } do
+		stone(f, sl.pos.x + o[1], sl.pos.y, sl.pos.z + o[2])
+	end
+	local si = assert(WorldDefs.chamber("R03.silt_loop"))
+	for _, o in { { 10, 0 }, { 7, 3 }, { 3, 6 }, { 0, 10 } } do
+		stone(f, si.pos.x + o[1], si.pos.y, si.pos.z + o[2])
+	end
+	-- Old pumps: large housings and pipes in the dry gallery
+	local pg = assert(WorldDefs.chamber("R03.pump_gallery"))
+	for i = -1, 1, 2 do
+		local housing = part(f, "PumpHousing", Vector3.new(6, 5, 5), CFrame.new(pg.pos.x + i * 8, pg.pos.y + 2.5, pg.pos.z + 8), RUST, Enum.Material.CorrodedMetal)
+		housing.Shape = Enum.PartType.Cylinder
+		part(f, "PumpPipe", Vector3.new(1.4, 12, 1.4), CFrame.new(pg.pos.x + i * 8, pg.pos.y + 9, pg.pos.z + 8), RUST, Enum.Material.CorrodedMetal)
+	end
+	for i = 0, 2 do
+		deco(f, "WallPipe", Vector3.new(1, 1, 30), CFrame.new(pg.pos.x + 15.3, pg.pos.y + 7 + i * 1.6, pg.pos.z), RUST, Enum.Material.CorrodedMetal)
+	end
+	-- Pump platform: a raised iron deck (the shelter exterior is literally above the water)
+	local pp = assert(WorldDefs.chamber("R03.pump_platform"))
+	part(f, "PlatformGrate", Vector3.new(pp.size.x - 2, 0.4, pp.size.z - 2), CFrame.new(pp.pos.x, pp.pos.y + 0.2, pp.pos.z), Color3.fromRGB(70, 70, 72), Enum.Material.DiamondPlate)
+end
+
+-- Hiding niches (F07): a shallow framed recess against a wall. Players step in via a prompt.
+local function buildHidingSpots()
+	local f = folder(root, "HidingSpots")
+	for _, hs in WorldDefs.HidingSpots do
+		local base = v(hs.pos)
+		local facing = v(hs.facing).Unit
+		local side = Vector3.new(-facing.Z, 0, facing.X)
+		local cf = CFrame.lookAt(base, base + facing)
+		for _, sgn in { -1, 1 } do
+			part(f, "NichePillar", Vector3.new(1, 8, 2.6), CFrame.new(base + side * sgn * 2.4 + facing * 1.3 + Vector3.new(0, 4, 0)) * (cf - cf.Position), STONE_DARK, Enum.Material.Cobblestone)
+		end
+		part(f, "NicheLintel", Vector3.new(5.8, 1, 2.6), CFrame.new(base + facing * 1.3 + Vector3.new(0, 8.5, 0)) * (cf - cf.Position), STONE_DARK, Enum.Material.Cobblestone)
+		local anchor = part(f, "HideAnchor", Vector3.new(3, 6, 1), CFrame.new(base + facing * 1.6 + Vector3.new(0, 3, 0)) * (cf - cf.Position))
+		anchor.Transparency = 1
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor:SetAttribute("HidingSpotId", hs.id)
+		CollectionService:AddTag(anchor, "HidingSpot")
+	end
+end
+
+local SIDE_OFFSETS = {
+	N = Vector3.new(0, 0, 1),
+	S = Vector3.new(0, 0, -1),
+	E = Vector3.new(1, 0, 0),
+	W = Vector3.new(-1, 0, 0),
+}
+
+-- World position of a shelter's exterior door and the CFrame where players stand when stepping outside.
+function WorldBuilder.shelterDoor(shelterId: string): (Vector3, CFrame)
+	local s = WorldDefs.Shelters[shelterId]
+	local c = assert(WorldDefs.chamber(s.exteriorChamberId))
+	local dir = SIDE_OFFSETS[s.doorSide]
+	local half = if dir.X ~= 0 then c.size.x / 2 else c.size.z / 2
+	local door = v(c.pos) + dir * (half - 0.5) + Vector3.new(0, 4.5, 0)
+	local stand = v(c.pos) + dir * (half - 5) + Vector3.new(0, 3, 0)
+	return door, CFrame.lookAt(stand, stand - dir)
+end
+
+local function buildShelterExteriors()
+	for id, s in WorldDefs.Shelters do
+		local c = assert(WorldDefs.chamber(s.exteriorChamberId))
+		local f = folder(regionFolders[s.regionId], "ShelterExterior_" .. id)
+		local doorPos = WorldBuilder.shelterDoor(id)
+		local dir = SIDE_OFFSETS[s.doorSide]
+		local size = if dir.X ~= 0 then Vector3.new(1, 9, 8) else Vector3.new(8, 9, 1)
+		local color = if s.theme == "office" then WOOD elseif s.theme == "ironwork" then Color3.fromRGB(70, 70, 72) else RUST
+		local door = part(f, "ShelterDoor", size, CFrame.new(doorPos), color, if s.theme == "office" then Enum.Material.WoodPlanks else Enum.Material.CorrodedMetal)
+		door:SetAttribute("ShelterId", id)
+		CollectionService:AddTag(door, "ShelterDoor")
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Enter shelter"
+		prompt.ObjectText = s.name
+		prompt.HoldDuration = 0.4
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = door
+		local reg = part(f, "RegisterVolume", Vector3.new(c.size.x, 10, c.size.z), CFrame.new(c.pos.x, c.pos.y + 5, c.pos.z))
+		reg.Transparency = 1
+		reg.CanCollide = false
+		reg.CanQuery = false
+		reg:SetAttribute("ShelterId", id)
+		CollectionService:AddTag(reg, "ShelterApproach")
+	end
+end
+
 local function buildDepot()
 	local f = regionFolders.R00
 	local d = WorldDefs.Depot
@@ -283,29 +536,6 @@ local function buildDepot()
 	sp.Parent = f
 end
 
-local function buildShelterExterior()
-	local s = WorldDefs.Shelters[WorldDefs.StartShelterId]
-	local c = assert(WorldDefs.chamber("R01.alcove_exterior"))
-	local f = folder(regionFolders.R01, "ShelterExterior_" .. s.id)
-	-- The alcove's repairable gate is on the far (east) wall of the exterior chamber.
-	local gate = part(f, "AlcoveGate", Vector3.new(1, 9, 8), CFrame.new(c.pos.x + c.size.x / 2 - 0.5, 4.5, c.pos.z), RUST, Enum.Material.CorrodedMetal)
-	gate:SetAttribute("ShelterId", s.id)
-	CollectionService:AddTag(gate, "ShelterDoor")
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Enter shelter"
-	prompt.ObjectText = s.name
-	prompt.HoldDuration = 0.4
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = gate
-	local reg = part(f, "RegisterVolume", Vector3.new(c.size.x, 10, c.size.z), CFrame.new(c.pos.x, 5, c.pos.z))
-	reg.Transparency = 1
-	reg.CanCollide = false
-	reg.CanQuery = false
-	reg:SetAttribute("ShelterId", s.id)
-	CollectionService:AddTag(reg, "ShelterApproach")
-end
-
 local function applyLighting()
 	Lighting.Ambient = Color3.fromRGB(6, 6, 8) -- enclosed tunnels: faint, never solid black
 	Lighting.OutdoorAmbient = Color3.fromRGB(70, 72, 80)
@@ -329,6 +559,8 @@ function WorldBuilder.init()
 	root = folder(workspace, "World")
 	regionFolders.R00 = folder(root, "R00_SurfaceSurveyDepot")
 	regionFolders.R01 = folder(root, "R01_OldQuarry")
+	regionFolders.R02 = folder(root, "R02_OssuaryGalleries")
+	regionFolders.R03 = folder(root, "R03_FloodedWorks")
 	folder(root, "ShelterInteriors")
 end
 
@@ -352,7 +584,10 @@ function WorldBuilder.start()
 		part(f, "Ceiling", Vector3.new(W + 4, 2, gap + 2), CFrame.new(0, H + 1, cz))
 	end
 	buildLandmarks()
-	buildShelterExterior()
+	buildOssuary()
+	buildWaterworks()
+	buildHidingSpots()
+	buildShelterExteriors()
 end
 
 function WorldBuilder.folder(regionId: string): Folder
@@ -372,20 +607,39 @@ function WorldBuilder.regionAt(pos: Vector3): string
 	if pos.Y > 40 then
 		return "R00"
 	end
-	return "R01"
+	local c = WorldBuilder.nearestChamber(pos)
+	return c.regionId
 end
 
--- Nearest chamber anchor for durable recovery records (never raw coordinates alone; section 15).
-function WorldBuilder.anchorFor(pos: Vector3): (string, Vector3)
+-- Nearest chamber; height differences weigh triple so stacked regions never confuse each other.
+function WorldBuilder.nearestChamber(pos: Vector3): any
 	local best, bestD = nil, math.huge
 	for _, c in WorldDefs.Chambers do
-		local d = (v(c.pos) - pos).Magnitude
+		local d = Vector3.new(c.pos.x - pos.X, (c.pos.y + 3 - pos.Y) * 3, c.pos.z - pos.Z).Magnitude
 		if d < bestD then
 			best, bestD = c, d
 		end
 	end
-	local c = assert(best)
-	return c.id, pos - v(c.pos)
+	return assert(best, "no chambers defined")
+end
+
+-- Nearest chamber anchor for durable recovery records (never raw coordinates alone; section 15).
+-- Returns (anchorId, offset, regionId).
+function WorldBuilder.anchorFor(pos: Vector3): (string, Vector3, string)
+	local c = WorldBuilder.nearestChamber(pos)
+	return c.id, pos - v(c.pos), c.regionId
+end
+
+-- True when a world position's feet are inside shallow water (used for splash hearing).
+function WorldBuilder.inWater(feet: Vector3): boolean
+	for _, w in CollectionService:GetTagged("ShallowWater") do
+		local rel = (w :: BasePart).CFrame:PointToObjectSpace(feet)
+		local h = (w :: BasePart).Size / 2
+		if math.abs(rel.X) <= h.X and math.abs(rel.Z) <= h.Z and rel.Y <= h.Y and rel.Y >= -h.Y - 0.6 then
+			return true
+		end
+	end
+	return false
 end
 
 -- Rebuilds a valid grounded position from an anchor. Falls back to the chamber centre when the offset is no

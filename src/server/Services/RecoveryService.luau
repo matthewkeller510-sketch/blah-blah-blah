@@ -18,9 +18,9 @@ local services: any
 local RECOVER_RANGE = 10
 
 local function anchorFrom(pos: Vector3)
-	local anchorId, offset = services.WorldBuilder.anchorFor(pos)
+	local anchorId, offset, regionId = services.WorldBuilder.anchorFor(pos)
 	return {
-		regionId = "R01",
+		regionId = regionId,
 		pocketVersion = 1,
 		anchorId = anchorId,
 		offset = { x = offset.X, y = offset.Y, z = offset.Z },

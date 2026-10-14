@@ -16,6 +16,8 @@ local Progress = require("../src/shared/Logic/Progress")
 local Commerce = require("../src/shared/Logic/Commerce")
 local Profile = require("../src/shared/Logic/Profile")
 local WorldDefs = require("../src/shared/Data/WorldDefs")
+local Puzzles = require("../src/shared/Logic/Puzzles")
+local Story = require("../src/shared/Logic/Story")
 
 Commerce.bind(Inventory)
 local lookup = ItemDefs.get
@@ -483,6 +485,153 @@ test("an organic scavenging site exists that needs no light and no money (T02)",
 		end
 	end
 	eq(found, true)
+end)
+
+print("Puzzles (section 12, T06)")
+test("P01 starts unsolved and solves on the target orientation", function()
+	for target = 0, 3 do
+		local p = Puzzles.newP01(target, 4)
+		eq(p.solved, false)
+		local solvedAt = 0
+		for i = 1, 4 do
+			if Puzzles.rotateP01(p) then
+				solvedAt = i
+				break
+			end
+		end
+		eq(solvedAt, 2, "two quarter turns from the start")
+		eq(Puzzles.rotateP01(p), false, "stays solved")
+		eq(p.orientation, target)
+	end
+end)
+test("P02 counts correct valves, drains on the authored pattern, resets immediately", function()
+	for idx, sol in Puzzles.P02_SOLUTIONS do
+		local p = Puzzles.newP02(idx)
+		eq(p.drained, false)
+		local drained = false
+		for i, open in sol do
+			if open then
+				local _, d = Puzzles.toggleValve(p, i)
+				drained = drained or d
+			end
+		end
+		eq(drained, true, "solution " .. idx)
+		eq(Puzzles.correctCount(p), 3)
+		Puzzles.resetP02(p)
+		eq(p.drained, false)
+		eq(Puzzles.correctCount(p) < 3, true)
+	end
+end)
+test("P02 solutions are never the reset state", function()
+	for _, sol in Puzzles.P02_SOLUTIONS do
+		eq(sol[1] or sol[2] or sol[3], true)
+	end
+end)
+test("P02 clue names every valve", function()
+	local c = Puzzles.p02Clue({ true, false, true })
+	assert(string.find(c, "I OUVERT") and string.find(c, "II FERMÉ") and string.find(c, "III OUVERT"), c)
+end)
+
+print("Story Act I (section 05)")
+local function facts()
+	return { discoveries = {}, claims = {}, storyStates = {}, shelterUpgrades = {} }
+end
+test("steps derive from profile facts in order", function()
+	local f = facts()
+	eq((Story.current(f)), 1)
+	f.discoveries["R01.survey_board"] = true
+	eq((Story.current(f)), 2)
+	f.storyStates["M01.completions"] = "1"
+	eq((Story.current(f)), 3)
+	f.shelterUpgrades["S01.worker_alcove"] = { gate_repair = 1 }
+	eq((Story.current(f)), 4)
+	f.discoveries["R02.bone_gate"] = true
+	eq((Story.current(f)), 5)
+	f.claims["R02.unique.old_tag"] = true
+	eq((Story.current(f)), 6)
+	f.storyStates["A1.complete"] = "1"
+	eq((Story.current(f)), nil)
+end)
+test("journal shows finished steps plus the current one", function()
+	local f = facts()
+	f.discoveries["R01.survey_board"] = true
+	local j = Story.journal(f)
+	eq(#j, 2)
+	eq(j[1].done, true)
+	eq(j[2].done, false)
+end)
+test("the story item is protected so Act I cannot be lost to a replaced death bag", function()
+	eq(ItemDefs.isProtected("treasure.old_expedition_tag"), true)
+end)
+
+print("World graph (Milestone 2)")
+test("every chamber is reachable from the depot ramp with puzzle gates open", function()
+	local d = WorldDefs.hops("R01.survey_board", { P01 = true, P02 = true })
+	for _, c in WorldDefs.Chambers do
+		assert(d[c.id] ~= nil, c.id .. " unreachable")
+	end
+end)
+test("main progression needs no puzzle: every shelter reachable with gates closed", function()
+	local d = WorldDefs.hops("R01.survey_board", {})
+	for _, s in WorldDefs.Shelters do
+		assert(d[s.exteriorChamberId] ~= nil, s.id .. " gated")
+	end
+	eq(d["R02.sealed_chapel"], nil, "chapel is behind P01")
+	eq(d["R03.cistern"], nil, "cistern is behind P02")
+end)
+test("corridors are axis-aligned", function()
+	for _, cor in WorldDefs.Corridors do
+		local a, b = WorldDefs.chamber(cor.from), WorldDefs.chamber(cor.to)
+		assert(a and b, cor.from .. "/" .. cor.to)
+		assert(a.pos.x == b.pos.x or a.pos.z == b.pos.z, cor.from .. " -> " .. cor.to)
+	end
+end)
+test("shelter doors are on walls without corridors", function()
+	for _, s in WorldDefs.Shelters do
+		local c = WorldDefs.chamber(s.exteriorChamberId)
+		for _, n in WorldDefs.neighbors(c.id) do
+			local o = WorldDefs.chamber(n)
+			local side = if o.pos.x == c.pos.x then (if o.pos.z > c.pos.z then "N" else "S") else (if o.pos.x > c.pos.x then "E" else "W")
+			assert(side ~= s.doorSide, s.id .. " door collides with corridor to " .. n)
+		end
+	end
+end)
+test("every slice creature has research hints for each stage", function()
+	for _, c in WorldDefs.Creatures do
+		if c.status == "SLICE" then
+			eq(#c.hints, #c.researchEvidence, c.name)
+		end
+	end
+end)
+test("scavenge, pickup, cache and rescue spots sit inside their chambers", function()
+	local function inside(pos, regionId)
+		for _, c in WorldDefs.Chambers do
+			if (regionId == nil or c.regionId == regionId)
+				and math.abs(pos.x - c.pos.x) < c.size.x / 2
+				and math.abs(pos.z - c.pos.z) < c.size.z / 2
+				and pos.y >= c.pos.y - 1 and pos.y <= c.pos.y + 4 then
+				return true
+			end
+		end
+		return false
+	end
+	for _, s in WorldDefs.ScavengeSites do
+		assert(inside(s.pos, s.regionId), s.id)
+	end
+	for _, u in WorldDefs.UniquePickups do
+		assert(inside(u.pos), u.id)
+	end
+	for _, r in WorldDefs.RescueSpawns do
+		assert(inside(r.pos), r.id)
+	end
+	for _, c in WorldDefs.CacheSpots do
+		assert(inside(c.pos), c.id)
+	end
+end)
+test("splash noise: crouching and dry footing are silent to the Wader", function()
+	eq(Director.splashNoise("crouch", true), 0)
+	eq(Director.splashNoise("sprint", false), 0)
+	assert(Director.splashNoise("sprint", true) > Director.splashNoise("walk", true))
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

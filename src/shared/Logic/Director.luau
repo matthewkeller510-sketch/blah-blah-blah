@@ -107,4 +107,13 @@ function Director.eventSeed(serverSeed: number, recipientId: number, eventIndex:
 	return bit32.bxor(h, bit32.rshift(h, 16))
 end
 
+-- Footstep noise for water-sensitive hearing (C06 Wader). Crouch-wading and standing still are silent; walking
+-- in water splashes; sprinting in water splashes loudly. Dry footing is silent to the Wader.
+function Director.splashNoise(mode: string, inWater: boolean): number
+	if not inWater or mode == "idle" or mode == "crouch" then
+		return 0
+	end
+	return if mode == "sprint" then 1 else 0.6
+end
+
 return Director

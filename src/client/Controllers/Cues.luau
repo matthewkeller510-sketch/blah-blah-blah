@@ -33,6 +33,19 @@ local CUES: { [string]: { text: string, essential: boolean } } = {
 	shelter_probe = { text = "[scratching at an unprotected entrance]", essential = true },
 	stun_fired = { text = "[stun device discharges]", essential = false },
 	breathing = { text = "[heavy breathing]", essential = false },
+	wader_ripple = { text = "[ripples spreading across the water]", essential = false },
+	wader_drag = { text = "[A DRAGGING STEP IN THE WATER — it heard you. Stop splashing.]", essential = true },
+	wader_strike = { text = "[long arms strike from the water]", essential = true },
+	wader_lost = { text = "[the dragging steps wander away]", essential = true },
+	wader_repelled = { text = "[it recoils and wades off]", essential = true },
+	stone_splash = { text = "[a stone splashes]", essential = false },
+	stone_clatter = { text = "[a stone clatters on rock]", essential = false },
+	plaque_turn = { text = "[stone grinds as the plaque turns]", essential = false },
+	gate_open = { text = "[a heavy gate grinds open]", essential = true },
+	valve_turn = { text = "[the valve squeals; water shifts in the pipes]", essential = false },
+	valve_reset = { text = "[all valves clank shut]", essential = false },
+	water_drain = { text = "[a deep gurgle — the cistern is draining]", essential = true },
+	water_rising = { text = "[water rushes back into the cistern]", essential = true },
 }
 
 local function direction(pos: Vector3?): string
@@ -93,6 +106,11 @@ function Cues.cue(d: any)
 		if d.extra.index < d.extra.of then
 			text = string.format("[KNOCK %d of %d]", d.extra.index, d.extra.of)
 		end
+	end
+	if d.id == "valve_turn" and d.extra then
+		text = string.format("[the valve squeals; the gauge settles — %d of %d set right]", d.extra.correct, d.extra.of)
+	elseif d.id == "plaque_turn" and d.extra and d.extra.solved then
+		text = "[the plaque locks into place with a deep click]"
 	end
 	caption(text .. direction(d.position), def.essential)
 	-- visual alternative for essential cues: a brief edge pulse (not a flash; respects reduceFlashes)

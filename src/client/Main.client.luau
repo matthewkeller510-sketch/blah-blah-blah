@@ -79,7 +79,11 @@ stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 		Hud.discovery(data)
 		Panels.discovery(data)
 	elseif channel == "research" then
-		Hud.notice(string.format("Journal: %s — %s (%d/%d)", data.name, string.gsub(data.stageName, "_", " "), data.stage, data.stages), "info")
+		Hud.notice(
+			string.format("Journal: %s — %s (%d/%d)%s", data.name, (string.gsub(data.stageName, "_", " ")), data.stage, data.stages,
+				if data.nextHint then (". Next: " .. data.nextHint) else ""),
+			"info"
+		)
 		Panels.research(data)
 	elseif channel == "cue" then
 		Cues.cue(data)
@@ -91,6 +95,11 @@ stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 		Panels.shelter(data)
 	elseif channel == "shop" then
 		Panels.shop(data)
+	elseif channel == "onboarding" then
+		Panels.onboarding(data)
+	elseif channel == "story" then
+		Hud.story(data)
+		Panels.story(data)
 	elseif channel == "debugPressure" then
 		Hud.debugPressure(data)
 	end

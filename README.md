@@ -1,10 +1,13 @@
-# Untitled Catacombs Project — Milestone 1 systems slice
+# Untitled Catacombs Project — Milestones 1–2
 
 An original Roblox exploration-survival horror experience built from the *Paris Catacombs Horror* design and build prompt (version 1, 13 October 2026).
 The working title stays **untitled** until the owner chooses one.
 
-> **Status: a representative systems slice in code, not the game.** This repository holds Luau source for Milestone 1 (spec section 23):
-> one grounded district as a greybox blockout, one shelter, a short rescue, a killable creature, an unkillable creature, resource scarcity, party sharing and death/logout recovery.
+> **Status: Milestones 1–2 in code, not the finished game.**
+> - **Milestone 1** (spec section 23): one grounded district, one shelter, a short rescue, killable and unkillable creatures, resource scarcity, party sharing and death/logout recovery.
+> - **Milestone 2**: the Ossuary Galleries and the Flooded Works, two more shelters, two puzzles, the Wader, hiding, thrown distractions, Act I of the story, a starting-class briefing, and two more mission types.
+>
+> All world geometry is greybox blockout.
 > The pure rule modules are unit-tested outside Roblox. **None of the Roblox services have been run in Roblox Studio yet.** No milestone is marked complete. See [`docs/IMPLEMENTATION-LEDGER.md`](docs/IMPLEMENTATION-LEDGER.md).
 
 ## What is here
@@ -46,7 +49,7 @@ Work only in a **new or explicitly designated** place (spec section 01). Never s
 3. For saving, publish to a **private test experience** and enable *Studio Access to API Services*. Without DataStore access the HUD shows "Not saving" and progress does not persist.
 4. Follow [`docs/TEST-PLAN.md`](docs/TEST-PLAN.md). Record the place ID, device and observed results in the ledger. A Studio run is not real-device evidence.
 
-## Controls (Milestone 1)
+## Controls
 
 | Action | Keyboard / mouse | Touch | Gamepad |
 | --- | --- | --- | --- |
@@ -59,6 +62,8 @@ Work only in a **new or explicitly designated** place (spec section 01). Never s
 | Chalk · sign · rope (two points) | G · T · Y | Mark (chalk) | — |
 | Help a downed teammate (stabilize, then carry) / drop | X | Help | — |
 | Verified party ping | Z | — | — |
+| Throw a stone (distraction) | B | Throw | — |
+| Hide in a niche / step out | E at the niche | tap prompt | prompt |
 | Notebook · inventory · party · settings | Tab · I · P · O | Menu | — |
 | Interact (search, shelter, rescue, recover bag) | E (hold) | tap prompt | prompt |
 

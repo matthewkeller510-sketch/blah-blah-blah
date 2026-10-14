@@ -1,10 +1,13 @@
 --!strict
--- Milestone 1 creatures (section 10): C01 Sidelooker (harmless), C05 Scrabbler (vulnerable predator, killable),
--- C07 Knocker (line-charge threat, cannot be killed). Placeholder primitive bodies; production rigs are PLANNED.
--- Movement is server-driven along the chamber graph (centre-to-centre lines stay inside corridors).
--- Every damaging encounter has a readable cue first and an escape route (T04, T05).
+-- Creatures (section 10): C01 Sidelooker (harmless), C05 Scrabbler (vulnerable predator, killable; one per home
+-- group), C06 Wader (water-sensitive stalker, cannot be killed), C07 Knocker (line-charge threat, cannot be killed).
+-- Placeholder primitive bodies; production rigs are PLANNED.
+-- Movement is server-driven along the chamber graph (centre-to-centre lines stay inside corridors, including the
+-- sloped galleries between levels). Every damaging encounter has a readable cue first and an escape route
+-- (T04, T05). Hidden players (F07) cannot be sensed.
 
 local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local WorldDefs = require(Shared.Data.WorldDefs)
@@ -17,12 +20,15 @@ local services: any
 local SCRAB = WorldDefs.Creatures.C05_Scrabbler
 local KNOCK = WorldDefs.Creatures.C07_Knocker
 local SIDE = WorldDefs.Creatures.C01_Sidelooker
+local WADER = WorldDefs.Creatures.C06_Wader
 
 -- Chamber graph ----------------------------------------------------------------------------------
-local nodes: { [string]: Vector3 } = {}
+local nodes: { [string]: Vector3 } = {} -- chamber floor centres
+local nodeRegion: { [string]: string } = {}
 local adj: { [string]: { string } } = {}
 for _, c in WorldDefs.Chambers do
-	nodes[c.id] = Vector3.new(c.pos.x, 0, c.pos.z)
+	nodes[c.id] = Vector3.new(c.pos.x, c.pos.y, c.pos.z)
+	nodeRegion[c.id] = c.regionId
 	adj[c.id] = {}
 end
 for _, cor in WorldDefs.Corridors do
@@ -33,7 +39,7 @@ end
 local function nearestNode(p: Vector3): string
 	local best, bd = "", math.huge
 	for id, n in nodes do
-		local d = (Vector3.new(p.X, 0, p.Z) - n).Magnitude
+		local d = Vector3.new(p.X - n.X, (p.Y - n.Y - 2) * 3, p.Z - n.Z).Magnitude
 		if d < bd then
 			best, bd = id, d
 		end
@@ -76,6 +82,15 @@ local function lineOfSight(a: Vector3, b: Vector3): boolean
 	return hit == nil
 end
 
+-- A player creatures may perceive right now.
+local function perceivable(p: Player, sess: any): boolean
+	return not sess.insideShelterId
+		and not sess.hiddenAt
+		and sess.vitals.condition ~= "dead"
+		and WorldDefs.isTunnel(sess.regionId)
+		and services.PlayerService.position(p) ~= nil
+end
+
 -- Research ---------------------------------------------------------------------------------------
 local function evidence(player: Player, def: any, evidenceId: string)
 	local s = services.PlayerService.get(player)
@@ -92,7 +107,11 @@ local function evidence(player: Player, def: any, evidenceId: string)
 			stage = stage,
 			stageName = Progress.stageName(stage),
 			stages = #def.researchEvidence,
+			nextHint = def.hints and def.hints[stage + 1] or nil,
 		})
+		if services.MissionService then
+			services.MissionService.onResearch(player, def.id, stage)
+		end
 	end
 end
 
@@ -108,20 +127,67 @@ local function cueAll(near: Vector3, radius: number, id: string, extra: any?): {
 	return heard
 end
 
-local function body(name: string, size: Vector3, color: Color3, material: Enum.Material): Model
+local function body(name: string, regionId: string, size: Vector3, color: Color3, material: Enum.Material): Model
 	local m = Instance.new("Model")
 	m.Name = name
 	local p = Instance.new("Part")
 	p.Name = "Body"
 	p.Anchored = true
 	p.CanCollide = false
+	p.CanQuery = false
 	p.Size = size
 	p.Color = color
 	p.Material = material
 	p.Parent = m
 	m.PrimaryPart = p
-	m.Parent = services.WorldBuilder.folder("R01")
+	m.Parent = services.WorldBuilder.folder(regionId)
 	return m
+end
+
+local function addPart(m: Model, name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.CFrame = (m.PrimaryPart :: BasePart).CFrame * offset
+	p.Parent = m
+	return p
+end
+
+-- Moves a model toward `to` (a floor position) keeping its body `lift` studs above the floor.
+local function moveModel(m: Model, to: Vector3, lift: number, speed: number, dt: number): boolean
+	local bp = m.PrimaryPart :: BasePart
+	local from = bp.Position
+	local goal = to + Vector3.new(0, lift, 0)
+	local d = goal - from
+	if d.Magnitude < 0.5 then
+		return true
+	end
+	local step = math.min(d.Magnitude, speed * dt)
+	local np = from + d.Unit * step
+	local flat = Vector3.new(d.X, 0, d.Z)
+	local cf = if flat.Magnitude > 0.01 then CFrame.lookAt(np, np + flat.Unit) else CFrame.new(np) * (bp.CFrame - bp.Position)
+	m:PivotTo(cf)
+	return step >= d.Magnitude - 0.01
+end
+
+-- Walks toward a floor goal along the chamber graph (direct when already in the goal's chamber).
+local function travel(m: Model, goal: Vector3, lift: number, speed: number, dt: number): boolean
+	local bp = m.PrimaryPart :: BasePart
+	local here, there = nearestNode(bp.Position - Vector3.new(0, lift, 0)), nearestNode(goal)
+	if here == there then
+		return moveModel(m, goal, lift, speed, dt)
+	end
+	local path = route(here, there)
+	local nextId = path[1]
+	if nextId then
+		moveModel(m, nodes[nextId], lift, speed, dt)
+	end
+	return false
 end
 
 -- C01 Sidelooker: appears at a chamber edge, peeks; retreats when deliberately watched. Never damages.
@@ -166,8 +232,8 @@ local function sidelookerTick(dt: number)
 			-- retreat: slide back out of view and vanish
 			evidence(w, SIDE, "seen_retreat_when_watched")
 			services.PlayerService.send(w, "cue", { id = "sidelooker_retreat", position = bp.Position })
-			local away = bp.Position - to.Unit * 6
-			bp.CFrame = CFrame.new(away, away + to.Unit)
+			local away = bp.Position - Vector3.new(to.X, 0, to.Z).Unit * 6
+			m:PivotTo(CFrame.new(away))
 			task.delay(0.25, function()
 				m:Destroy()
 			end)
@@ -176,9 +242,9 @@ local function sidelookerTick(dt: number)
 		end
 		return
 	end
-	-- maybe spawn: early, subtle, easy to miss (F06, T04). One at a time server-wide.
+	-- maybe spawn: early, subtle, easy to miss (F06, T04). One at a time server-wide; a private sighting.
 	for p, s in services.PlayerService.all() do
-		if s.regionId ~= "R01" or s.insideShelterId then
+		if not perceivable(p, s) then
 			continue
 		end
 		if os.clock() - (lastSighting[p] or 0) < 75 then
@@ -192,17 +258,19 @@ local function sidelookerTick(dt: number)
 		if not head then
 			continue
 		end
-		-- choose a chamber 30-60 studs away, off to the side (outside immediate view)
+		-- choose a chamber in the same region 30-60 studs away, off to the side (outside immediate view)
 		for id, n in nodes do
-			local spot = n + Vector3.new(0, 0, 0)
-			local to = spot - Vector3.new(head.Position.X, 0, head.Position.Z)
+			if nodeRegion[id] ~= s.regionId then
+				continue
+			end
+			local to = Vector3.new(n.X - head.Position.X, 0, n.Z - head.Position.Z)
 			local d = to.Magnitude
 			local look = Vector3.new(head.CFrame.LookVector.X, 0, head.CFrame.LookVector.Z).Unit
 			if d > 30 and d < 60 and math.abs(look:Dot(to.Unit)) < 0.6 then
 				local c = assert(WorldDefs.chamber(id))
-				local corner = spot + Vector3.new((c.size.x / 2 - 1.5) * (if math.random() < 0.5 then -1 else 1), 0, (c.size.z / 2 - 1.5))
-				local mm = body("Sidelooker", Vector3.new(1.2, 8.5, 0.8), Color3.fromRGB(58, 56, 52), Enum.Material.Slate)
-				;(mm.PrimaryPart :: BasePart).CFrame = CFrame.new(corner + Vector3.new(0, 4.25, 0), head.Position)
+				local corner = n + Vector3.new((c.size.x / 2 - 1.5) * (if math.random() < 0.5 then -1 else 1), 0, (c.size.z / 2 - 1.5))
+				local mm = body("Sidelooker", c.regionId, Vector3.new(1.2, 8.5, 0.8), Color3.fromRGB(58, 56, 52), Enum.Material.Slate)
+				mm:PivotTo(CFrame.lookAt(corner + Vector3.new(0, 4.25, 0), head.Position))
 				sideState.model = mm
 				sideState.watcher = p
 				sideState.watchedFor = 0
@@ -227,67 +295,42 @@ type Scrabbler = {
 	health: number,
 	state: "idle" | "search" | "warning" | "rush" | "recover" | "stunned" | "dead",
 	target: Player?,
-	path: { string },
 	stateUntil: number,
 	lastKnown: Vector3?,
+	investigate: Vector3?,
+	homes: { string },
 	home: string,
+	regionId: string,
 	engaged: boolean,
 	lastHit: number,
 	respawnAt: number,
 }
 
-local scrab: Scrabbler? = nil
-local SCRAB_HOMES = { "R01.rubble_room", "R01.sloped_gallery" }
+local SCRAB_LIFT = 0.9
+local scrabblers: { Scrabbler } = {}
 
-local function spawnScrabbler()
-	local home = SCRAB_HOMES[math.random(1, #SCRAB_HOMES)]
-	local m = body("Scrabbler", Vector3.new(3.6, 1.8, 5.5), Color3.fromRGB(70, 66, 58), Enum.Material.Slate)
-	local back = Instance.new("Part")
-	back.Name = "MineralPlates"
-	back.Anchored = true
-	back.CanCollide = false
-	back.Size = Vector3.new(3, 0.6, 4.6)
-	back.Color = Color3.fromRGB(120, 116, 108)
-	back.Material = Enum.Material.Basalt
-	back.Parent = m
-	local pos = nodes[home] + Vector3.new(math.random(-6, 6), 0.9, math.random(-6, 6))
-	local cf = CFrame.new(pos)
-	;(m.PrimaryPart :: BasePart).CFrame = cf
-	back.CFrame = cf * CFrame.new(0, 1.1, 0)
+local function spawnScrabbler(homes: { string }): Scrabbler
+	local home = homes[math.random(1, #homes)]
+	local regionId = nodeRegion[home]
+	local m = body("Scrabbler", regionId, Vector3.new(3.6, 1.8, 5.5), Color3.fromRGB(70, 66, 58), Enum.Material.Slate)
+	m:PivotTo(CFrame.new(nodes[home] + Vector3.new(math.random(-6, 6), SCRAB_LIFT, math.random(-6, 6))))
+	addPart(m, "MineralPlates", Vector3.new(3, 0.6, 4.6), CFrame.new(0, 1.1, 0), Color3.fromRGB(120, 116, 108), Enum.Material.Basalt)
 	m:SetAttribute("CreatureId", SCRAB.id)
-	scrab = {
+	return {
 		model = m,
 		health = SCRAB.health,
 		state = "idle",
 		target = nil,
-		path = {},
 		stateUntil = 0,
 		lastKnown = nil,
+		investigate = nil,
+		homes = homes,
 		home = home,
+		regionId = regionId,
 		engaged = false,
 		lastHit = 0,
 		respawnAt = 0,
 	}
-end
-
-local function moveModel(m: Model, to: Vector3, speed: number, dt: number): boolean
-	local bp = m.PrimaryPart :: BasePart
-	local from = bp.Position
-	local flatTo = Vector3.new(to.X, from.Y, to.Z)
-	local d = flatTo - from
-	if d.Magnitude < 0.5 then
-		return true
-	end
-	local step = math.min(d.Magnitude, speed * dt)
-	local np = from + d.Unit * step
-	local cf = CFrame.lookAt(np, np + d.Unit)
-	local delta = cf * bp.CFrame:Inverse()
-	for _, p in m:GetChildren() do
-		if p:IsA("BasePart") then
-			p.CFrame = delta * p.CFrame
-		end
-	end
-	return step >= d.Magnitude - 0.01
 end
 
 local function scrabEnd(s: Scrabbler, wasChase: boolean)
@@ -309,25 +352,24 @@ local function noisy(p: Player, sess: any): boolean
 	if not pos then
 		return false
 	end
-	for _, v in game:GetService("CollectionService"):GetTagged("NoisyFloor") do
+	for _, v in CollectionService:GetTagged("NoisyFloor") do
 		local rel = v.CFrame:PointToObjectSpace(pos)
 		local h = v.Size / 2
-		if math.abs(rel.X) <= h.X and math.abs(rel.Z) <= h.Z then
+		if math.abs(rel.X) <= h.X and math.abs(rel.Z) <= h.Z and math.abs(rel.Y) <= h.Y + 4 then
 			return true
 		end
 	end
 	return false
 end
 
-local function scrabblerTick(dt: number)
-	local s = scrab
-	if not s then
-		return
-	end
+local function scrabblerTick(s: Scrabbler, dt: number)
 	if s.state == "dead" then
 		if os.clock() > s.respawnAt then
 			s.model:Destroy()
-			spawnScrabbler()
+			local fresh = spawnScrabbler(s.homes)
+			for k, v in fresh :: any do
+				(s :: any)[k] = v
+			end
 		end
 		return
 	end
@@ -343,13 +385,10 @@ local function scrabblerTick(dt: number)
 	if s.state == "idle" or s.state == "search" then
 		local best: Player?, bestD = nil, math.huge
 		for p, sess in services.PlayerService.all() do
-			if sess.insideShelterId or sess.regionId ~= "R01" or sess.vitals.condition == "dead" then
+			if not perceivable(p, sess) or sess.regionId ~= s.regionId then
 				continue
 			end
-			local pos = services.PlayerService.position(p)
-			if not pos then
-				continue
-			end
+			local pos = services.PlayerService.position(p) :: Vector3
 			local d = (pos - bp.Position).Magnitude
 			local heard = d < SCRAB.hearingRadius and noisy(p, sess)
 			local seen = d < SCRAB.sightRadius * (if sess.lightOn then 1.4 else 0.6) and lineOfSight(bp.Position + Vector3.new(0, 1, 0), pos)
@@ -366,6 +405,7 @@ local function scrabblerTick(dt: number)
 			if services.DirectorService.mayEngage(best, 0.25) then
 				s.target = best
 				s.engaged = true
+				s.investigate = nil
 				services.DirectorService.beginThreat(best)
 				s.state = "warning"
 				s.stateUntil = now + SCRAB.windupSeconds
@@ -389,7 +429,11 @@ local function scrabblerTick(dt: number)
 		local t = s.target
 		local tpos = t and services.PlayerService.position(t)
 		local tsess = t and services.PlayerService.get(t)
-		if not t or not tpos or not tsess or tsess.insideShelterId then
+		-- leash: it never follows a target out of its own region, into a shelter, or to a hiding niche
+		if not t or not tpos or not tsess or tsess.insideShelterId or tsess.hiddenAt or tsess.regionId ~= s.regionId then
+			if t and tsess and tsess.hiddenAt then
+				evidence(t, SCRAB, "escaped_by_breaking_sight")
+			end
 			s.state = "search"
 			scrabEnd(s, true)
 			return
@@ -398,25 +442,17 @@ local function scrabblerTick(dt: number)
 		if canSee then
 			s.lastKnown = tpos
 		end
-		local goal = s.lastKnown or tpos
+		local goal = (s.lastKnown or tpos) - Vector3.new(0, 3, 0)
 		if canSee then
-			moveModel(s.model, goal, SCRAB.rushSpeed, dt)
-		else
-			-- follow chamber graph toward last known position
-			local here, there = nearestNode(bp.Position), nearestNode(goal)
-			local path = route(here, there)
-			local nextId = path[1]
-			if nextId then
-				moveModel(s.model, nodes[nextId], SCRAB.rushSpeed * 0.8, dt)
-			elseif moveModel(s.model, goal, SCRAB.rushSpeed * 0.8, dt) then
-				-- reached last known position without sight: the player broke sight and escaped
-				evidence(t, SCRAB, "escaped_by_breaking_sight")
-				s.state = "search"
-				scrabEnd(s, true)
-				return
-			end
+			moveModel(s.model, goal, SCRAB_LIFT, SCRAB.rushSpeed, dt)
+		elseif travel(s.model, goal, SCRAB_LIFT, SCRAB.rushSpeed * 0.8, dt) then
+			-- reached last known position without sight: the player broke sight and escaped
+			evidence(t, SCRAB, "escaped_by_breaking_sight")
+			s.state = "search"
+			scrabEnd(s, true)
+			return
 		end
-		if (tpos - bp.Position).Magnitude < 4 and now - s.lastHit > 1.2 then
+		if (tpos - bp.Position).Magnitude < 4.5 and now - s.lastHit > 1.2 then
 			s.lastHit = now
 			services.PlayerService.damage(t, SCRAB.damage, true, "scrabbler")
 			s.state = "recover"
@@ -437,14 +473,182 @@ local function scrabblerTick(dt: number)
 		end
 		return
 	end
-	-- idle / search: wander back toward home slowly
-	local homePos = nodes[s.home] + Vector3.new(0, 0.9, 0)
-	if (bp.Position - homePos).Magnitude > 4 then
-		local path = route(nearestNode(bp.Position), s.home)
-		local nextId = path[1]
-		moveModel(s.model, if nextId then nodes[nextId] else homePos, SCRAB.walkSpeed, dt)
+	-- idle / search: investigate a noise, otherwise wander back home slowly
+	if s.investigate then
+		if travel(s.model, s.investigate, SCRAB_LIFT, SCRAB.walkSpeed * 1.4, dt) then
+			s.investigate = nil
+		end
+		return
+	end
+	local homePos = nodes[s.home]
+	if (bp.Position - (homePos + Vector3.new(0, SCRAB_LIFT, 0))).Magnitude > 4 then
+		travel(s.model, homePos, SCRAB_LIFT, SCRAB.walkSpeed, dt)
 	elseif math.random() < 0.01 then
 		cueAll(bp.Position, 35, "scrabbler_idle")
+	end
+end
+
+-- C06 Wader -------------------------------------------------------------------------------------------
+-- Blind; hears splashes. Crouch-wading, stepping stones, dry floors and hiding are silent. A thrown stone that
+-- lands in water draws it away. It can be repelled briefly but never killed.
+type Wader = {
+	model: Model,
+	state: "wander" | "listening" | "pursue" | "recover" | "repelled",
+	target: Player?,
+	goal: Vector3?,
+	stateUntil: number,
+	lastHeard: number,
+	home: string,
+	engaged: boolean,
+}
+
+local WADER_LIFT = 5
+local wader: Wader
+
+local function spawnWader()
+	local home = WADER.homes[1]
+	local m = body("Wader", "R03", Vector3.new(2.2, 9, 1.6), Color3.fromRGB(58, 66, 62), Enum.Material.SmoothPlastic)
+	m:PivotTo(CFrame.new(nodes[home] + Vector3.new(0, WADER_LIFT, 0)))
+	addPart(m, "LongArmL", Vector3.new(0.5, 7, 0.5), CFrame.new(-1.5, -1, -0.2) * CFrame.Angles(0.1, 0, 0.08), Color3.fromRGB(50, 58, 54), Enum.Material.SmoothPlastic)
+	addPart(m, "LongArmR", Vector3.new(0.5, 7, 0.5), CFrame.new(1.5, -1, -0.2) * CFrame.Angles(0.1, 0, -0.08), Color3.fromRGB(50, 58, 54), Enum.Material.SmoothPlastic)
+	addPart(m, "Head", Vector3.new(1.4, 1.6, 1.2), CFrame.new(0, 5.3, -0.3), Color3.fromRGB(72, 80, 74), Enum.Material.SmoothPlastic)
+	m:SetAttribute("CreatureId", WADER.id)
+	wader = { model = m, state = "wander", target = nil, goal = nil, stateUntil = 0, lastHeard = 0, home = home, engaged = false }
+end
+
+local function waderEnd(wasChase: boolean)
+	if wader.engaged and wader.target then
+		services.DirectorService.endThreat(wader.target, wasChase)
+	end
+	wader.engaged = false
+	wader.target = nil
+end
+
+local function waderHear(pos: Vector3, loudness: number, source: Player?, thrower: Player?)
+	local w = wader
+	if not w or w.state == "repelled" or w.state == "recover" then
+		return
+	end
+	if services.WorldBuilder.regionAt(pos) ~= "R03" then
+		return
+	end
+	local bp = w.model.PrimaryPart :: BasePart
+	if (pos - bp.Position).Magnitude > WADER.hearingRadius * loudness then
+		return
+	end
+	local now = os.clock()
+	w.lastHeard = now
+	if source == nil then
+		-- a distraction: go and listen there, abandoning any pursuit
+		if thrower then
+			evidence(thrower, WADER, "distracted_or_repelled")
+		end
+		waderEnd(true)
+		w.goal = pos
+		w.state = "wander"
+		return
+	end
+	if w.state == "pursue" and w.target == source then
+		w.goal = pos -- blind tracking: it only updates on the next splash
+		return
+	end
+	if w.state == "wander" and services.DirectorService.mayEngage(source, 0.2) then
+		w.target = source
+		w.engaged = true
+		services.DirectorService.beginThreat(source)
+		w.goal = pos
+		w.state = "listening"
+		w.stateUntil = now + WADER.warnSeconds
+		for _, p in cueAll(bp.Position, 70, "wader_drag") do
+			evidence(p, WADER, "heard_drag")
+		end
+	elseif w.state == "wander" then
+		w.goal = pos -- not allowed to engage yet: it drifts toward the sound without attacking
+	end
+end
+
+local function waderTick(dt: number)
+	local w = wader
+	local bp = w.model.PrimaryPart :: BasePart
+	local now = os.clock()
+	for p, sess in services.PlayerService.all() do
+		local pos = services.PlayerService.position(p)
+		if pos and perceivable(p, sess) and (pos - bp.Position).Magnitude < 30 and lineOfSight(pos, bp.Position) then
+			evidence(p, WADER, "seen")
+		end
+	end
+	if w.state == "repelled" or w.state == "recover" then
+		if now > w.stateUntil then
+			w.state = "wander"
+		end
+		if w.state == "repelled" then
+			travel(w.model, nodes[w.home], WADER_LIFT, WADER.walkSpeed, dt)
+		end
+		return
+	end
+	if w.state == "listening" then
+		if now > w.stateUntil then
+			w.state = "pursue"
+			w.stateUntil = now + 20
+		end
+		return
+	end
+	if w.state == "pursue" then
+		local t = w.target
+		local tsess = t and services.PlayerService.get(t)
+		if not t or not tsess or tsess.insideShelterId or not WorldDefs.isTunnel(tsess.regionId) then
+			waderEnd(true)
+			w.state = "wander"
+			return
+		end
+		local arrived = w.goal == nil or travel(w.model, w.goal :: Vector3, WADER_LIFT, WADER.pursueSpeed, dt)
+		local tpos = services.PlayerService.position(t)
+		if tpos and not tsess.hiddenAt and tsess.inWater and (tpos - bp.Position).Magnitude < 5 then
+			services.PlayerService.damage(t, WADER.damage, true, "wader")
+			cueAll(bp.Position, 40, "wader_strike")
+			waderEnd(true)
+			w.state = "recover"
+			w.stateUntil = now + 4
+			return
+		end
+		if (arrived and now - w.lastHeard > 4) or now > w.stateUntil then
+			-- silence wins: the player stayed quiet long enough
+			evidence(t, WADER, "evaded_by_silence")
+			cueAll(bp.Position, 50, "wader_lost")
+			waderEnd(true)
+			w.state = "wander"
+		end
+		return
+	end
+	-- wander: drift to a heard sound, otherwise between home pools
+	if w.goal then
+		if travel(w.model, w.goal :: Vector3, WADER_LIFT, WADER.walkSpeed, dt) then
+			w.goal = nil
+		end
+		return
+	end
+	if (bp.Position - (nodes[w.home] + Vector3.new(0, WADER_LIFT, 0))).Magnitude < 3 then
+		if math.random() < 0.004 then
+			w.home = WADER.homes[math.random(1, #WADER.homes)]
+		elseif math.random() < 0.01 then
+			cueAll(bp.Position, 45, "wader_ripple")
+		end
+	else
+		travel(w.model, nodes[w.home], WADER_LIFT, WADER.walkSpeed, dt)
+	end
+end
+
+-- Noise entry point: player splashes (source = player) and thrown stones (source = nil, thrower = player).
+function CreatureService.noise(pos: Vector3, kind: string, loudness: number, source: Player?, thrower: Player?)
+	if kind == "splash" then
+		waderHear(pos, loudness, source, thrower)
+	end
+	if kind == "clatter" or (kind == "splash" and source == nil) then
+		for _, s in scrabblers do
+			if (s.state == "idle" or s.state == "search") and (pos - (s.model.PrimaryPart :: BasePart).Position).Magnitude < 35 then
+				s.investigate = pos
+			end
+		end
 	end
 end
 
@@ -469,31 +673,18 @@ type Knocker = {
 
 local knocker: Knocker
 local function spawnKnocker()
-	local m = body("Knocker", Vector3.new(4.5, 7.5, 3.5), Color3.fromRGB(64, 58, 52), Enum.Material.Rock)
-	local arms = Instance.new("Part")
-	arms.Name = "FoldedForelimbs"
-	arms.Anchored = true
-	arms.CanCollide = false
-	arms.Size = Vector3.new(5.2, 2, 2)
-	arms.Color = Color3.fromRGB(80, 72, 64)
-	arms.Material = Enum.Material.Rock
-	arms.Parent = m
+	local m = body("Knocker", "R01", Vector3.new(4.5, 7.5, 3.5), Color3.fromRGB(64, 58, 52), Enum.Material.Rock)
+	m:PivotTo(CFrame.new(0, -30, laneZ0)) -- dormant below the floor, out of play
+	addPart(m, "FoldedForelimbs", Vector3.new(5.2, 2, 2), CFrame.new(0, 1, -1.6), Color3.fromRGB(80, 72, 64), Enum.Material.Rock)
 	knocker = { model = m, state = "dormant", target = nil, knocks = 0, nextAt = 0, dir = 1, endZ = laneZ1, hit = {}, cooldownUntil = 0 }
-	local bp = m.PrimaryPart :: BasePart
-	bp.CFrame = CFrame.new(0, -30, laneZ0) -- dormant below the floor, out of play
-	arms.CFrame = bp.CFrame * CFrame.new(0, 1, -1.6)
 end
 
-local function placeKnocker(pos: Vector3, facing: Vector3)
-	local m = knocker.model
-	local bp = m.PrimaryPart :: BasePart
-	local cf = CFrame.lookAt(pos, pos + facing)
-	bp.CFrame = cf
-	;(m:FindFirstChild("FoldedForelimbs") :: BasePart).CFrame = cf * CFrame.new(0, 1, -1.6)
+local function placeKnocker(pos: Vector3, facingDir: Vector3)
+	knocker.model:PivotTo(CFrame.lookAt(pos, pos + facingDir))
 end
 
 local function inLane(pos: Vector3): boolean
-	return math.abs(pos.X) < 7 and pos.Z > laneZ0 and pos.Z < laneZ1 and pos.Y < 12
+	return math.abs(pos.X) < 7 and pos.Z > laneZ0 and pos.Z < laneZ1 and pos.Y > -4 and pos.Y < 12
 end
 
 local function knockerTick(dt: number)
@@ -505,7 +696,7 @@ local function knockerTick(dt: number)
 		end
 		for p, sess in services.PlayerService.all() do
 			local pos = services.PlayerService.position(p)
-			if pos and inLane(pos) and not sess.insideShelterId and services.DirectorService.mayEngage(p, 0.2) then
+			if pos and inLane(pos) and perceivable(p, sess) and services.DirectorService.mayEngage(p, 0.2) then
 				k.target = p
 				services.DirectorService.beginThreat(p)
 				-- emerge at the far end from the player's direction of travel
@@ -544,7 +735,7 @@ local function knockerTick(dt: number)
 		placeKnocker(pos, Vector3.new(0, 0, k.dir))
 		for p, sess in services.PlayerService.all() do
 			local pp = services.PlayerService.position(p)
-			if pp and not k.hit[p] and not sess.insideShelterId and math.abs(pp.X - pos.X) < 4 and math.abs(pp.Z - pos.Z) < 3 and pp.Y < 12 then
+			if pp and not k.hit[p] and perceivable(p, sess) and math.abs(pp.X - pos.X) < 4 and math.abs(pp.Z - pos.Z) < 3 and pp.Y > -4 and pp.Y < 12 then
 				k.hit[p] = true
 				services.PlayerService.damage(p, KNOCK.damage, true, "knocker")
 			end
@@ -576,32 +767,33 @@ end
 -- Player tools ----------------------------------------------------------------------------------------
 local lastSwing: { [Player]: number } = {}
 
--- Returns the creature model the player is facing within range, if any.
-local function facing(player: Player, range: number): (string?, BasePart?)
+-- Returns what the player is facing within range: ("scrabbler", instance) | ("knocker") | ("wader").
+local function facing(player: Player, range: number): (string?, any)
 	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return nil, nil
 	end
-	local candidates = {}
-	if scrab and scrab.state ~= "dead" then
-		table.insert(candidates, { "scrabbler", scrab.model.PrimaryPart })
-	end
-	if knocker.state ~= "dormant" then
-		table.insert(candidates, { "knocker", knocker.model.PrimaryPart })
-	end
-	for _, c in candidates do
-		local bp = c[2] :: BasePart
+	local function aimed(bp: BasePart): boolean
 		local to = bp.Position - head.Position
-		if to.Magnitude < range and head.CFrame.LookVector:Dot(to.Unit) > 0.6 then
-			return c[1], bp
+		return to.Magnitude < range and head.CFrame.LookVector:Dot(to.Unit) > 0.6
+	end
+	for _, s in scrabblers do
+		if s.state ~= "dead" and aimed(s.model.PrimaryPart :: BasePart) then
+			return "scrabbler", s
 		end
+	end
+	if knocker.state ~= "dormant" and aimed(knocker.model.PrimaryPart :: BasePart) then
+		return "knocker", knocker
+	end
+	if wader and aimed(wader.model.PrimaryPart :: BasePart) then
+		return "wader", wader
 	end
 	return nil, nil
 end
 
 function CreatureService.useTool(player: Player, itemId: string)
 	local sess = services.PlayerService.get(player)
-	if not sess or Inventory.count(sess.profile.inventory, itemId) < 1 or sess.vitals.condition == "downed" then
+	if not sess or Inventory.count(sess.profile.inventory, itemId) < 1 or sess.vitals.condition == "downed" or sess.hiddenAt then
 		return
 	end
 	local now = os.clock()
@@ -610,26 +802,28 @@ function CreatureService.useTool(player: Player, itemId: string)
 	end
 	lastSwing[player] = now
 	if itemId == "tool.iron_bar" then
-		local which = facing(player, 8)
-		if which == "scrabbler" and scrab then
-			scrab.health -= 25
-			cueAll(scrab.model.PrimaryPart.Position, 40, "scrabbler_hurt")
-			if scrab.health <= 0 then
-				scrab.state = "dead"
-				scrab.respawnAt = now + 8 * 60
-				scrabEnd(scrab, true)
+		local which, inst = facing(player, 8)
+		if which == "scrabbler" then
+			local s = inst :: Scrabbler
+			s.health -= 25
+			cueAll((s.model.PrimaryPart :: BasePart).Position, 40, "scrabbler_hurt")
+			if s.health <= 0 then
+				s.state = "dead"
+				s.respawnAt = now + 8 * 60
+				scrabEnd(s, true)
 				evidence(player, SCRAB, "stunned_or_killed")
 				services.PlayerService.notify(player, "The scrabbler is dead.", "info")
-				for _, p in scrab.model:GetChildren() do
+				for _, p in s.model:GetChildren() do
 					if p:IsA("BasePart") then
 						p.Color = Color3.fromRGB(40, 36, 32)
 					end
 				end
 				-- No loot from the corpse: encounters cannot be farmed (section 10).
 			end
-		elseif which == "knocker" then
+		elseif which == "knocker" or which == "wader" then
 			-- Ordinary weapons fail visibly against an unkillable creature (T05).
-			services.PlayerService.send(player, "cue", { id = "weapon_ineffective", position = knocker.model.PrimaryPart.Position })
+			local bp = (if which == "knocker" then knocker.model.PrimaryPart else wader.model.PrimaryPart) :: BasePart
+			services.PlayerService.send(player, "cue", { id = "weapon_ineffective", position = bp.Position })
 			services.PlayerService.notify(player, "The bar glances off. It cannot be hurt like this.", "warn")
 		end
 	elseif itemId == "tool.stun_device" then
@@ -641,16 +835,17 @@ function CreatureService.useTool(player: Player, itemId: string)
 			services.PlayerService.notify(player, "The stun device is out of charge.", "warn")
 			return
 		end
-		local which = facing(player, 14)
+		local which, inst = facing(player, 14)
 		if not which then
 			return
 		end
 		sess.profile.toolCharges["tool.stun_device"] = charges - 1
 		services.SaveService.markDirty(player)
-		if which == "scrabbler" and scrab then
-			scrab.state = "stunned"
-			scrab.stateUntil = now + 3
-			scrabEnd(scrab, true)
+		if which == "scrabbler" then
+			local s = inst :: Scrabbler
+			s.state = "stunned"
+			s.stateUntil = now + 3
+			scrabEnd(s, true)
 			evidence(player, SCRAB, "stunned_or_killed")
 		elseif which == "knocker" then
 			if knocker.state == "knocking" then
@@ -658,10 +853,18 @@ function CreatureService.useTool(player: Player, itemId: string)
 				knocker.state = "stunned"
 				knocker.nextAt = now + KNOCK.stunSeconds
 				evidence(player, KNOCK, "stunned_window")
-				cueAll(knocker.model.PrimaryPart.Position, 50, "knocker_stunned")
+				cueAll((knocker.model.PrimaryPart :: BasePart).Position, 50, "knocker_stunned")
 			else
 				services.PlayerService.notify(player, "Too late: it is already committed to the charge.", "warn")
 			end
+		elseif which == "wader" then
+			-- repelled briefly, never killed
+			waderEnd(true)
+			wader.state = "repelled"
+			wader.stateUntil = now + WADER.repelSeconds
+			wader.goal = nil
+			evidence(player, WADER, "distracted_or_repelled")
+			cueAll((wader.model.PrimaryPart :: BasePart).Position, 50, "wader_repelled")
 		end
 		services.PlayerService.send(player, "cue", { id = "stun_fired" })
 	end
@@ -672,8 +875,11 @@ function CreatureService.init(s)
 end
 
 function CreatureService.start()
-	spawnScrabbler()
+	for _, homes in SCRAB.homes do
+		table.insert(scrabblers, spawnScrabbler(homes))
+	end
 	spawnKnocker()
+	spawnWader()
 	Players.PlayerRemoving:Connect(function(p)
 		lastSighting[p] = nil
 		lastSwing[p] = nil
@@ -688,8 +894,11 @@ function CreatureService.start()
 			local dt = task.wait(TICK)
 			debug.profilebegin("Creatures")
 			local ok, err = pcall(function()
-				scrabblerTick(dt)
+				for _, s in scrabblers do
+					scrabblerTick(s, dt)
+				end
 				knockerTick(dt)
+				waderTick(dt)
 				sidelookerTick(dt)
 			end)
 			debug.profileend()

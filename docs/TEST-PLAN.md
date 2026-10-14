@@ -22,3 +22,13 @@ Run these in a **private published test experience** with API services enabled. 
 | 16 | Concurrent session (T20) | Join the same account on two servers | The second waits, then is refused while the first holds the lock. No inventory overwrite. |
 | 17 | Touch layout (T21) | Phone and tablet, landscape | Action buttons ≥48 px, clear of the thumbstick and jump. Text readable. Safe areas respected. |
 | 18 | Performance (T22) | Baseline phone: rubble room chase, shelter transition, 16 players | Record median frame time and the bad-frame percentile. Target 30 fps phone, 60 fps PC (TUNE). |
+| 19 | First join (D22) | Join with a fresh account | The briefing and class choice appear; choosing closes them. They do not reappear on rejoin. |
+| 20 | Act I chain | Follow the story objective at the top of the screen | Each step advances on its own. Returning the old tag to the depot board completes Act I (+60 coins). The notebook shows the journal. |
+| 21 | Descent to R02/R03 | Walk north from the Rubble Workings, then from the Long Ossuary | Sloped galleries reach each level with no gaps at either end. Discovery toasts appear. Creatures and bags work at every level. |
+| 22 | P01 (T06) | Read the carving by the south door, turn the plaque until it matches | The gate rises after the match and the plaque locks. The chapel holds the story tag (your own copy) and a chest. |
+| 23 | P02 (T06) | Read the clue plate, set the valves | The gauge and caption show n of 3 after each turn. On 3/3 the cistern drains and the barrier opens. Leave; after ~10 minutes with nobody inside it refloods. |
+| 24 | Wader | Walk through the sluice water, then crouch-wade or use the stepping stones | Walking triggers the dragging-step caption and a pursuit. Silence makes it lose you. A thrown stone (B) into water pulls it away. A stun repels it. The iron bar is ineffective. |
+| 25 | Hiding | Enter a niche while a Scrabbler is rushing you | It loses you; you cannot move until you step out. Damage or respawn always frees the niche. |
+| 26 | New shelters | Register at the Inspection Office and the Pump Platform; die; rejoin | Respawn and login happen at the last registered shelter. Each interior shows its own theme and entrances. |
+| 27 | M02 and M07 | Accept each with a friend in your party | M02: each of you opens your own copy of the case. M07: completes when the named creature's research rises, then pays out at a shelter. |
+

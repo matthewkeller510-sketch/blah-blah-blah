@@ -97,25 +97,35 @@ local function prompt(parent: Instance, action: string, object: string, key: str
 	return pp
 end
 
+local THEMES = {
+	limestone = { wall = Color3.fromRGB(176, 166, 146), material = Enum.Material.Limestone, floor = Enum.Material.Slate },
+	office = { wall = Color3.fromRGB(150, 140, 120), material = Enum.Material.Plaster, floor = Enum.Material.WoodPlanks },
+	ironwork = { wall = Color3.fromRGB(96, 98, 96), material = Enum.Material.Concrete, floor = Enum.Material.DiamondPlate },
+}
+
+-- Entrance visuals per stage: 0 = open vulnerability, partial = patched boards, >= required = solid and barred.
 local function refreshCellVisuals(cell: Cell)
 	local def = shelterDef(cell.shelterId)
 	local map = occupantsMap(cell)
-	local gate = Shelters.stage(map, def.id, "gate_repair")
-	local crack = Shelters.stage(map, def.id, "crack_boarding")
 	local p = cell.parts
-	-- Main gate: 0 = broken bars with a gap, 1 = patched boards, 2 = solid gate with locking beam
-	p.GateBars.Transparency = if gate == 0 then 0.55 else 1
-	p.GateBoards.Transparency = if gate == 1 then 0 else 1
-	p.GateSolid.Transparency = if gate >= 2 then 0 else 1
-	p.GateBeam.Transparency = if gate >= 2 then 0 else 1
-	p.CrackOpen.Transparency = if crack == 0 then 0 else 1
-	p.CrackBoards.Transparency = if crack >= 1 then 0 else 1
-	p.Workbench.Transparency = if Shelters.stage(map, def.id, "workbench") >= 1 then 0 else 1
-	p.Workbench.CanCollide = Shelters.stage(map, def.id, "workbench") >= 1
+	for i, e in def.entrances do
+		local st = Shelters.stage(map, def.id, e.requiredUpgrade)
+		p["Ent" .. i .. "Open"].Transparency = if st == 0 then 0 else 1
+		p["Ent" .. i .. "Patched"].Transparency = if st > 0 and st < e.requiredStage then 0 else 1
+		p["Ent" .. i .. "Secured"].Transparency = if st >= e.requiredStage then 0 else 1
+		p["Ent" .. i .. "Bar"].Transparency = if st >= e.requiredStage then 0 else 1
+	end
+	local bench = Shelters.stage(map, def.id, "workbench") >= 1
+	p.Workbench.Transparency = if bench then 0 else 1
+	p.Workbench.CanCollide = bench
+	local shelves = Shelters.stage(map, def.id, "supply_shelves") >= 1
+	p.Shelves.Transparency = if shelves then 0 else 1
+	p.Shelves.CanCollide = shelves
 	local lamp = p.Lamp:FindFirstChildOfClass("PointLight")
 	if lamp then
-		lamp.Brightness = if Shelters.stage(map, def.id, "better_lighting") >= 1 then 1.6 else 0.5
-		lamp.Range = if Shelters.stage(map, def.id, "better_lighting") >= 1 then 22 else 12
+		local better = Shelters.stage(map, def.id, "better_lighting") >= 1
+		lamp.Brightness = if better then 1.6 else 0.5
+		lamp.Range = if better then 22 else 12
 	end
 	cell.model:SetAttribute("Fortification", Shelters.fortification(def, map))
 end
@@ -125,36 +135,43 @@ local function buildCell(index: number, shelterId: string, key: string): Cell
 	local origin = Vector3.new(o.x + (index % 20) * Config.Shelter.interiorCellSpacing, o.y, o.z + math.floor(index / 20) * Config.Shelter.interiorCellSpacing)
 	local model = Instance.new("Model")
 	model.Name = "Cell_" .. index
+	local def = shelterDef(shelterId)
+	local theme = THEMES[def.theme] or THEMES.limestone
 	local parts: { [string]: BasePart } = {}
 	local hx, hz = ROOM.X / 2, ROOM.Z / 2
-	mk(model, "Floor", Vector3.new(ROOM.X + 4, 1, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, -0.5, 0)), Color3.fromRGB(120, 112, 98), Enum.Material.Slate)
-	mk(model, "Ceiling", Vector3.new(ROOM.X + 4, 2, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, ROOM.Y + 1, 0)))
-	mk(model, "WallN", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, hz + 1)))
-	mk(model, "WallS", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, -hz - 1)))
-	mk(model, "WallE", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(hx + 1, ROOM.Y / 2, 0)))
-	mk(model, "WallW", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(-hx - 1, ROOM.Y / 2, 0)))
-	-- Main gate (west wall, where the player came in). The physical room is always closed; the gate visuals show
-	-- the fortification state and where vulnerabilities are.
-	local gx = origin.X - hx + 0.6
-	parts.GateBars = mk(model, "GateBars", Vector3.new(0.4, 9, 8), CFrame.new(gx, origin.Y + 4.5, origin.Z), RUST, Enum.Material.CorrodedMetal)
-	parts.GateBoards = mk(model, "GateBoards", Vector3.new(0.5, 9, 8), CFrame.new(gx + 0.3, origin.Y + 4.5, origin.Z), WOOD, Enum.Material.WoodPlanks)
-	parts.GateSolid = mk(model, "GateSolid", Vector3.new(0.6, 9, 8), CFrame.new(gx + 0.6, origin.Y + 4.5, origin.Z), RUST, Enum.Material.DiamondPlate)
-	parts.GateBeam = mk(model, "GateBeam", Vector3.new(0.6, 0.8, 10), CFrame.new(gx + 1.1, origin.Y + 4.5, origin.Z), WOOD, Enum.Material.Wood)
-	-- Side crack (north wall)
-	parts.CrackOpen = mk(model, "CrackOpen", Vector3.new(2, 7, 0.3), CFrame.new(origin.X + 6, origin.Y + 3.5, origin.Z + hz - 0.1), Color3.fromRGB(10, 10, 10), Enum.Material.SmoothPlastic)
-	parts.CrackBoards = mk(model, "CrackBoards", Vector3.new(4, 8, 0.5), CFrame.new(origin.X + 6, origin.Y + 4, origin.Z + hz - 0.4), WOOD, Enum.Material.WoodPlanks)
-	for _, n in { "GateBars", "GateBoards", "GateSolid", "GateBeam", "CrackOpen", "CrackBoards" } do
-		parts[n].CanCollide = false
+	mk(model, "Floor", Vector3.new(ROOM.X + 4, 1, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, -0.5, 0)), Color3.fromRGB(120, 112, 98), theme.floor)
+	mk(model, "Ceiling", Vector3.new(ROOM.X + 4, 2, ROOM.Z + 4), CFrame.new(origin + Vector3.new(0, ROOM.Y + 1, 0)), theme.wall, theme.material)
+	mk(model, "WallN", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, hz + 1)), theme.wall, theme.material)
+	mk(model, "WallS", Vector3.new(ROOM.X + 4, ROOM.Y, 2), CFrame.new(origin + Vector3.new(0, ROOM.Y / 2, -hz - 1)), theme.wall, theme.material)
+	mk(model, "WallE", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(hx + 1, ROOM.Y / 2, 0)), theme.wall, theme.material)
+	mk(model, "WallW", Vector3.new(2, ROOM.Y, ROOM.Z), CFrame.new(origin + Vector3.new(-hx - 1, ROOM.Y / 2, 0)), theme.wall, theme.material)
+	-- Entrances. The physical room is always closed; these visuals show each entrance's fortification state and
+	-- where the vulnerabilities are. Entrance 1 is on the west wall, entrance 2 on the north wall.
+	local entranceFrames = {
+		CFrame.new(origin.X - hx + 0.6, origin.Y + 4.5, origin.Z) * CFrame.Angles(0, -math.pi / 2, 0), -- local -Z points into the room
+		CFrame.new(origin.X + 6, origin.Y + 4, origin.Z + hz - 0.4),
+	}
+	for i, ef in entranceFrames do
+		local w = if i == 1 then 8 else 4
+		local open = mk(model, "Ent" .. i .. "Open", Vector3.new(w * 0.6, 7, 0.3), ef, Color3.fromRGB(10, 10, 10), Enum.Material.SmoothPlastic)
+		local patched = mk(model, "Ent" .. i .. "Patched", Vector3.new(w, 8, 0.5), ef * CFrame.new(0, 0, -0.3), WOOD, Enum.Material.WoodPlanks)
+		local secured = mk(model, "Ent" .. i .. "Secured", Vector3.new(w, 8.5, 0.6), ef * CFrame.new(0, 0, -0.5), RUST, Enum.Material.DiamondPlate)
+		local bar = mk(model, "Ent" .. i .. "Bar", Vector3.new(w + 2, 0.8, 0.6), ef * CFrame.new(0, 0, -1), WOOD, Enum.Material.Wood)
+		for _, part in { open, patched, secured, bar } do
+			part.CanCollide = false
+			parts[part.Name] = part
+		end
 	end
 	-- Furniture and interaction points
 	local exit = mk(model, "ExitDoor", Vector3.new(1, 8, 5), CFrame.new(origin.X - hx + 1.5, origin.Y + 4, origin.Z - 7), WOOD, Enum.Material.WoodPlanks)
-	prompt(exit, "Leave shelter", "Old Quarry", "exit")
+	prompt(exit, "Leave shelter", def.name, "exit")
 	local storage = mk(model, "Storage", Vector3.new(5, 3, 3), CFrame.new(origin.X + hx - 3.5, origin.Y + 1.5, origin.Z - hz + 2.5), WOOD, Enum.Material.WoodPlanks)
 	prompt(storage, "Open", "Shelter storage & escrow", "panel")
 	local board = mk(model, "Board", Vector3.new(0.4, 4, 6), CFrame.new(origin.X + hx - 0.4, origin.Y + 5, origin.Z + 4), WOOD, Enum.Material.WoodPlanks)
 	prompt(board, "Open", "Shelter works & missions", "panel")
 	parts.Workbench = mk(model, "Workbench", Vector3.new(6, 3, 3), CFrame.new(origin.X, origin.Y + 1.5, origin.Z - hz + 2.5), WOOD, Enum.Material.WoodPlanks)
 	prompt(parts.Workbench, "Craft", "Workbench", "panel")
+	parts.Shelves = mk(model, "Shelves", Vector3.new(2, 6, 7), CFrame.new(origin.X + hx - 1.5, origin.Y + 3, origin.Z - 4), WOOD, Enum.Material.WoodPlanks)
 	mk(model, "Cot", Vector3.new(7, 1.4, 3.5), CFrame.new(origin.X - 4, origin.Y + 0.7, origin.Z + hz - 3), Color3.fromRGB(90, 96, 80), Enum.Material.Fabric)
 	local lamp = mk(model, "Lamp", Vector3.new(0.8, 1.2, 0.8), CFrame.new(origin.X, origin.Y + ROOM.Y - 1, origin.Z), Color3.fromRGB(255, 220, 160), Enum.Material.Neon)
 	lamp.CanCollide = false
@@ -250,14 +267,15 @@ function ShelterService.enter(player: Player, shelterId: string)
 		return
 	end
 	local pos = services.PlayerService.position(player)
-	local door = def.exteriorDoor
-	if not pos or (pos - Vector3.new(door.x, door.y, door.z)).Magnitude > 22 then
+	local door = services.WorldBuilder.shelterDoor(shelterId)
+	if not pos or (pos - door).Magnitude > 22 then
 		return
 	end
 	if s.vitals.condition == "downed" then
 		services.PlayerService.notify(player, "You cannot open the gate while down.", "warn")
 		return
 	end
+	services.PlayerService.unhide(player)
 	local firstTime = s.profile.lastShelterId ~= shelterId
 	s.profile.lastShelterId = shelterId
 	if not s.profile.discoveries["shelter:" .. shelterId] then
@@ -311,13 +329,13 @@ function ShelterService.exit(player: Player)
 	cell.occupants[player] = nil
 	s.insideShelterId = nil
 	s.dirtyState = true
-	local c = assert(WorldDefs.chamber("R01.alcove_exterior"))
+	local _, stand = services.WorldBuilder.shelterDoor(cell.shelterId)
 	local r = services.PlayerService.rootPart(player)
 	if r then
 		pcall(function()
-			player:RequestStreamAroundAsync(Vector3.new(c.pos.x, 2, c.pos.z), 5)
+			player:RequestStreamAroundAsync(stand.Position, 5)
 		end)
-		r.CFrame = CFrame.new(c.pos.x - 4, 3, c.pos.z) * CFrame.Angles(0, math.pi / 2, 0)
+		r.CFrame = stand
 	end
 	services.PlayerService.send(player, "shelterPanel", { open = false })
 	releaseIfEmpty(cell)
@@ -546,11 +564,10 @@ function ShelterService.start()
 				end
 				cell.lastProbe = os.clock()
 				local spots = {}
-				if Shelters.stage(map, def.id, "gate_repair") < 2 then
-					table.insert(spots, cell.parts.GateBars.Position)
-				end
-				if Shelters.stage(map, def.id, "crack_boarding") < 1 then
-					table.insert(spots, cell.parts.CrackOpen.Position)
+				for i, e in def.entrances do
+					if Shelters.stage(map, def.id, e.requiredUpgrade) < e.requiredStage then
+						table.insert(spots, cell.parts["Ent" .. i .. "Open"].Position)
+					end
 				end
 				local spot = spots[math.random(1, #spots)]
 				for p in cell.occupants do

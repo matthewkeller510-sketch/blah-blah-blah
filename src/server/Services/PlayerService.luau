@@ -13,6 +13,8 @@ local Stamina = require(Shared.Logic.Stamina)
 local Vitals = require(Shared.Logic.Vitals)
 local Inventory = require(Shared.Logic.Inventory)
 local Net = require(Shared.Net)
+local Director = require(Shared.Logic.Director)
+local CollectionService = game:GetService("CollectionService")
 
 local PlayerService = {}
 
@@ -38,6 +40,10 @@ export type Session = {
 	lastSent: number,
 	alive: boolean,
 	lastCondition: string,
+	hiddenAt: string?, -- hiding spot id while hidden (F07)
+	inWater: boolean,
+	lastSplash: number,
+	lastThrow: number,
 }
 
 local sessions: { [Player]: Session } = {}
@@ -154,7 +160,7 @@ local function applySpeed(s: Session)
 	local speed
 	if s.vitals.condition == "downed" then
 		speed = 2.5 -- downed crawl; never an unrecoverable lock
-	elseif s.carriedBy then
+	elseif s.carriedBy or s.hiddenAt then
 		speed = 0
 	elseif s.mode == "sprint" then
 		speed = M.sprintSpeed
@@ -200,6 +206,8 @@ local function statePayload(s: Session)
 		busy = os.clock() < s.busyUntil,
 		carrying = s.carrying ~= nil,
 		carriedBy = s.carriedBy and s.carriedBy.DisplayName or nil,
+		hidden = s.hiddenAt ~= nil,
+		inWater = s.inWater,
 	}
 end
 
@@ -218,6 +226,9 @@ function PlayerService.damage(player: Player, amount: number, causesInjury: bool
 	end
 	if services.ShelterService and not services.ShelterService.canBeDamaged(player) then
 		return false
+	end
+	if s.hiddenAt then
+		PlayerService.unhide(player)
 	end
 	local before = s.vitals.condition
 	local cond = Vitals.damage(Config.Health, s.vitals, amount, causesInjury)
@@ -485,16 +496,131 @@ end
 -- Spawn position for the player's last shelter (or the depot before any shelter is registered).
 function PlayerService.spawnCFrame(s: Session): CFrame
 	local sid = s.profile.lastShelterId
-	local sh = WorldDefs.Shelters[sid]
-	if sh then
-		local c = assert(WorldDefs.chamber("R01.alcove_exterior"))
-		return CFrame.new(c.pos.x - 4, 3, c.pos.z)
+	if WorldDefs.Shelters[sid] then
+		local _, stand = services.WorldBuilder.shelterDoor(sid)
+		return stand
 	end
 	local sp = WorldDefs.Depot.spawn
 	return CFrame.new(sp.x, sp.y, sp.z)
 end
 
+-- Hiding (F07) ----------------------------------------------------------------------------------------
+local occupiedSpots: { [string]: Player } = {}
+
+local function spotAnchor(spotId: string): BasePart?
+	for _, a in CollectionService:GetTagged("HidingSpot") do
+		if a:GetAttribute("HidingSpotId") == spotId then
+			return a :: BasePart
+		end
+	end
+	return nil
+end
+
+function PlayerService.unhide(player: Player)
+	local s = sessions[player]
+	if not s or not s.hiddenAt then
+		return
+	end
+	local anchor = spotAnchor(s.hiddenAt)
+	occupiedSpots[s.hiddenAt] = nil
+	s.hiddenAt = nil
+	local r = rootPart(player)
+	if r then
+		r.Anchored = false
+		if anchor then
+			r.CFrame = anchor.CFrame * CFrame.new(0, 0, -3) -- step out into the room
+		end
+	end
+	s.dirtyState = true
+end
+
+function PlayerService.hide(player: Player, spotId: string)
+	local s = sessions[player]
+	local anchor = spotAnchor(spotId)
+	local r = rootPart(player)
+	if not s or not anchor or not r then
+		return
+	end
+	if s.hiddenAt == spotId then
+		PlayerService.unhide(player)
+		return
+	end
+	if s.hiddenAt or s.carrying or s.carriedBy or s.vitals.condition == "downed" then
+		return
+	end
+	if occupiedSpots[spotId] then
+		PlayerService.notify(player, "Someone is already hiding there.", "info")
+		return
+	end
+	if (r.Position - anchor.Position).Magnitude > 9 then
+		return
+	end
+	occupiedSpots[spotId] = player
+	s.hiddenAt = spotId
+	r.CFrame = anchor.CFrame * CFrame.Angles(0, 0, 0)
+	r.Anchored = true
+	s.dirtyState = true
+	PlayerService.notify(player, "Hidden. Creatures cannot sense you here. Use the niche again to step out.", "info")
+end
+
+function PlayerService.isHidden(player: Player): boolean
+	local s = sessions[player]
+	return s ~= nil and s.hiddenAt ~= nil
+end
+
+-- Throwing a stone makes a noise where it lands: a splash in water, a clatter on stone. No item needed.
+function PlayerService.throwStone(player: Player)
+	local s = sessions[player]
+	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
+	if not s or not head or s.hiddenAt or s.vitals.condition == "downed" then
+		return
+	end
+	if os.clock() - s.lastThrow < 2.5 then
+		return
+	end
+	s.lastThrow = os.clock()
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { services.WorldBuilder.root() }
+	local dir = head.CFrame.LookVector
+	local hit = workspace:Raycast(head.Position, dir * 40, params)
+	local landing = if hit then hit.Position else head.Position + dir * 40
+	-- drop to the floor below the landing point
+	local floor = workspace:Raycast(landing + Vector3.new(0, 1, 0), Vector3.new(0, -20, 0), params)
+	if floor then
+		landing = floor.Position
+	end
+	local wet = services.WorldBuilder.inWater(landing + Vector3.new(0, 0.2, 0))
+	services.CreatureService.noise(landing, if wet then "splash" else "clatter", 1, nil, player)
+	for p in sessions do
+		local pos = PlayerService.position(p)
+		if pos and (pos - landing).Magnitude < 60 then
+			PlayerService.send(p, "cue", { id = if wet then "stone_splash" else "stone_clatter", position = landing })
+		end
+	end
+end
+
+-- First join: choose a class once for free (F22: changing later has a cost).
+function PlayerService.chooseStartingClass(player: Player, className: string)
+	local s = sessions[player]
+	if not s or s.profile.storyStates.onboarded == "1" or not Config.Classes[className] then
+		return
+	end
+	s.profile.class = className
+	s.profile.storyStates.onboarded = "1"
+	services.SaveService.markDirty(player)
+	PlayerService.pushInventory(player)
+	PlayerService.send(player, "onboarding", { done = true })
+	if services.StoryService then
+		services.StoryService.push(player)
+	end
+end
+
 local function onCharacter(s: Session, character: Model)
+	if s.hiddenAt then
+		occupiedSpots[s.hiddenAt] = nil
+		s.hiddenAt = nil
+	end
 	s.alive = true
 	local h = character:WaitForChild("Humanoid") :: Humanoid
 	local root = character:WaitForChild("HumanoidRootPart") :: BasePart
@@ -563,6 +689,9 @@ function PlayerService.handleDeparture(player: Player)
 	if not s then
 		return
 	end
+	if s.hiddenAt then
+		occupiedSpots[s.hiddenAt] = nil
+	end
 	if s.carrying then
 		PlayerService.dropCarry(player)
 	end
@@ -617,6 +746,10 @@ local function onPlayerAdded(player: Player)
 		lastSent = 0,
 		alive = false,
 		lastCondition = "healthy",
+		hiddenAt = nil,
+		inWater = false,
+		lastSplash = 0,
+		lastThrow = 0,
 	}
 	sessions[player] = s
 	-- Crash reconciliation (section 20): a previous session that ended without a clean departure leaves
@@ -631,6 +764,12 @@ local function onPlayerAdded(player: Player)
 		task.spawn(onCharacter, s, player.Character)
 	end
 	PlayerService.pushInventory(player)
+	if profile.storyStates.onboarded ~= "1" then
+		PlayerService.send(player, "onboarding", { classes = Config.Classes, current = profile.class })
+	end
+	if services.StoryService then
+		services.StoryService.push(player)
+	end
 	if services.RecoveryService then
 		services.RecoveryService.pushBags(player)
 	end
@@ -651,6 +790,18 @@ function PlayerService.start()
 		task.spawn(onPlayerAdded, p)
 	end
 	Players.PlayerRemoving:Connect(PlayerService.handleDeparture)
+	for _, a in CollectionService:GetTagged("HidingSpot") do
+		local pp = Instance.new("ProximityPrompt")
+		pp.ActionText = "Hide / step out"
+		pp.ObjectText = "Niche"
+		pp.HoldDuration = 0.3
+		pp.MaxActivationDistance = 8
+		pp.RequiresLineOfSight = false
+		pp.Parent = a
+		pp.Triggered:Connect(function(player)
+			PlayerService.hide(player, a:GetAttribute("HidingSpotId"))
+		end)
+	end
 
 	local accCheckpoint = 0
 	local params = RaycastParams.new()
@@ -682,13 +833,20 @@ function PlayerService.start()
 					s.dirtyState = true
 				end
 				applySpeed(s)
+				-- Splash noise for water-sensitive hearing (C06 Wader): crouch-wading and dry footing are silent.
+				s.inWater = services.WorldBuilder.inWater(r.Position - Vector3.new(0, 3, 0))
+				local splash = Director.splashNoise(s.mode, s.inWater)
+				if splash > 0 and os.clock() - s.lastSplash > 0.4 then
+					s.lastSplash = os.clock()
+					services.CreatureService.noise(r.Position, "splash", splash, player)
+				end
 				-- region & grounded checkpoint
 				local region = services.WorldBuilder.regionAt(r.Position)
 				if region ~= s.regionId then
 					s.regionId = region
 					s.dirtyState = true
 				end
-				if h.FloorMaterial ~= Enum.Material.Air and region == "R01" then
+				if h.FloorMaterial ~= Enum.Material.Air and WorldDefs.isTunnel(region) then
 					local hit = workspace:Raycast(r.Position, Vector3.new(0, -6, 0), params)
 					if hit then
 						s.lastGrounded = hit.Position + Vector3.new(0, 1, 0)
@@ -732,10 +890,10 @@ function PlayerService.start()
 			if accCheckpoint >= CHECKPOINT_PERIOD then
 				accCheckpoint = 0
 				for player, s in sessions do
-					if s.lastGrounded and s.regionId == "R01" then
-						local anchorId, offset = services.WorldBuilder.anchorFor(s.lastGrounded)
+					if s.lastGrounded and WorldDefs.isTunnel(s.regionId) then
+						local anchorId, offset, regionId = services.WorldBuilder.anchorFor(s.lastGrounded)
 						s.profile.checkpoint = {
-							regionId = "R01",
+							regionId = regionId,
 							pocketVersion = 1,
 							anchorId = anchorId,
 							offset = { x = offset.X, y = offset.Y, z = offset.Z },

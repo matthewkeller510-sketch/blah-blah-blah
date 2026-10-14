@@ -27,10 +27,13 @@ local pressureText: TextLabel
 local inviteBox: Frame
 local downedText: TextLabel
 local missionObjective = ""
+local storyObjective = ""
 local inShelter = false
 
+-- Priority: active mission, then the story objective, then the shelter reminder.
 local function refreshObjective()
 	objective.Text = if missionObjective ~= "" then missionObjective
+		elseif storyObjective ~= "" then storyObjective
 		elseif inShelter then "Shelter: rest here. Passive recovery stops at half health; supplies heal further."
 		else ""
 end
@@ -127,7 +130,9 @@ function Hud.vitals(d: any)
 		lightText.Text = "No light"
 		lightText.TextColor3 = C.dim
 	end
-	if cond == "downed" then
+	if d.hidden then
+		downedText.Text = "HIDDEN — creatures cannot sense you. Use the niche prompt to step out."
+	elseif cond == "downed" then
 		downedText.Text = if d.stabilized then "DOWN — stabilized. A teammate can treat or carry you."
 			else string.format("DOWN — %ds. A party member can stabilize you.", math.ceil(d.downedRemaining))
 		if d.carriedBy then
@@ -248,6 +253,11 @@ function Hud.mission(d: any)
 	else
 		missionObjective = d.objective or ""
 	end
+	refreshObjective()
+end
+
+function Hud.story(d: any)
+	storyObjective = if d.complete then "" else ("Story: " .. d.objective)
 	refreshObjective()
 end
 

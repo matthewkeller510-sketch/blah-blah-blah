@@ -55,6 +55,10 @@ local function grant(player: Player, contents: { [string]: number }): { [string]
 		local added = Inventory.add(s.profile.inventory, ItemDefs.get, id, n, "expedition")
 		if added > 0 then
 			got[id] = added
+			local d = ItemDefs.get(id)
+			if d and d.stunCharges then
+				s.profile.toolCharges[id] = d.stunCharges -- a found device arrives charged
+			end
 		end
 	end
 	services.SaveService.markDirty(player)
@@ -73,7 +77,7 @@ end
 local function buildPickups()
 	local f = Instance.new("Folder")
 	f.Name = "Pickups"
-	f.Parent = services.WorldBuilder.folder("R01")
+	f.Parent = services.WorldBuilder.root()
 	for _, site in WorldDefs.ScavengeSites do
 		local p = Instance.new("Part")
 		p.Name = site.id
@@ -142,7 +146,7 @@ local function buildPickups()
 			Progress.claim(s.profile.claims, u.id)
 			grant(player, { [u.itemId] = 1 })
 			services.PlayerService.notify(player, "Collected your " .. pp.ObjectText .. ". Party members must collect their own.", "info")
-			DiscoveryService.discover(player, u.discoveryId, "Expedition survey tag")
+			DiscoveryService.discover(player, u.discoveryId, u.label)
 		end)
 	end
 end

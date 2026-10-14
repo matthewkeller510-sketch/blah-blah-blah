@@ -9,6 +9,7 @@ local Config = require(Shared.Data.Config)
 local ItemDefs = require(Shared.Data.ItemDefs)
 local Inventory = require(Shared.Logic.Inventory)
 local NavRecords = require(Shared.Logic.NavRecords)
+local WorldDefs = require(Shared.Data.WorldDefs)
 
 local NavigationService = {}
 local services: any
@@ -53,7 +54,8 @@ function NavigationService.place(player: Player, payload: any)
 	if (pos - head.Position).Magnitude > PLACE_RANGE then
 		return
 	end
-	if services.WorldBuilder.regionAt(pos) ~= "R01" then
+	local regionId = services.WorldBuilder.regionAt(pos)
+	if not WorldDefs.isTunnel(regionId) then
 		services.PlayerService.notify(player, "Markers can only be placed in the tunnels.", "warn")
 		return
 	end
@@ -78,12 +80,13 @@ function NavigationService.place(player: Player, payload: any)
 		return
 	end
 	local anchorId = services.WorldBuilder.anchorFor(pos)
+	local pocketVersion = 1 -- no variable pockets exist yet (R05); records still carry the field
 	local rec, err = NavRecords.place(s.profile.nav, {
 		ownerId = player.UserId,
 		kind = kind,
 		itemId = itemId,
-		regionId = "R01",
-		pocketVersion = 1,
+		regionId = regionId,
+		pocketVersion = pocketVersion,
 		anchorId = anchorId,
 		position = tbl(hit.Position),
 		facing = tbl(hit.Normal),
@@ -113,16 +116,21 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 	if not os_ or not owner then
 		return
 	end
-	local page = os_.profile.nav.pages.R01
-	local rec = page and page[recordId]
-	if not rec then
+	local regionId, page, rec = nil, nil, nil
+	for rid, pg in os_.profile.nav.pages do
+		if pg[recordId] then
+			regionId, page, rec = rid, pg, pg[recordId]
+			break
+		end
+	end
+	if not rec or not regionId then
 		return
 	end
 	local p = services.PlayerService.position(player)
 	if not p or (p - vec(rec.position)).Magnitude > PLACE_RANGE then
 		return
 	end
-	local res = NavRecords.retrieve(os_.profile.nav, "R01", recordId, player.UserId, services.PartyService.memberIds(owner))
+	local res = NavRecords.retrieve(os_.profile.nav, regionId, recordId, player.UserId, services.PartyService.memberIds(owner))
 	if not res.ok then
 		if res.reason == "not_authorized" then
 			services.PlayerService.notify(player, "Only the owner can pick that up unless they allow party recovery.", "warn")
@@ -133,8 +141,8 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 	if added < (res.units :: number) then
 		-- Not enough room: put the record back unchanged rather than destroying the unit.
 		Inventory.remove(os_.profile.inventory, res.itemId :: string, added)
-		page = os_.profile.nav.pages.R01 or {}
-		os_.profile.nav.pages.R01 = page
+		page = os_.profile.nav.pages[regionId] or {}
+		os_.profile.nav.pages[regionId] = page
 		page[recordId] = rec
 		services.PlayerService.notify(player, "No room to carry it.", "warn")
 		return
@@ -146,8 +154,12 @@ end
 
 function NavigationService.setPartyRecovery(player: Player, recordId: string, allow: boolean)
 	local s = services.PlayerService.get(player)
-	local page = s and s.profile.nav.pages.R01
-	local rec = page and page[recordId]
+	local rec = nil
+	if s then
+		for _, pg in s.profile.nav.pages do
+			rec = rec or pg[recordId]
+		end
+	end
 	if rec then
 		rec.allowPartyRecovery = allow == true
 		services.SaveService.markDirty(player)
@@ -163,7 +175,8 @@ function NavigationService.refreshFor(viewer: Player)
 		local s = services.PlayerService.get(owner)
 		if s then
 			local ids = services.PartyService.memberIds(owner)
-			for _, rec in NavRecords.inRegion(s.profile.nav, "R01") do
+			for regionId in s.profile.nav.pages do
+				for _, rec in NavRecords.inRegion(s.profile.nav, regionId) do
 				if NavRecords.canSee(rec, viewer.UserId, ids) then
 					table.insert(out, {
 						recordId = rec.recordId,
@@ -178,6 +191,7 @@ function NavigationService.refreshFor(viewer: Player)
 						allowPartyRecovery = rec.allowPartyRecovery,
 					})
 				end
+			end
 			end
 		end
 	end
