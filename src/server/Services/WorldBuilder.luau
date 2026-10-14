@@ -1,8 +1,10 @@
 --!strict
--- Builds the BLOCKOUT for R00 Surface Survey Depot, R01 Old Quarry, R02 Ossuary Galleries and R03 Flooded Works
--- from primitive parts.
+-- Builds the BLOCKOUT for every region in WorldDefs (R00 depot through R05 Shifting Crossroads) from primitive parts,
+-- and the active version of each variable pocket on request from PocketService (buildPocket / destroyPocket).
 -- This is greybox geometry for testing scale, routes and systems, not production art (section 18 pipeline).
--- Every generated part is tagged BLOCKOUT so it can be replaced by modular kit pieces later.
+-- Every generated part is tagged BLOCKOUT so it can be replaced by modular kit pieces later; pocket parts are also
+-- tagged PocketGeometry and live in a version folder with PocketId / PocketVersion attributes.
+-- Interactive props belong to other services (puzzles, missions, story); the set-pieces here are decor only.
 
 local Lighting = game:GetService("Lighting")
 local CollectionService = game:GetService("CollectionService")
@@ -10,6 +12,8 @@ local CollectionService = game:GetService("CollectionService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local WorldDefs = require(Shared.Data.WorldDefs)
 local Config = require(Shared.Data.Config)
+local Pockets = require(Shared.Logic.Pockets)
+Pockets.bind(WorldDefs)
 
 local WorldBuilder = {}
 
@@ -19,6 +23,7 @@ local WALL = 2
 
 local root: Folder
 local regionFolders: { [string]: Folder } = {}
+local pocketFolders: { [string]: Folder } = {}
 
 local STONE = Color3.fromRGB(176, 166, 146)
 local STONE_DARK = Color3.fromRGB(120, 112, 98)
@@ -76,19 +81,46 @@ local function folder(parent: Instance, name: string): Folder
 	return f
 end
 
--- Which sides of a chamber have a corridor opening: "N" (+z), "S" (-z), "E" (+x), "W" (-x)
+-- Water rules (generalised from the Milestone 2 R03-only checks): chambers in a flooded region carry shallow water
+-- unless flagged `dry`; PuzzleService owns the cistern's water; gated corridors get none (their puzzle builds the
+-- deep barrier). PROPOSED: the long silent route to the Overflow Vault (M05) starts dry at the Silt Works' south
+-- door, reached over stepping stones.
+local WET_REGIONS: { [string]: boolean } = { R03 = true }
+local PUZZLE_WATER: { [string]: boolean } = { ["R03.cistern"] = true }
+local DRY_CORRIDORS: { [string]: boolean } = { ["R03.silt_loop|R03.drain_gallery"] = true }
+
+local function chamberWet(c: any): boolean
+	return WET_REGIONS[c.regionId] == true and not c.dry and not PUZZLE_WATER[c.id]
+end
+
+local function corridorWet(cor: any, a: any, b: any): boolean
+	return cor.gate == nil
+		and cor.pocket == nil
+		and a.pos.y == b.pos.y
+		and WET_REGIONS[a.regionId] == true
+		and WET_REGIONS[b.regionId] == true
+		and not (a.dry and b.dry)
+		and not DRY_CORRIDORS[cor.from .. "|" .. cor.to]
+		and not DRY_CORRIDORS[cor.to .. "|" .. cor.from]
+end
+
+-- The side of chamber `c` that faces chamber `o` along their shared axis: "N" (+z), "S" (-z), "E" (+x), "W" (-x)
+local function sideToward(c: any, o: any): string
+	if o.pos.x == c.pos.x then
+		return if o.pos.z > c.pos.z then "N" else "S"
+	end
+	return if o.pos.x > c.pos.x then "E" else "W"
+end
+
+-- Which sides of a chamber have a corridor opening. Pocket corridors count: PocketService builds the passage, but
+-- the static mouth doorway is always open (entry/exit contract).
 local function openings(chamberId: string): { [string]: boolean }
 	local out = {}
 	local c = assert(WorldDefs.chamber(chamberId))
 	for _, cor in WorldDefs.Corridors do
 		local otherId = if cor.from == chamberId then cor.to elseif cor.to == chamberId then cor.from else nil
 		if otherId then
-			local o = assert(WorldDefs.chamber(otherId))
-			if o.pos.x == c.pos.x then
-				out[if o.pos.z > c.pos.z then "N" else "S"] = true
-			else
-				out[if o.pos.x > c.pos.x then "E" else "W"] = true
-			end
+			out[sideToward(c, assert(WorldDefs.chamber(otherId)))] = true
 		end
 	end
 	if chamberId == "R01.survey_board" then
@@ -97,48 +129,85 @@ local function openings(chamberId: string): { [string]: boolean }
 	return out
 end
 
--- A wall along one side, split around a centered opening of width W when open.
+-- A gap in a wall: `c` is its centre measured along the wall from the wall's centre, `w` its width.
+type Gap = { c: number, w: number }
+
+-- Door gaps per side: one centred corridor-width doorway per open side, except a pocket mouth with several doors
+-- (PK3's Room of Three Doors), which gets one DOOR_WIDTH gap at each authored position.
+local function doorGaps(c: any): { [string]: { Gap } }
+	local out: { [string]: { Gap } } = {}
+	for side, open in openings(c.id) do
+		if open then
+			out[side] = { { c = 0, w = W } }
+		end
+	end
+	for _, pk in WorldDefs.Pockets do
+		if pk.doors and pk.from == c.id then
+			local side = sideToward(c, assert(WorldDefs.chamber(pk.to)))
+			local gaps: { Gap } = {}
+			for _, d in pk.doors do
+				local along = if side == "N" or side == "S" then d - c.pos.x else d - c.pos.z
+				table.insert(gaps, { c = along, w = Pockets.DOOR_WIDTH })
+			end
+			out[side] = gaps
+		end
+	end
+	return out
+end
+
+-- A wall along one side, split around its door gaps, with a lintel above each gap when the room is taller than a
+-- corridor.
 local function sideWall(
 	parent: Instance,
 	center: Vector3,
 	length: number,
 	height: number,
 	alongX: boolean,
-	open: boolean
+	gaps: { Gap }?
 )
 	local y = center.Y + height / 2
-	if not open then
-		local size = if alongX then Vector3.new(length, height, WALL) else Vector3.new(WALL, height, length)
-		part(parent, "Wall", size, CFrame.new(center.X, y, center.Z))
-		return
-	end
-	local seg = (length - W) / 2
-	for _, sgn in { -1, 1 } do
-		local off = sgn * (W / 2 + seg / 2)
-		local size = if alongX then Vector3.new(seg, height, WALL) else Vector3.new(WALL, height, seg)
+	local function segment(a: number, b: number)
+		if b - a < 0.05 then
+			return
+		end
+		local mid = (a + b) / 2
+		local size = if alongX then Vector3.new(b - a, height, WALL) else Vector3.new(WALL, height, b - a)
 		local pos = if alongX
-			then Vector3.new(center.X + off, y, center.Z)
-			else Vector3.new(center.X, y, center.Z + off)
+			then Vector3.new(center.X + mid, y, center.Z)
+			else Vector3.new(center.X, y, center.Z + mid)
 		part(parent, "Wall", size, CFrame.new(pos))
 	end
-	if height > H then
-		local lintelH = height - H
-		local size = if alongX then Vector3.new(W, lintelH, WALL) else Vector3.new(WALL, lintelH, W)
-		part(parent, "Lintel", size, CFrame.new(center.X, center.Y + H + lintelH / 2, center.Z))
+	local list: { Gap } = if gaps then table.clone(gaps) else {}
+	table.sort(list, function(a: Gap, b: Gap)
+		return a.c < b.c
+	end)
+	local cursor = -length / 2
+	for _, g in list do
+		segment(cursor, g.c - g.w / 2)
+		cursor = g.c + g.w / 2
+		if height > H then
+			local lintelH = height - H
+			local size = if alongX then Vector3.new(g.w, lintelH, WALL) else Vector3.new(WALL, lintelH, g.w)
+			local pos = if alongX
+				then Vector3.new(center.X + g.c, center.Y + H + lintelH / 2, center.Z)
+				else Vector3.new(center.X, center.Y + H + lintelH / 2, center.Z + g.c)
+			part(parent, "Lintel", size, CFrame.new(pos))
+		end
 	end
+	segment(cursor, length / 2)
 end
 
 local function buildChamber(c: any)
-	local f = folder(regionFolders[c.regionId], c.id)
+	local f = folder(WorldBuilder.folder(c.regionId), c.id)
 	local p = v(c.pos)
 	local s = v(c.size)
-	local op = openings(c.id)
+	local gaps = doorGaps(c)
 	part(f, "Floor", Vector3.new(s.X + WALL * 2, 1, s.Z + WALL * 2), CFrame.new(p.X, p.Y - 0.5, p.Z), STONE_DARK)
 	part(f, "Ceiling", Vector3.new(s.X + WALL * 2, 2, s.Z + WALL * 2), CFrame.new(p.X, p.Y + s.Y + 1, p.Z))
-	sideWall(f, Vector3.new(p.X, p.Y, p.Z + s.Z / 2 + WALL / 2), s.X + WALL * 2, s.Y, true, op.N == true)
-	sideWall(f, Vector3.new(p.X, p.Y, p.Z - s.Z / 2 - WALL / 2), s.X + WALL * 2, s.Y, true, op.S == true)
-	sideWall(f, Vector3.new(p.X + s.X / 2 + WALL / 2, p.Y, p.Z), s.Z, s.Y, false, op.E == true)
-	sideWall(f, Vector3.new(p.X - s.X / 2 - WALL / 2, p.Y, p.Z), s.Z, s.Y, false, op.W == true)
+	sideWall(f, Vector3.new(p.X, p.Y, p.Z + s.Z / 2 + WALL / 2), s.X + WALL * 2, s.Y, true, gaps.N)
+	sideWall(f, Vector3.new(p.X, p.Y, p.Z - s.Z / 2 - WALL / 2), s.X + WALL * 2, s.Y, true, gaps.S)
+	sideWall(f, Vector3.new(p.X + s.X / 2 + WALL / 2, p.Y, p.Z), s.Z, s.Y, false, gaps.E)
+	sideWall(f, Vector3.new(p.X - s.X / 2 - WALL / 2, p.Y, p.Z), s.Z, s.Y, false, gaps.W)
 	-- Discovery volume (non-colliding, invisible)
 	local vol = part(f, "DiscoveryVolume", s, CFrame.new(p.X, p.Y + s.Y / 2, p.Z))
 	vol.Transparency = 1
@@ -169,7 +238,7 @@ local function buildSlopedCorridor(f: Folder, a: any, b: any)
 	end
 	local len = (s1 - s0).Magnitude
 	local look = CFrame.lookAt((s0 + s1) / 2, s1)
-	local wet = a.regionId == "R03" and b.regionId == "R03"
+	local wet = WET_REGIONS[a.regionId] == true and WET_REGIONS[b.regionId] == true
 	part(
 		f,
 		"Floor",
@@ -187,7 +256,7 @@ local function buildSlopedCorridor(f: Folder, a: any, b: any)
 end
 
 local function buildCorridor(a: any, b: any)
-	local f = folder(regionFolders[a.regionId], a.id .. "__" .. b.id)
+	local f = folder(WorldBuilder.folder(a.regionId), a.id .. "__" .. b.id)
 	if a.pos.y ~= b.pos.y then
 		buildSlopedCorridor(f, a, b)
 		return f
@@ -479,12 +548,12 @@ local function stone(parent: Instance, x: number, y: number, z: number)
 end
 
 local function buildWaterworks()
-	local f = folder(regionFolders.R03, "Landmarks")
+	local f = folder(WorldBuilder.folder("R03"), "Landmarks")
 	for _, c in WorldDefs.Chambers do
-		if c.regionId == "R03" and not c.dry and c.id ~= "R03.cistern" then
+		if chamberWet(c) then
 			waterVolume(f, v(c.pos), Vector3.new(c.size.x, 0, c.size.z))
 		end
-		if c.regionId == "R03" then
+		if WET_REGIONS[c.regionId] then
 			-- silt lines: old water marks painted along each wall
 			local silt = Color3.fromRGB(70, 64, 50)
 			local y = c.pos.y + 2.6
@@ -524,13 +593,7 @@ local function buildWaterworks()
 	end
 	for _, cor in WorldDefs.Corridors do
 		local a, b = assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to))
-		if
-			a.regionId == "R03"
-			and b.regionId == "R03"
-			and a.pos.y == b.pos.y
-			and not (a.dry and b.dry)
-			and cor.gate == nil
-		then
+		if corridorWet(cor, a, b) then
 			-- exact corridor span between the two chamber walls
 			if a.pos.x == b.pos.x then
 				local lo, hi = if a.pos.z < b.pos.z then a else b, if a.pos.z < b.pos.z then b else a
@@ -549,7 +612,8 @@ local function buildWaterworks()
 		stone(f, sl.pos.x + o[1], sl.pos.y, sl.pos.z + o[2])
 	end
 	local si = assert(WorldDefs.chamber("R03.silt_loop"))
-	for _, o in { { 10, 0 }, { 7, 3 }, { 3, 6 }, { 0, 10 } } do
+	-- east door to the north door (pump platform), and east door to the south door (the dry route, M05)
+	for _, o in { { 10, 0 }, { 7, 3 }, { 3, 6 }, { 0, 10 }, { 7, -3 }, { 3, -6 }, { 0, -10 } } do
 		stone(f, si.pos.x + o[1], si.pos.y, si.pos.z + o[2])
 	end
 	-- Old pumps: large housings and pipes in the dry gallery
@@ -656,7 +720,7 @@ end
 local function buildShelterExteriors()
 	for id, s in WorldDefs.Shelters do
 		local c = assert(WorldDefs.chamber(s.exteriorChamberId))
-		local f = folder(regionFolders[s.regionId], "ShelterExterior_" .. id)
+		local f = folder(WorldBuilder.folder(s.regionId), "ShelterExterior_" .. id)
 		local doorPos = WorldBuilder.shelterDoor(id)
 		local dir = SIDE_OFFSETS[s.doorSide]
 		local size = if dir.X ~= 0 then Vector3.new(1, 9, 8) else Vector3.new(8, 9, 1)
@@ -870,12 +934,584 @@ local function applyLighting()
 	atm.Parent = Lighting
 end
 
+-- Milestone 3 set-pieces (decor only; interactive props belong to the puzzle, story and mission services) --------
+
+local PAPER = Color3.fromRGB(196, 186, 160)
+local METAL = Color3.fromRGB(88, 90, 92)
+local PLAQUE_COLOR = Color3.fromRGB(150, 146, 136)
+local SHIFT_COLOR = Color3.fromRGB(214, 160, 70)
+
+local function facingCF(pos: Vector3, dir: Vector3): CFrame
+	return CFrame.lookAt(pos, pos + dir)
+end
+
+-- A survey desk at floor point `base`, its front facing `front`. Every desk carries the same instrument and lamp
+-- (section 04, R04: familiar equipment appearing in incompatible decades); `label` is its date plaque.
+local function surveyDesk(parent: Instance, base: Vector3, width: number, depth: number, front: Vector3, label: string?)
+	local alongX = math.abs(front.Z) > math.abs(front.X)
+	local sx, sz = if alongX then width else depth, if alongX then depth else width
+	part(
+		parent,
+		"DeskTop",
+		Vector3.new(sx, 0.3, sz),
+		CFrame.new(base + Vector3.new(0, 2.6, 0)),
+		WOOD,
+		Enum.Material.WoodPlanks
+	)
+	for _, ax in { -1, 1 } do
+		for _, az in { -1, 1 } do
+			deco(
+				parent,
+				"DeskLeg",
+				Vector3.new(0.25, 2.45, 0.25),
+				CFrame.new(base + Vector3.new(ax * (sx / 2 - 0.3), 1.225, az * (sz / 2 - 0.3))),
+				WOOD,
+				Enum.Material.Wood
+			)
+		end
+	end
+	local side = Vector3.new(-front.Z, 0, front.X)
+	deco(
+		parent,
+		"SurveyInstrument",
+		Vector3.new(1.2, 0.9, 1.2),
+		CFrame.new(base + side * (width / 4) + Vector3.new(0, 3.2, 0)),
+		METAL,
+		Enum.Material.Metal
+	)
+	deco(
+		parent,
+		"InstrumentDial",
+		Vector3.new(0.6, 0.6, 0.6),
+		CFrame.new(base + side * (width / 4) + front * 0.55 + Vector3.new(0, 3.25, 0)),
+		PAPER,
+		Enum.Material.SmoothPlastic
+	).Shape =
+		Enum.PartType.Ball
+	deco(
+		parent,
+		"DeskLamp",
+		Vector3.new(0.5, 1.2, 0.5),
+		CFrame.new(base - side * (width / 4) + Vector3.new(0, 3.35, 0)),
+		RUST,
+		Enum.Material.Metal
+	)
+	if label then
+		plaque(
+			parent,
+			facingCF(base + Vector3.new(0, 2.1, 0) + front * (depth / 2 + 0.14), front),
+			label,
+			Vector2.new(1.8, 0.6)
+		)
+	end
+end
+
+-- A rack against a wall at floor point `base` (its back on the wall), `length` along the wall, facing `front`.
+-- Rows of identical items with one dated plaque per row.
+local function wallRack(
+	parent: Instance,
+	name: string,
+	base: Vector3,
+	length: number,
+	front: Vector3,
+	itemColor: Color3,
+	dates: { string }
+)
+	local side = Vector3.new(-front.Z, 0, front.X)
+	local alongX = math.abs(side.X) > 0.5
+	local size = if alongX then Vector3.new(length, 6, 1.2) else Vector3.new(1.2, 6, length)
+	part(parent, name, size, CFrame.new(base + front * 0.6 + Vector3.new(0, 3, 0)), RUST, Enum.Material.CorrodedMetal)
+	for row = 1, 3 do
+		local y = row * 1.8
+		local shelfSize = if alongX then Vector3.new(length, 0.2, 1) else Vector3.new(1, 0.2, length)
+		deco(parent, name .. "Shelf", shelfSize, CFrame.new(base + front * 1.7 + Vector3.new(0, y, 0)), WOOD)
+		local n = math.max(1, math.floor((length - 1) / 1.4))
+		for i = 1, n do
+			local along = -length / 2 + 0.7 + (i - 1) * ((length - 1.4) / math.max(1, n - 1))
+			deco(
+				parent,
+				name .. "Item",
+				Vector3.new(0.6, 0.9, 0.6),
+				CFrame.new(base + front * 1.7 + side * along + Vector3.new(0, y + 0.55, 0)),
+				itemColor,
+				Enum.Material.SmoothPlastic
+			)
+		end
+		local date = dates[(row - 1) % #dates + 1]
+		plaque(
+			parent,
+			facingCF(base + front * 2.25 + side * (length / 2 - 1) + Vector3.new(0, y - 0.25, 0), front),
+			date,
+			Vector2.new(1.4, 0.45)
+		)
+	end
+end
+
+-- A low heap of collidable rubble and a fallen roof slab against one wall of a dead end.
+local function rubbleHeap(parent: Instance, c: any, seed: number, towardX: number)
+	local rng = Random.new(seed)
+	local hx, hz = c.size.x / 2, c.size.z / 2
+	for i = 1, 14 do
+		local x = c.pos.x + towardX * rng:NextNumber(hx * 0.65, hx - 1.5)
+		local z = c.pos.z + rng:NextNumber(-hz + 1.5, hz - 1.5)
+		part(
+			parent,
+			"Rubble" .. i,
+			Vector3.new(rng:NextNumber(1.5, 3.5), rng:NextNumber(0.6, 1.4), rng:NextNumber(1.5, 3.5)),
+			CFrame.new(x, c.pos.y + 0.4, z) * CFrame.Angles(0, rng:NextNumber(0, 3), 0),
+			STONE_DARK,
+			Enum.Material.Slate
+		)
+	end
+	-- a roof slab leaning on the far wall, its low edge toward the room
+	part(
+		parent,
+		"FallenRoof",
+		Vector3.new(5, 2, c.size.z - 2),
+		CFrame.new(c.pos.x + towardX * (hx - 2.5), c.pos.y + 2.2, c.pos.z) * CFrame.Angles(0, 0, towardX * math.rad(28)),
+		STONE,
+		Enum.Material.Slate
+	)
+end
+
+local function cable(parent: Instance, a: Vector3, b: Vector3)
+	local len = (b - a).Magnitude
+	if len < 0.5 then
+		return
+	end
+	local mid = (a + b) / 2
+	-- a cylinder's axis is its X axis; a vertical run is rotated directly (lookAt with a vertical direction and the
+	-- default up vector is degenerate)
+	local cf = if math.abs((b - a).Unit.Y) > 0.99
+		then CFrame.new(mid) * CFrame.Angles(0, 0, math.rad(90))
+		else CFrame.lookAt(mid, b) * CFrame.Angles(0, math.rad(90), 0)
+	local c = deco(parent, "Cable", Vector3.new(len, 0.25, 0.25), cf, Color3.fromRGB(30, 30, 30), Enum.Material.Rubber)
+	c.Shape = Enum.PartType.Cylinder
+end
+
+local function buildSurveyStation()
+	local f = folder(WorldBuilder.folder("R04"), "Landmarks")
+	-- Station Hall: desks whose dates disagree on identical equipment, medical shelves, a battery rack, a field map
+	local hall = assert(WorldDefs.chamber("R04.station_hall"))
+	local hp, hy = v(hall.pos), hall.pos.y
+	-- the cache desk ("under the desk with three calendars that disagree", M02 cache.station sits beneath it)
+	surveyDesk(f, Vector3.new(hp.X - 9, hy, hp.Z - 13), 6, 3, Vector3.new(0, 0, 1), "RELEVÉ — ÉQUIPE 7")
+	for i, year in { "1898", "1961", "1987" } do
+		plaque(
+			f,
+			facingCF(Vector3.new(hp.X - 11 + (i - 1) * 2, hy + 3.3, hp.Z - 14.2), Vector3.new(0, 0, 1)),
+			"CALENDRIER\n" .. year,
+			Vector2.new(1.3, 1.1)
+		)
+	end
+	surveyDesk(f, Vector3.new(hp.X + 9, hy, hp.Z + 8), 4, 3, Vector3.new(0, 0, -1), "RELEVÉ 1961")
+	surveyDesk(f, Vector3.new(hp.X + 12, hy, hp.Z + 15), 8, 2, Vector3.new(0, 0, -1), "RELEVÉ 1987")
+	-- medical shelves on the south wall, east of the doorway (the medical_shelves scavenging site stands in front)
+	wallRack(
+		f,
+		"MedicalShelves",
+		Vector3.new(hp.X + 10.5, hy, hp.Z - hall.size.z / 2),
+		7,
+		Vector3.new(0, 0, 1),
+		Color3.fromRGB(220, 216, 204),
+		{ "+ MÉDICAL 1961", "+ MÉDICAL 1898", "+ MÉDICAL 1987" }
+	)
+	wallRack(
+		f,
+		"BatteryRack",
+		Vector3.new(hp.X + hall.size.x / 2, hy, hp.Z + 9.75),
+		6.5,
+		Vector3.new(-1, 0, 0),
+		Color3.fromRGB(70, 66, 52),
+		{ "PILES 1898", "PILES 1987", "PILES 1961" }
+	)
+	plaque(
+		f,
+		facingCF(Vector3.new(hp.X - 9, hy + 6, hp.Z + hall.size.z / 2 - 0.15), Vector3.new(0, 0, -1)),
+		"CARTE DE TERRAIN\nGALERIES 14–31\nLEVÉ 1898 / 1987",
+		Vector2.new(5, 3)
+	).Name =
+		"FieldMap"
+	for _, dz in { -8, 8 } do
+		cable(
+			f,
+			Vector3.new(hp.X - hall.size.x / 2, hy + 13.4, hp.Z + dz),
+			Vector3.new(hp.X + hall.size.x / 2, hy + 13.4, hp.Z + dz)
+		)
+	end
+
+	-- Battery Store: dated battery racks (Wick Moth zone)
+	local bs = assert(WorldDefs.chamber("R04.battery_store"))
+	local bp = v(bs.pos)
+	wallRack(
+		f,
+		"BatteryRack",
+		Vector3.new(bp.X - 7, bs.pos.y, bp.Z - bs.size.z / 2),
+		10,
+		Vector3.new(0, 0, 1),
+		Color3.fromRGB(70, 66, 52),
+		{ "PILES 1961", "PILES 1898", "PILES 1987" }
+	)
+	wallRack(
+		f,
+		"BatteryRack",
+		Vector3.new(bp.X + bs.size.x / 2, bs.pos.y, bp.Z + 9),
+		5,
+		Vector3.new(-1, 0, 0),
+		Color3.fromRGB(70, 66, 52),
+		{ "PILES 1987" }
+	)
+
+	-- Collapsed Adit: the Borrowed Miner's misleading dead end
+	rubbleHeap(f, assert(WorldDefs.chamber("R04.collapsed_adit")), 4101, -1)
+
+	-- Radio Room: dated station plate (the radio itself is P05, built by PuzzleService)
+	local rr = assert(WorldDefs.chamber("R04.radio_room"))
+	plaque(
+		f,
+		facingCF(Vector3.new(rr.pos.x, rr.pos.y + 7, rr.pos.z - rr.size.z / 2 + 0.15), Vector3.new(0, 0, 1)),
+		"STATION D'ÉCOUTE — 1961",
+		Vector2.new(5, 1.2)
+	)
+
+	-- Generator Room: housing around the P03 generator point; the north wall (P03 boxes) stays clear
+	local gr = assert(WorldDefs.chamber("R04.generator_room"))
+	local gen = WorldDefs.Puzzles.P03.generator
+	local gp = Vector3.new(gen.x, gr.pos.y, gen.z)
+	part(
+		f,
+		"GeneratorHousing",
+		Vector3.new(8, 5, 6),
+		CFrame.new(gp + Vector3.new(0, 2.5, 0)),
+		RUST,
+		Enum.Material.CorrodedMetal
+	)
+	part(
+		f,
+		"GeneratorExhaust",
+		Vector3.new(1.2, gr.size.y - 5, 1.2),
+		CFrame.new(gp + Vector3.new(2.5, 5 + (gr.size.y - 5) / 2, -1.5)),
+		RUST,
+		Enum.Material.CorrodedMetal
+	)
+	for i, o in { Vector3.new(-6.5, 0, -4), Vector3.new(-6.5, 0, -1.4) } do
+		local drum = part(
+			f,
+			"FuelDrum" .. i,
+			Vector3.new(3, 2.2, 2.2),
+			CFrame.new(gp + o + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color3.fromRGB(90, 40, 30),
+			Enum.Material.CorrodedMetal
+		)
+		drum.Shape = Enum.PartType.Cylinder
+	end
+	-- cable runs along the ceiling to the east and west doorways
+	local cy = gr.pos.y + gr.size.y - 0.5
+	cable(f, gp + Vector3.new(0, 5, 0), Vector3.new(gp.X, cy, gp.Z))
+	cable(f, Vector3.new(gr.pos.x - gr.size.x / 2, cy, gp.Z), Vector3.new(gr.pos.x + gr.size.x / 2, cy, gp.Z))
+
+	-- Map Room: field maps that disagree; the area round the story package's map table is left free
+	local mr = assert(WorldDefs.chamber("R04.map_room"))
+	local mp, my = v(mr.pos), mr.pos.y
+	local ex = mp.X + mr.size.x / 2 - 0.15
+	plaque(
+		f,
+		facingCF(Vector3.new(ex, my + 6, mp.Z - 8), Vector3.new(-1, 0, 0)),
+		"LEVÉ 1898\nGALERIE 51 — 58 m",
+		Vector2.new(4.5, 3)
+	).Name =
+		"FieldMap"
+	plaque(
+		f,
+		facingCF(Vector3.new(ex, my + 6, mp.Z - 2.5), Vector3.new(-1, 0, 0)),
+		"LEVÉ 1987\nGALERIE 51 — 112 m",
+		Vector2.new(4.5, 3)
+	).Name =
+		"FieldMap"
+	-- "the map that shows a street where no street can be" (M02 cache.maproom lies below it)
+	plaque(
+		f,
+		facingCF(Vector3.new(mp.X - 10, my + 6, mp.Z + mr.size.z / 2 - 0.15), Vector3.new(0, 0, -1)),
+		"PLAN — RUE DES CARRIERS\n(aucune rue ici)",
+		Vector2.new(5, 3)
+	).Name =
+		"FieldMap"
+	-- decorative surround of the map table spot (about 14, -64, 1024): a worn floor mat and a hanging lamp, no
+	-- collision, so the story package's interactive table can stand there
+	deco(
+		f,
+		"MapTableMat",
+		Vector3.new(10, 0.1, 8),
+		CFrame.new(14, my + 0.05, 1024),
+		Color3.fromRGB(70, 56, 40),
+		Enum.Material.Fabric
+	)
+	local hang =
+		deco(f, "MapTableLamp", Vector3.new(1, 0.8, 1), CFrame.new(14, my + 11, 1024), RUST, Enum.Material.Metal)
+	local lamp = Instance.new("PointLight")
+	lamp.Range = 14
+	lamp.Brightness = 0.6
+	lamp.Color = Color3.fromRGB(255, 214, 160)
+	lamp.Parent = hang
+	cable(f, Vector3.new(14, my + 11.4, 1024), Vector3.new(14, my + mr.size.y, 1024))
+
+	-- Service Office exterior (S04): a dated door plate
+	local so = assert(WorldDefs.chamber("R04.service_office"))
+	plaque(
+		f,
+		facingCF(Vector3.new(so.pos.x, so.pos.y + 6, so.pos.z + so.size.z / 2 - 0.15), Vector3.new(0, 0, -1)),
+		"BUREAU DE SERVICE — 1961",
+		Vector2.new(5, 1.2)
+	)
+end
+
+local function buildCrossroads()
+	local f = folder(WorldBuilder.folder("R05"), "Landmarks")
+	-- Survey anchor plaques (section 04: stable anchor rooms with recognizable survey anchors)
+	local anchors = {
+		{ id = "R05.south_anchor", wall = "E", along = 4, name = "ANCRE SUD" },
+		{ id = "R05.west_anchor", wall = "N", along = -6, name = "ANCRE OUEST" },
+		{ id = "R05.center_anchor", wall = "N", along = -10, name = "CROISEMENT MESURÉ" },
+		{ id = "R05.east_anchor", wall = "E", along = 4, name = "ANCRE EST" },
+	}
+	for _, a in anchors do
+		local c = assert(WorldDefs.chamber(a.id))
+		local pos, dir
+		if a.wall == "E" then
+			pos = Vector3.new(c.pos.x + c.size.x / 2 - 0.15, c.pos.y + 6, c.pos.z + a.along)
+			dir = Vector3.new(-1, 0, 0)
+		else
+			pos = Vector3.new(c.pos.x + a.along, c.pos.y + 6, c.pos.z + c.size.z / 2 - 0.15)
+			dir = Vector3.new(0, 0, -1)
+		end
+		local p = plaque(
+			f,
+			facingCF(pos, dir),
+			Pockets.ANCHOR_SYMBOLS[a.id] .. "\nREPÈRE — " .. a.name,
+			Vector2.new(3, 2.4)
+		)
+		p.Name = "AnchorPlaque"
+		p:SetAttribute("AnchorSymbol", Pockets.ANCHOR_SYMBOLS[a.id])
+	end
+	-- Numbered threshold plates at every pocket mouth; they glow while a change is telegraphed
+	for id, pk in WorldDefs.Pockets do
+		for _, t in Pockets.thresholds(pk) do
+			local pos = Vector3.new(t.pos.x, t.pos.y, t.pos.z)
+			local p = plaque(f, facingCF(pos, Vector3.new(t.normal.x, 0, t.normal.z)), t.text, Vector2.new(2.6, 1))
+			p.Name = "ThresholdPlate"
+			p:SetAttribute("PocketId", id)
+			p:SetAttribute("Shifting", false)
+			CollectionService:AddTag(p, "PocketThreshold")
+		end
+	end
+	-- P06: the raised observation step on the south side of the Room of Three Doors, and its hint plate
+	local room = assert(WorldDefs.chamber("R05.doorway_room"))
+	local step = WorldDefs.Puzzles.P06.observationStep
+	part(
+		f,
+		"ObservationStep",
+		Vector3.new(8, 1, 6),
+		CFrame.new(step.x, room.pos.y + 0.5, step.z),
+		STONE_DARK,
+		Enum.Material.Cobblestone
+	)
+	plaque(
+		f,
+		facingCF(Vector3.new(step.x, room.pos.y + 5, room.pos.z - room.size.z / 2 + 0.15), Vector3.new(0, 0, 1)),
+		"POSTE D'OBSERVATION\nThe stable door bears the Crossing's mark "
+			.. Pockets.STABLE_SYMBOL
+			.. "\nand its lamp never flickers.",
+		Vector2.new(6, 2.2)
+	).Name =
+		"ObservationPlate"
+end
+
+local function buildMilestone3Extras()
+	-- R01 Collapsed Drift: the Borrowed Miner's dead end east of the East Workings
+	local r01 = folder(WorldBuilder.folder("R01"), "Milestone3")
+	rubbleHeap(r01, assert(WorldDefs.chamber("R01.collapsed_drift")), 1801, 1)
+	-- R03 Vault Stair: a disused stair climbing into the west wall
+	local r03 = folder(WorldBuilder.folder("R03"), "Milestone3")
+	local vs = assert(WorldDefs.chamber("R03.vault_stair"))
+	for i = 1, 6 do
+		part(
+			r03,
+			"VaultStep" .. i,
+			Vector3.new(6, i, 2),
+			CFrame.new(vs.pos.x - vs.size.x / 2 + 3, vs.pos.y + i / 2, vs.pos.z - vs.size.z / 2 + 1 + i * 2),
+			STONE,
+			Enum.Material.Cobblestone
+		)
+	end
+	-- R03 Overflow Vault: storage racks on the west and north walls
+	local ov = assert(WorldDefs.chamber("R03.overflow_vault"))
+	wallRack(
+		r03,
+		"VaultRack",
+		Vector3.new(ov.pos.x - ov.size.x / 2, ov.pos.y, ov.pos.z - 4),
+		12,
+		Vector3.new(1, 0, 0),
+		Color3.fromRGB(110, 96, 70),
+		{ "CAISSE 7", "CAISSE 9", "CAISSE 12" }
+	)
+	wallRack(
+		r03,
+		"VaultRack",
+		Vector3.new(ov.pos.x, ov.pos.y, ov.pos.z + ov.size.z / 2),
+		8,
+		Vector3.new(0, 0, -1),
+		Color3.fromRGB(110, 96, 70),
+		{ "CAISSE 14" }
+	)
+	-- R03 Drain Gallery: floor drain grates (dry route)
+	local dg = assert(WorldDefs.chamber("R03.drain_gallery"))
+	for _, dz in { -5, 5 } do
+		deco(
+			r03,
+			"DrainGrate",
+			Vector3.new(3, 0.1, 3),
+			CFrame.new(dg.pos.x, dg.pos.y + 0.05, dg.pos.z + dz),
+			Color3.fromRGB(60, 60, 62),
+			Enum.Material.DiamondPlate
+		)
+	end
+end
+
+-- Variable pockets: the active version's geometry (PocketService decides when) -----------------------------
+
+-- Discovery id and notebook label of a pocket's passage (one per pocket, shared by every version).
+function WorldBuilder.pocketDiscoveryId(pocketId: string): string
+	local pk = WorldDefs.Pockets[pocketId]
+	return (if pk then pk.regionId else "R05") .. ".passage_" .. string.lower(pocketId)
+end
+
+function WorldBuilder.destroyPocket(pocketId: string)
+	local f = pocketFolders[pocketId]
+	if f then
+		pocketFolders[pocketId] = nil
+		f:Destroy()
+	end
+end
+
+-- Builds one version of a pocket inside its bounds and returns its folder (attributes PocketId, PocketVersion).
+-- The new version is assembled completely before the old one is removed, so an error can never leave the mouths
+-- opening onto empty space. The caller (PocketService) guarantees the pocket is empty; nothing here checks players.
+function WorldBuilder.buildPocket(pocketId: string, version: string): Folder
+	local def = assert(WorldDefs.Pockets[pocketId], "unknown pocket " .. pocketId)
+	local plan = Pockets.plan(def, version)
+	local f = Instance.new("Folder")
+	f.Name = "Pocket_" .. pocketId .. "_" .. version
+	f:SetAttribute("PocketId", pocketId)
+	f:SetAttribute("PocketVersion", version)
+	local y = plan.floorY
+	local function center(b: Pockets.Box, height: number): CFrame
+		return CFrame.new((b.x0 + b.x1) / 2, height, (b.z0 + b.z1) / 2)
+	end
+	for _, b in plan.floors do
+		local w, d = b.x1 - b.x0, b.z1 - b.z0
+		part(f, "Floor", Vector3.new(w, 1, d), center(b, y - 0.5), STONE_DARK)
+		part(f, "Ceiling", Vector3.new(w, 2, d), center(b, y + H + 1))
+	end
+	for _, b in plan.walls do
+		part(f, "Wall", Vector3.new(b.x1 - b.x0, H, b.z1 - b.z0), center(b, y + H / 2))
+	end
+	local LOW = Pockets.LOW_CEILING
+	for _, b in plan.lows do
+		local w, d = b.x1 - b.x0, b.z1 - b.z0
+		part(f, "LowCeiling", Vector3.new(w, H - LOW, d), center(b, y + LOW + (H - LOW) / 2), STONE_DARK)
+		-- timber props under the low ceiling, across the narrow dimension
+		local alongX = w > d
+		local len = if alongX then w else d
+		for t = 4, len - 4, 6 do
+			local cf = if alongX
+				then CFrame.new(b.x0 + t, y + LOW - 0.3, (b.z0 + b.z1) / 2)
+				else CFrame.new((b.x0 + b.x1) / 2, y + LOW - 0.3, b.z0 + t)
+			local size = if alongX then Vector3.new(0.8, 0.6, d) else Vector3.new(w, 0.6, 0.8)
+			deco(f, "Prop", size, cf, WOOD, Enum.Material.Wood)
+		end
+	end
+	-- numbered plate: the same number and "measured" length on every version
+	local pl = plan.plate
+	plaque(
+		f,
+		facingCF(Vector3.new(pl.pos.x, pl.pos.y, pl.pos.z), Vector3.new(pl.normal.x, pl.normal.y, pl.normal.z)),
+		pl.text,
+		Vector2.new(3.6, 1)
+	).Name =
+		"PassagePlate"
+	-- one discovery per pocket, whatever the version (DiscoveryService picks up volumes added at runtime)
+	local a = plan.area.box
+	local vol = part(
+		f,
+		"DiscoveryVolume",
+		Vector3.new(a.x1 - a.x0, H, a.z1 - a.z0),
+		CFrame.new((a.x0 + a.x1) / 2, y + H / 2, (a.z0 + a.z1) / 2)
+	)
+	vol.Transparency = 1
+	vol.CanCollide = false
+	vol.CanQuery = false
+	vol:SetAttribute("ChamberId", WorldBuilder.pocketDiscoveryId(pocketId))
+	vol:SetAttribute("RegionId", def.regionId)
+	vol:SetAttribute("DiscoveryLabel", Pockets.LABELS[pocketId] or pocketId)
+	CollectionService:AddTag(vol, "DiscoveryVolume")
+	-- P06: survey symbols above each door and a lamp; the client (PocketFX) flickers the false doors' lamps in one
+	-- shared rhythm, the stable door's lamp stays steady
+	if plan.doors then
+		for _, d in plan.doors do
+			local into = Vector3.new(0, 0, -1)
+			local sym = plaque(f, facingCF(Vector3.new(d.x, y + 12.5, d.z - 0.15), into), d.symbol, Vector2.new(2, 1.6))
+			sym.Name = "DoorSymbol"
+			local lamp = part(
+				f,
+				"P06Lamp",
+				Vector3.new(0.9, 0.9, 0.5),
+				CFrame.new(d.x, y + 14.3, d.z - 0.35),
+				Color3.fromRGB(255, 214, 150),
+				Enum.Material.Neon
+			)
+			lamp.CanCollide = false
+			lamp.CanQuery = false
+			lamp:SetAttribute("Stable", d.stable)
+			lamp:SetAttribute("PocketId", pocketId)
+			local light = Instance.new("PointLight")
+			light.Range = 10
+			light.Brightness = 1.2
+			light.Color = Color3.fromRGB(255, 214, 150)
+			light.Parent = lamp
+			CollectionService:AddTag(lamp, "P06Lamp")
+		end
+	end
+	for _, d in f:GetDescendants() do
+		if d:IsA("BasePart") then
+			CollectionService:AddTag(d, "PocketGeometry")
+		end
+	end
+	-- swap in one step: the old version goes and the whole new one appears in the same frame
+	WorldBuilder.destroyPocket(pocketId)
+	f.Parent = WorldBuilder.folder(def.regionId)
+	pocketFolders[pocketId] = f
+	return f
+end
+
+-- Telegraph look of a pocket's threshold plates: a steady amber glow while a change is pending (no flashing; the
+-- client may add a flicker and dust that respect reduceFlashes).
+function WorldBuilder.setThresholdShifting(pocketId: string, shifting: boolean)
+	for _, inst in CollectionService:GetTagged("PocketThreshold") do
+		if inst:IsA("BasePart") and inst:GetAttribute("PocketId") == pocketId then
+			inst:SetAttribute("Shifting", shifting)
+			inst.Material = if shifting then Enum.Material.Neon else Enum.Material.Marble
+			inst.Color = if shifting then SHIFT_COLOR else PLAQUE_COLOR
+		end
+	end
+end
+
 function WorldBuilder.init()
 	root = folder(workspace, "World")
-	regionFolders.R00 = folder(root, "R00_SurfaceSurveyDepot")
-	regionFolders.R01 = folder(root, "R01_OldQuarry")
-	regionFolders.R02 = folder(root, "R02_OssuaryGalleries")
-	regionFolders.R03 = folder(root, "R03_FloodedWorks")
+	-- One folder per WorldDefs region (e.g. "R04_AbandonedSurveyStation"): a region added to the data can never
+	-- parent its geometry to nil.
+	for _, r in WorldDefs.Regions do
+		regionFolders[r.id] = folder(root, r.id .. "_" .. (string.gsub(r.name, "[^%w]", "")))
+	end
 	folder(root, "ShelterInteriors")
 end
 
@@ -886,7 +1522,10 @@ function WorldBuilder.start()
 		buildChamber(c)
 	end
 	for _, cor in WorldDefs.Corridors do
-		buildCorridor(assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to)))
+		-- pocket corridors are built (and rebuilt) by PocketService through buildPocket
+		if cor.pocket == nil then
+			buildCorridor(assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to)))
+		end
 	end
 	-- Ramp mouth into the survey-board chamber's south opening
 	local sb = assert(WorldDefs.chamber("R01.survey_board"))
@@ -901,6 +1540,9 @@ function WorldBuilder.start()
 	buildLandmarks()
 	buildOssuary()
 	buildWaterworks()
+	buildSurveyStation()
+	buildCrossroads()
+	buildMilestone3Extras()
 	buildHidingSpots()
 	buildShelterExteriors()
 end
@@ -966,9 +1608,14 @@ function WorldBuilder.resolveAnchor(anchorId: string, offset: Vector3): Vector3
 		return v((assert(def)).pos) + Vector3.new(0, 1, 0)
 	end
 	local candidate = v(c.pos) + offset
+	-- Region geometry only: never land a bag on a pickup crate, a puzzle prop or a shelter interior.
+	local include: { Instance } = {}
+	for _, f in regionFolders do
+		table.insert(include, f)
+	end
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { root }
+	params.FilterDescendantsInstances = include
 	local hit = workspace:Raycast(candidate + Vector3.new(0, 4, 0), Vector3.new(0, -12, 0), params)
 	if hit and hit.Normal.Y > 0.7 then
 		return hit.Position + Vector3.new(0, 0.6, 0)

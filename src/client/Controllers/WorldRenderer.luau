@@ -52,6 +52,35 @@ local function textOn(part: BasePart, face: Enum.NormalId, text: string, color: 
 	t.Parent = g
 end
 
+-- A CFrame at `pos` facing `dir`. A floor or ceiling mark faces straight up or down, where the default up vector
+-- is parallel to the look direction, so another up vector is used there.
+local function facingCF(pos: Vector3, dir: Vector3): CFrame
+	if dir.Magnitude < 1e-4 then
+		dir = Vector3.yAxis
+	end
+	local up = if math.abs(dir.Unit.Y) > 0.99 then Vector3.zAxis else Vector3.yAxis
+	return CFrame.lookAt(pos, pos + dir, up)
+end
+
+-- Small label on a marker or bag that a pocket change moved (section 04: show the recovery location honestly).
+local function movedLabel(parent: BasePart, offset: number)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Moved"
+	bb.Size = UDim2.fromOffset(200, 22)
+	bb.StudsOffset = Vector3.new(0, offset, 0)
+	bb.MaxDistance = 30
+	bb.AlwaysOnTop = false
+	bb.Parent = parent
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Font = UI.font()
+	t.TextScaled = true
+	t.TextColor3 = UI.Colors.bone
+	t.Text = "moved: the passage changed"
+	t.Parent = bb
+end
+
 local function pickupPrompt(parent: Instance, text: string, onTrigger: () -> ())
 	local pp = Instance.new("ProximityPrompt")
 	pp.ActionText = text
@@ -73,7 +102,7 @@ local function buildNav(rec: any): Instance
 		p.Anchored, p.CanCollide, p.CanQuery = true, false, true
 		p.Transparency = 1
 		p.Size = Vector3.new(1.6, 1.6, 0.05)
-		p.CFrame = CFrame.lookAt(pos + n * 0.03, pos + n)
+		p.CFrame = facingCF(pos + n * 0.03, n)
 		textOn(
 			p,
 			Enum.NormalId.Front,
@@ -89,7 +118,7 @@ local function buildNav(rec: any): Instance
 		p.Size = Vector3.new(3, 0.9, 0.15)
 		p.Color = Color3.fromRGB(120, 90, 55)
 		p.Material = Enum.Material.WoodPlanks
-		p.CFrame = CFrame.lookAt(pos + n * 0.1 + Vector3.new(0, 1.5, 0), pos + n * 2 + Vector3.new(0, 1.5, 0))
+		p.CFrame = facingCF(pos + n * 0.1 + Vector3.new(0, 1.5, 0), n)
 		textOn(
 			p,
 			Enum.NormalId.Front,
@@ -126,6 +155,9 @@ local function buildNav(rec: any): Instance
 			ctx.send("nav.retrieve", { ownerId = rec.ownerId, recordId = rec.recordId })
 		end)
 	end
+	if rec.migratedFrom then
+		movedLabel(m.PrimaryPart :: BasePart, 1.6)
+	end
 	m.Parent = folder
 	return m
 end
@@ -159,14 +191,31 @@ local function buildBag(rec: any): Instance
 	pickupPrompt(p, if rec.isOwn then "Recover" else "Recover to their escrow", function()
 		ctx.send("bag.recover", { ownerId = rec.ownerId, kind = rec.kind })
 	end)
+	if rec.moved then
+		movedLabel(p, 3)
+	end
 	p.Parent = folder
 	return p
 end
 
+-- Everything that changes how a record looks is in its key, so a moved or re-versioned record rebuilds at once
+-- instead of lingering where it was (pocket migration).
 local function key(rec: any, isBag: boolean): string
-	return if isBag
-		then ("bag:" .. rec.ownerId .. ":" .. rec.kind .. ":" .. tostring(rec.position))
-		else ("nav:" .. rec.recordId .. ":" .. tostring(rec.allowPartyRecovery))
+	if isBag then
+		return "bag:" .. rec.ownerId .. ":" .. rec.kind .. ":" .. tostring(rec.position) .. ":" .. tostring(rec.moved)
+	end
+	local moved = rec.migratedFrom
+	return table.concat({
+		"nav",
+		rec.recordId,
+		tostring(rec.allowPartyRecovery),
+		tostring(rec.position),
+		tostring(rec.facing),
+		tostring(rec.endPosition),
+		tostring(rec.pocketId),
+		tostring(rec.pocketVersion),
+		if moved then tostring(moved.pocketId) .. "/" .. tostring(moved.version) else "-",
+	}, ":")
 end
 
 local function refresh()
