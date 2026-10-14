@@ -272,7 +272,8 @@ function BorrowedMiner.start()
 			state = "work",
 			origin = os.clock() + i * 0.37, -- the two figures do not strike in unison
 			strokes = 0,
-			listeners = {},
+			-- weak keys: a write during a departing player's final save never pins the Player (review R2 finding 12)
+			listeners = setmetatable({}, { __mode = "k" }) :: any,
 			respawnAt = 0,
 		}
 		placeAtWork(m)

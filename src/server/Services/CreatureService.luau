@@ -16,6 +16,7 @@ local ItemDefs = require(Shared.Data.ItemDefs)
 local WorldDefs = require(Shared.Data.WorldDefs)
 local Progress = require(Shared.Logic.Progress)
 local Inventory = require(Shared.Logic.Inventory)
+local CreatureRules = require(Shared.Logic.CreatureRules)
 
 local Creatures = script.Parent.Creatures
 local Common = require(Creatures.Common)
@@ -70,24 +71,33 @@ function CreatureService.noise(pos: Vector3, kind: string, loudness: number, sou
 	Scrabbler.noise(pos, kind, source)
 end
 
--- The nearest creature the player is aiming at within range (all creatures considered, nearest first).
+-- The creature the player is aiming at: within range, inside the aim cone and in clear line of sight (never through
+-- rock or round a corner). Threats come before harmless phenomena, so a nearer roost or miner never absorbs a swing
+-- or stun meant for a threat; the nearest of each (review R2 findings 10 and 11).
 local function facing(player: Player, range: number): Common.Target?
 	local head = Common.head(player)
 	if not head then
 		return nil
 	end
-	local best: Common.Target? = nil
-	local bestD = math.huge
+	local cands: { Common.Target } = {}
+	local order: { CreatureRules.ToolCandidate } = {}
 	for _, entry in MODULES do
 		for _, t in entry.m.targets() do
 			local to = t.part.Position - head.Position
 			local d = to.Magnitude
-			if d < range and d > 0.01 and d < bestD and head.CFrame.LookVector:Dot(to.Unit) > 0.6 then
-				best, bestD = t, d
+			if d < range and d > 0.01 and head.CFrame.LookVector:Dot(to.Unit) > 0.6 then
+				table.insert(cands, t)
+				table.insert(order, { harmless = t.kind == "harmless", dist = d })
 			end
 		end
 	end
-	return best
+	for _, i in CreatureRules.toolTargetOrder(order) do
+		local t = cands[i]
+		if Common.lineOfSight(head.Position, t.part.Position) then
+			return t
+		end
+	end
+	return nil
 end
 
 local function nothingToStrike(player: Player)

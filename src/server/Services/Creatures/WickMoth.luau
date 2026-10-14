@@ -28,7 +28,8 @@ local FLARE_SLACK = 2
 local ROOST_CHECK_SECONDS = 0.5
 
 type Swarm = { st: CreatureRules.MothState, appliedItem: string? }
-local swarms: { [Player]: Swarm } = {}
+-- weak keys: a write during a departing player's final save never pins the Player (review R2 finding 12)
+local swarms: { [Player]: Swarm } = setmetatable({}, { __mode = "k" }) :: any
 local roosts: { [string]: BasePart } = {} -- zone chamber id -> roost body
 local roostCheckAt = 0
 

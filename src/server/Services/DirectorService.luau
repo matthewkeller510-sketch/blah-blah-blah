@@ -20,9 +20,11 @@ local services: any
 local GRACE_SECONDS = 30 -- a calm first half-minute after joining
 local PRESSURE_CACHE_SECONDS = 0.25 -- several creatures ask every tick; compute once per player per quarter second
 
-local victims: { [Player]: Director.VictimRecord } = {}
+-- Weak keys (review R2 finding 12): a departing player's session outlives PlayerRemoving while the final save yields,
+-- so a late write must never pin the Player. Nothing is computed or engaged for a player who has left (Parent nil).
+local victims: { [Player]: Director.VictimRecord } = setmetatable({}, { __mode = "k" }) :: any
 local activeDamaging = 0
-local pressureCache: { [Player]: { value: number, at: number } } = {}
+local pressureCache: { [Player]: { value: number, at: number } } = setmetatable({}, { __mode = "k" }) :: any
 
 local function victim(p: Player): Director.VictimRecord
 	local v = victims[p]
@@ -60,7 +62,7 @@ end
 
 function DirectorService.pressure(player: Player): number
 	local s = services.PlayerService.get(player)
-	if not s then
+	if not s or not player.Parent then
 		return 0
 	end
 	local now = os.clock()
@@ -79,6 +81,7 @@ function DirectorService.mayEngage(player: Player, threshold: number): boolean
 	local s = services.PlayerService.get(player)
 	if
 		not s
+		or not player.Parent -- leaving: its session lives on only for the final save
 		or s.insideShelterId
 		or s.hiddenAt
 		or s.vitals.condition == "downed"
@@ -172,7 +175,9 @@ function DirectorService.start()
 		while true do
 			task.wait(Config.Director.tickSeconds * 2)
 			for p in services.PlayerService.all() do
-				services.PlayerService.send(p, "debugPressure", { pressure = DirectorService.pressure(p) })
+				if p.Parent then
+					services.PlayerService.send(p, "debugPressure", { pressure = DirectorService.pressure(p) })
+				end
 			end
 		end
 	end)

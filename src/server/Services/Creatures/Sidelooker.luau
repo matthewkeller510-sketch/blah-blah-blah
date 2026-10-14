@@ -29,7 +29,8 @@ type State = {
 	expiresAt: number,
 }
 local st: State = { pos = nil, watcher = nil, watchedFor = 0, chamber = "", id = 0, expiresAt = 0 }
-local lastSighting: { [Player]: number } = {}
+-- weak keys: a write during a departing player's final save never pins the Player (review R2 finding 12)
+local lastSighting: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 
 local function clear()
 	st.pos = nil
