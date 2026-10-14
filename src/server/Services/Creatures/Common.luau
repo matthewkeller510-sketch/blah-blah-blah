@@ -1,9 +1,11 @@
 --!strict
 -- Shared helpers for every creature (section 10): the chamber graph and movement along it, perception, research
 -- evidence (with field experience), cues and greybox bodies. CreatureService.init hands the services table in.
--- Movement is server-driven along the chamber graph (centre-to-centre lines stay inside corridors, including the
--- sloped galleries between levels). Closed puzzle gates are impassable; pocket corridors are always connected because
--- every pocket version honours the same entry/exit contract (docs/MILESTONE-3.md section 2).
+-- Movement is server-driven in straight legs chosen by CreatureRules.nextLeg: centre to centre along the chamber
+-- graph (those lines stay inside corridors, including the sloped galleries between levels), straight inside a
+-- chamber. Closed puzzle gates are impassable. A variable pocket differs in every version, so creatures cross it
+-- along its current version's creature route (Logic/Pockets.creatureRoute, refreshed when PocketService.versionOf
+-- changes), never in a straight line through its rock, and keep their bodies under a low ceiling (review finding 10).
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Data.Config)
@@ -12,6 +14,8 @@ local WorldDefs = require(Shared.Data.WorldDefs)
 local Progress = require(Shared.Logic.Progress)
 local Inventory = require(Shared.Logic.Inventory)
 local CreatureRules = require(Shared.Logic.CreatureRules)
+local Pockets = require(Shared.Logic.Pockets)
+Pockets.bind(WorldDefs)
 
 local Common = {}
 local services: any
@@ -31,28 +35,57 @@ export type Target = {
 
 -- Chamber graph ----------------------------------------------------------------------------------
 local nodes: { [string]: Vector3 } = {} -- chamber floor centres
+local nodeV3: { [string]: CreatureRules.V3 } = {}
 local nodeRegion: { [string]: string } = {}
 local chamberIds: { string } = {}
 local gateIds: { string } = {}
 for _, c in WorldDefs.Chambers do
 	nodes[c.id] = Vector3.new(c.pos.x, c.pos.y, c.pos.z)
+	nodeV3[c.id] = { x = c.pos.x, y = c.pos.y, z = c.pos.z }
 	nodeRegion[c.id] = c.regionId
 	table.insert(chamberIds, c.id)
 end
+local pocketIds: { string } = {}
+local pocketEdges: { [string]: string } = {} -- "fromId>toId" (both ways) -> pocket id
 for _, cor in WorldDefs.Corridors do
 	if cor.gate and not table.find(gateIds, cor.gate) then
 		table.insert(gateIds, cor.gate)
 	end
+	if cor.pocket and WorldDefs.Pockets[cor.pocket] then
+		pocketEdges[cor.from .. ">" .. cor.to] = cor.pocket
+		pocketEdges[cor.to .. ">" .. cor.from] = cor.pocket
+		if not table.find(pocketIds, cor.pocket) then
+			table.insert(pocketIds, cor.pocket)
+		end
+	end
 end
-local graph = CreatureRules.buildGraph(chamberIds, WorldDefs.Corridors)
+table.sort(pocketIds)
+-- pocket corridors are gated by their pocket id: open while the current version has a creature route
+local graph = CreatureRules.buildGraph(chamberIds, WorldDefs.Corridors, true)
 Common.nodes = nodes
 Common.nodeRegion = nodeRegion
 
 local gateOpen: { [string]: boolean } = {}
 local gateSignature = ""
 local routeCache: { [string]: { string } } = {}
+local pocketVersion: { [string]: string? } = {}
+local pocketLine: { [string]: CreatureRules.RouteLine? } = {}
 
--- Reads puzzle gate state once per creature tick; a change clears the cached routes.
+-- The creature route of a pocket version (nil closes the pocket to creatures).
+local function lineFor(pocketId: string, version: string?): CreatureRules.RouteLine?
+	if not version then
+		return nil
+	end
+	local def = WorldDefs.Pockets[pocketId]
+	local ok, pts = pcall(Pockets.creatureRoute, def, version)
+	if not ok then
+		warn("[Creatures] no creature route for " .. pocketId .. " " .. version .. ": " .. tostring(pts))
+		return nil
+	end
+	return if pts then CreatureRules.routeLine(pts, def.from, def.to) else nil
+end
+
+-- Reads puzzle gate state and pocket versions once per creature tick; a change clears the cached routes.
 function Common.refreshGates()
 	local ps = services.PuzzleService
 	local legacy: { [string]: boolean }? = nil
@@ -71,24 +104,42 @@ function Common.refreshGates()
 		gateOpen[g] = open
 		table.insert(parts, if open then "1" else "0")
 	end
-	local sig = table.concat(parts)
+	local pocketService = services.PocketService
+	for _, id in pocketIds do
+		local version: string? = nil
+		if pocketService and pocketService.versionOf then
+			local ok, v = pcall(pocketService.versionOf, id)
+			version = if ok and type(v) == "string" then v else nil
+		end
+		if version ~= pocketVersion[id] then
+			pocketVersion[id] = version
+			pocketLine[id] = lineFor(id, version)
+		end
+		gateOpen[id] = pocketLine[id] ~= nil
+		table.insert(parts, id .. "=" .. (version or "-"))
+	end
+	local sig = table.concat(parts, ",")
 	if sig ~= gateSignature then
 		gateSignature = sig
 		table.clear(routeCache)
 	end
 end
 
--- Nearest chamber to a FLOOR position. Same metric as WorldBuilder.nearestChamber for a standing player (whose root
--- is about 3 studs above the floor): height differences weigh triple.
-function Common.nearestNode(p: Vector3): string
+local function nearestNodeV3(p: CreatureRules.V3): string
 	local best, bd = "", math.huge
-	for id, n in nodes do
-		local d = Vector3.new(p.X - n.X, (p.Y - n.Y) * 3, p.Z - n.Z).Magnitude
+	for id, n in nodeV3 do
+		local d = math.sqrt((p.x - n.x) ^ 2 + ((p.y - n.y) * 3) ^ 2 + (p.z - n.z) ^ 2)
 		if d < bd then
 			best, bd = id, d
 		end
 	end
 	return best
+end
+
+-- Nearest chamber to a FLOOR position. Same metric as WorldBuilder.nearestChamber for a standing player (whose root
+-- is about 3 studs above the floor): height differences weigh triple.
+function Common.nearestNode(p: Vector3): string
+	return nearestNodeV3({ x = p.X, y = p.Y, z = p.Z })
 end
 
 -- Shortest chamber path (excluding `fromId`) honouring closed gates (`wades`: deep-water gates are passable).
@@ -123,8 +174,117 @@ function Common.moveModel(m: Model, to: Vector3, lift: number, speed: number, dt
 	return step >= d.Magnitude - 0.01
 end
 
--- Walks toward a floor goal along the chamber graph (direct when already in the goal's chamber).
--- Returns (arrived, blocked). Blocked means no open route exists: callers give up instead of stalling forever.
+-- The planner's view of the world (CreatureRules.Nav). Pocket answers use each pocket's current version.
+local nav: CreatureRules.Nav = {
+	pocketIds = pocketIds,
+	nearestNode = nearestNodeV3,
+	node = function(id: string): CreatureRules.V3
+		return nodeV3[id]
+	end,
+	chamberAt = function(p: CreatureRules.V3): string?
+		for _, c in WorldDefs.Chambers do
+			if CreatureRules.inChamber(p, c.pos, c.size, 0) then
+				return c.id
+			end
+		end
+		return nil
+	end,
+	pocketsAt = function(p: CreatureRules.V3): { string }
+		local out = {}
+		for _, id in pocketIds do
+			if Pockets.inBounds(WorldDefs.Pockets[id], p, 0) then
+				table.insert(out, id)
+			end
+		end
+		return out
+	end,
+	mouths = function(id: string): (string, string)
+		local def = WorldDefs.Pockets[id]
+		return def.from, def.to
+	end,
+	line = function(id: string): CreatureRules.RouteLine?
+		return pocketLine[id]
+	end,
+	clear = function(id: string, a: CreatureRules.V3, b: CreatureRules.V3): boolean
+		local version = pocketVersion[id]
+		return version ~= nil and Pockets.creatureClear(WorldDefs.Pockets[id], version, a, b)
+	end,
+	room = function(id: string, p: CreatureRules.V3): CreatureRules.V3?
+		local version = pocketVersion[id]
+		if not version then
+			return nil
+		end
+		return Pockets.creatureRoom(WorldDefs.Pockets[id], version, p, CreatureRules.ROUTE_ROOM)
+	end,
+	crosses = function(a: CreatureRules.V3, b: CreatureRules.V3): boolean
+		for _, def in WorldDefs.Pockets do
+			if Pockets.segmentInBounds(def, a, b, Pockets.CREATURE_CLEARANCE) then
+				return true
+			end
+		end
+		return false
+	end,
+	route = function(a: string, b: string, wades: boolean): { string }
+		return Common.route(a, b, wades)
+	end,
+	edgePocket = function(a: string, b: string): string?
+		return pocketEdges[a .. ">" .. b]
+	end,
+}
+
+-- Low ceilings (review finding 10) ------------------------------------------------------------------------------
+local LOW_ZONE = 4 -- studs past a pocket's bounds where a creature already keeps under its low ceiling
+local topCache: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+-- Height of a model's top above its pivot (bodies only turn about the vertical axis, so the box stays upright).
+local function bodyTop(m: Model): number
+	local t = topCache[m]
+	if not t then
+		local cf, size = m:GetBoundingBox()
+		t = cf.Position.Y + size.Y / 2 - m:GetPivot().Position.Y
+		topCache[m] = t
+	end
+	return t
+end
+
+-- The lift to keep at a floor point: lower near and inside a pocket whose current version has a low ceiling.
+local function liftAt(m: Model, p: CreatureRules.V3, lift: number): number
+	local out = lift
+	for _, id in pocketIds do
+		local version = pocketVersion[id]
+		local def = WorldDefs.Pockets[id]
+		if version and Pockets.inBounds(def, p, LOW_ZONE) then
+			out = math.min(out, Pockets.creatureLift(def, version, lift, bodyTop(m)))
+		end
+	end
+	return out
+end
+
+-- Floor position under a model that normally keeps `lift` (lower under a low ceiling).
+local function floorOf(m: Model, lift: number): Vector3
+	local p = (m.PrimaryPart :: BasePart).Position
+	local guess = p - Vector3.new(0, lift, 0)
+	return p - Vector3.new(0, liftAt(m, Common.v3(guess), lift), 0)
+end
+
+-- One movement step toward a floor point at the right height. Entering a low ceiling, it first lowers the body in
+-- place, so its top never passes through the ceiling.
+local function stepTo(m: Model, target: Vector3, lift: number, speed: number, dt: number): boolean
+	local want = liftAt(m, Common.v3(target), lift)
+	if want < lift then
+		local p = (m.PrimaryPart :: BasePart).Position
+		local floorHere = Common.v3(p - Vector3.new(0, want, 0))
+		if p.Y - target.Y > want + 0.25 and liftAt(m, floorHere, lift) < lift then
+			Common.moveModel(m, Vector3.new(p.X, target.Y, p.Z), want, speed, dt)
+			return false
+		end
+	end
+	return Common.moveModel(m, target, want, speed, dt)
+end
+
+-- Walks toward a floor goal (CreatureRules.nextLeg: straight inside a chamber, along the chamber graph between
+-- chambers, along a pocket's current creature route through a pocket). Returns (arrived, blocked). Blocked means no
+-- open route exists: callers give up instead of stalling forever.
 function Common.travel(
 	m: Model,
 	goal: Vector3,
@@ -133,17 +293,22 @@ function Common.travel(
 	dt: number,
 	wades: boolean?
 ): (boolean, boolean)
-	local bp = m.PrimaryPart :: BasePart
-	local here, there = Common.nearestNode(bp.Position - Vector3.new(0, lift, 0)), Common.nearestNode(goal)
-	if here == there then
-		return Common.moveModel(m, goal, lift, speed, dt), false
-	end
-	local nextId = Common.route(here, there, wades)[1]
-	if not nextId then
+	local target, final, blocked =
+		CreatureRules.nextLeg(nav, Common.v3(floorOf(m, lift)), Common.v3(goal), wades == true)
+	if blocked then
 		return false, true
 	end
-	Common.moveModel(m, nodes[nextId], lift, speed, dt)
-	return false, false
+	local arrived = stepTo(m, Vector3.new(target.x, target.y, target.z), lift, speed, dt)
+	return final and arrived, false
+end
+
+-- Straight at a floor goal (a chase in the open, with sight), unless that line touches a variable pocket: then the
+-- pocket's route decides (Common.travel), so even a chase never cuts through pocket rock. Returns arrived.
+function Common.approach(m: Model, goal: Vector3, lift: number, speed: number, dt: number): boolean
+	if not nav.crosses(Common.v3(floorOf(m, lift)), Common.v3(goal)) then
+		return Common.moveModel(m, goal, lift, speed, dt)
+	end
+	return (Common.travel(m, goal, lift, speed, dt))
 end
 
 -- Turns a model in place to face a point (horizontal only). No-op when the point is directly above or below.

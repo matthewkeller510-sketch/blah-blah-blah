@@ -804,4 +804,276 @@ function Pockets.noticeNames(def: PocketDef): (string, string)
 	return (region and region.name or def.regionId), (anchor and anchor.label or def.migrationAnchor)
 end
 
+-- Creature routes (review finding 10) -------------------------------------------------------------------------
+-- Creatures move kinematically in straight legs (Services/Creatures/Common), so a pocket corridor cannot be one
+-- straight edge for them. Each version gets a creature route derived from LAYOUTS: from the first mouth chamber's
+-- centre, through that version's own passage (PK3: the stable door), to the second mouth chamber's centre. Every
+-- leg keeps CREATURE_CLEARANCE studs of open floor on both sides, so a body never crosses rock, a pillar, a false
+-- door's ring or a mouth chamber's wall (tests/specs/fix_creatures.luau checks every pocket and version).
+
+Pockets.CREATURE_CLEARANCE = 2 -- TUNE: half-width a creature keeps clear (the Lantern Thief greybox is about 1.6)
+Pockets.CREATURE_HEADROOM = 0.2 -- TUNE: gap between a creature's top and a low ceiling
+
+-- Open floor round a pocket in pocket-local unit cells (cell a, b covers u in [a, a + 1) and v in [b, b + 1)): the
+-- version's walkable cells, the doorways through the mouth chambers' walls and the mouth chambers' interiors near
+-- them. `sum` is a prefix sum of the blocked cells, so a clearance square is one lookup.
+type Cover = { area: Area, a0: number, b0: number, na: number, nb: number, sum: { number } }
+
+local coverCache: { [string]: Cover } = {}
+local creatureRouteCache: { [string]: { V3 } | false } = {}
+
+-- Interior of a chamber in pocket-local coordinates: u0, u1, v0, v1.
+local function localBox(area: Area, c: Chamber): (number, number, number, number)
+	local hx, hz = c.size.x / 2, c.size.z / 2
+	if area.axis == "z" then
+		return c.pos.x - hx - area.center,
+			c.pos.x + hx - area.center,
+			c.pos.z - hz - area.start,
+			c.pos.z + hz - area.start
+	end
+	return c.pos.z - hz - area.center, c.pos.z + hz - area.center, c.pos.x - hx - area.start, c.pos.x + hx - area.start
+end
+
+local function toLocal(area: Area, p: V3): (number, number)
+	if area.axis == "z" then
+		return p.x - area.center, p.z - area.start
+	end
+	return p.z - area.center, p.x - area.start
+end
+
+-- (first, second) mouth chambers along the pocket axis, and whether `from` is the first.
+local function mouthChambers(def: PocketDef, area: Area): (Chamber, Chamber, boolean)
+	local a, b = chamber(def.from), chamber(def.to)
+	local fromIsFirst = if area.axis == "z" then a.pos.z < b.pos.z else a.pos.x < b.pos.x
+	if fromIsFirst then
+		return a, b, true
+	end
+	return b, a, false
+end
+
+local function cover(def: PocketDef, version: string): Cover
+	local key = def.id .. "|" .. version
+	local cached = coverCache[key]
+	if cached then
+		return cached
+	end
+	local plan = Pockets.plan(def, version)
+	local area = plan.area
+	local grid = Pockets.grid(area, plan.walk, plan.lowWalk)
+	local WALL = Pockets.WALL
+	local reach = WALL + Pockets.CREATURE_CLEARANCE + 4 -- how far into the mouth chambers the cover reaches
+	local a0 = math.floor(area.uMin)
+	local na = math.ceil(area.uMax) - a0
+	local b0 = -reach
+	local nb = math.ceil(area.length) + reach - b0
+	local spans = Pockets.mouthSpans(def)
+	local first, second = mouthChambers(def, area)
+	local fu0, fu1, fv0 = localBox(area, first)
+	local su0, su1, _, sv1 = localBox(area, second)
+	local function inSpans(a: number, list: { { number } }): boolean
+		for _, sp in list do
+			if a >= sp[1] and a + 1 <= sp[2] then
+				return true
+			end
+		end
+		return false
+	end
+	local function open(a: number, b: number): boolean
+		if b >= 0 and b + 1 <= area.length then
+			local p = Pockets.toWorld(area, a + 0.5, b + 0.5, 0)
+			local i, k = math.floor(p.x - grid.x0), math.floor(p.z - grid.z0)
+			return i >= 0
+				and i < grid.nx
+				and k >= 0
+				and k < grid.nz
+				and Pockets.isWalkable(grid.cells[k * grid.nx + i + 1])
+		elseif b >= -WALL and b + 1 <= 0 then
+			return inSpans(a, spans.first) -- the doorway through the first chamber's wall
+		elseif b >= area.length and b + 1 <= area.length + WALL then
+			return inSpans(a, spans.second)
+		elseif b + 1 <= -WALL then
+			return a >= fu0 and a + 1 <= fu1 and b >= fv0
+		elseif b >= area.length + WALL then
+			return a >= su0 and a + 1 <= su1 and b + 1 <= sv1
+		end
+		return false -- a cell straddling a boundary (only with a non-integer pocket length)
+	end
+	-- sum[j * (na + 1) + i + 1] = blocked cells in columns < i and rows < j
+	local sum: { number } = table.create((na + 1) * (nb + 1), 0)
+	for j = 1, nb do
+		local row = 0
+		for i = 1, na do
+			if not open(a0 + i - 1, b0 + j - 1) then
+				row += 1
+			end
+			sum[j * (na + 1) + i + 1] = sum[(j - 1) * (na + 1) + i + 1] + row
+		end
+	end
+	local cv: Cover = { area = area, a0 = a0, b0 = b0, na = na, nb = nb, sum = sum }
+	coverCache[key] = cv
+	return cv
+end
+
+-- True when the square of half-size `c` round local (u, v) is all open floor.
+local function clearAt(cv: Cover, u: number, v: number, c: number): boolean
+	local c0 = math.floor(u - c) - cv.a0
+	local c1 = math.ceil(u + c) - 1 - cv.a0
+	local r0 = math.floor(v - c) - cv.b0
+	local r1 = math.ceil(v + c) - 1 - cv.b0
+	if c0 < 0 or r0 < 0 or c1 >= cv.na or r1 >= cv.nb then
+		return false
+	end
+	local s, w = cv.sum, cv.na + 1
+	return s[(r1 + 1) * w + c1 + 2] - s[(r1 + 1) * w + c0 + 1] - s[r0 * w + c1 + 2] + s[r0 * w + c0 + 1] == 0
+end
+
+local function clearLine(cv: Cover, u0: number, v0: number, u1: number, v1: number): boolean
+	local n = math.max(1, math.ceil(math.sqrt((u1 - u0) ^ 2 + (v1 - v0) ^ 2) / 0.25))
+	for i = 0, n do
+		local t = i / n
+		if not clearAt(cv, u0 + (u1 - u0) * t, v0 + (v1 - v0) * t, Pockets.CREATURE_CLEARANCE) then
+			return false
+		end
+	end
+	return true
+end
+
+-- True when a creature may move straight from `a` to `b` (floor points; a horizontal test) in this version: every
+-- point of the leg keeps CREATURE_CLEARANCE of open floor (passage, doorway or nearby mouth chamber) round it. A
+-- point more than a few studs outside the pocket's bounds is never clear here: the chamber graph covers it.
+function Pockets.creatureClear(def: PocketDef, version: string, a: V3, b: V3): boolean
+	local cv = cover(def, version)
+	local u0, v0 = toLocal(cv.area, a)
+	local u1, v1 = toLocal(cv.area, b)
+	return clearLine(cv, u0, v0, u1, v1)
+end
+
+-- The nearest point to `p` (horizontally, within `radius`) where a creature body fits in this version: `p` itself
+-- when it fits, nil when nothing that near does. A goal against a wall is approached here instead.
+function Pockets.creatureRoom(def: PocketDef, version: string, p: V3, radius: number): V3?
+	local cv = cover(def, version)
+	local u, v = toLocal(cv.area, p)
+	local c = Pockets.CREATURE_CLEARANCE
+	if clearAt(cv, u, v, c) then
+		return p
+	end
+	local bu, bv, bestD = 0, 0, math.huge
+	local n = math.ceil(radius / 0.5)
+	for i = -n, n do
+		for j = -n, n do
+			local du, dv = i * 0.5, j * 0.5
+			local d = du * du + dv * dv
+			if d < bestD and d <= radius * radius and clearAt(cv, u + du, v + dv, c) then
+				bu, bv, bestD = du, dv, d
+			end
+		end
+	end
+	if bestD == math.huge then
+		return nil
+	end
+	return Pockets.toWorld(cv.area, u + bu, v + bv, p.y)
+end
+
+-- The creature route of one version: floor points from `def.from`'s centre to `def.to`'s centre. In between it
+-- passes a point just inside each mouth chamber, in line with the doorway it uses, then follows the version's
+-- passage (a shortest clear lattice path, straightened wherever the floor stays clear). Nil when no clear route
+-- exists, which closes the pocket to creatures. Memoized: layouts are fixed data.
+function Pockets.creatureRoute(def: PocketDef, version: string): { V3 }?
+	local key = def.id .. "|" .. version
+	local cached = creatureRouteCache[key]
+	if cached == false then
+		return nil
+	elseif cached ~= nil then
+		return cached :: { V3 }
+	end
+	local cv = cover(def, version)
+	local area = cv.area
+	local c = Pockets.CREATURE_CLEARANCE
+	local first, second, fromIsFirst = mouthChambers(def, area)
+	local doorU = 0
+	local stable = Pockets.stableDoor(def, version)
+	if def.doors and stable then
+		doorU = def.doors[stable] - area.center -- doors are on the `from` chamber's wall
+	end
+	local inset = Pockets.WALL + c + 1
+	local su, sv = if fromIsFirst then doorU else 0, -inset
+	local eu, ev = if fromIsFirst then 0 else doorU, math.floor(area.length + 0.5) + inset
+	local w = cv.na + 1
+	local function id(u: number, v: number): number
+		return (v - cv.b0) * w + (u - cv.a0)
+	end
+	local path: { { number } }? = nil
+	if clearAt(cv, su, sv, c) and clearAt(cv, eu, ev, c) then
+		-- breadth-first search over integer lattice points with clearance
+		local steps = { { 0, 1 }, { 1, 0 }, { -1, 0 }, { 0, -1 } }
+		local prev: { [number]: number } = {}
+		local seen: { [number]: boolean } = { [id(su, sv)] = true }
+		local qu, qv = { su }, { sv }
+		local head = 1
+		while head <= #qu do
+			local u, v = qu[head], qv[head]
+			head += 1
+			if u == eu and v == ev then
+				local p: { { number } } = {}
+				local k: number? = id(u, v)
+				while k ~= nil do
+					table.insert(p, 1, { k % w + cv.a0, k // w + cv.b0 })
+					k = prev[k]
+				end
+				path = p
+				break
+			end
+			for _, d in steps do
+				local nu, nv = u + d[1], v + d[2]
+				local k = id(nu, nv)
+				if not seen[k] and clearAt(cv, nu, nv, c) then
+					seen[k] = true
+					prev[k] = id(u, v)
+					table.insert(qu, nu)
+					table.insert(qv, nv)
+				end
+			end
+		end
+	end
+	if not path then
+		creatureRouteCache[key] = false
+		return nil
+	end
+	-- straighten: from each kept point, the furthest following point reachable by one clear leg
+	local kept = { path[1] }
+	local i = 1
+	while i < #path do
+		local j = i + 1
+		while j < #path and clearLine(cv, path[i][1], path[i][2], path[j + 1][1], path[j + 1][2]) do
+			j += 1
+		end
+		table.insert(kept, path[j])
+		i = j
+	end
+	local route: { V3 } = { { x = first.pos.x, y = first.pos.y, z = first.pos.z } }
+	for _, p in kept do
+		table.insert(route, Pockets.toWorld(area, p[1], p[2], area.floorY))
+	end
+	table.insert(route, { x = second.pos.x, y = second.pos.y, z = second.pos.z })
+	if not fromIsFirst then
+		local n = #route
+		for k = 1, n // 2 do
+			route[k], route[n - k + 1] = route[n - k + 1], route[k]
+		end
+	end
+	creatureRouteCache[key] = route
+	return route
+end
+
+-- Lift (floor to body pivot) for a creature in this version: under a low ceiling its top (`top` studs above the
+-- pivot) stays CREATURE_HEADROOM below LOW_CEILING; any other version keeps `lift`.
+function Pockets.creatureLift(def: PocketDef, version: string, lift: number, top: number): number
+	for _, low in Pockets.plan(def, version).lowWalk do
+		if low then
+			return math.max(0, math.min(lift, Pockets.LOW_CEILING - Pockets.CREATURE_HEADROOM - top))
+		end
+	end
+	return lift
+end
+
 return Pockets

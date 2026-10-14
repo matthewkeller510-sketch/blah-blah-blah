@@ -13,6 +13,8 @@
 -- A strike damages (PlayerService.damage) and snuffs the light (PlayerService.snuffLight: charge unchanged); it never
 -- takes items.
 
+local CollectionService = game:GetService("CollectionService")
+
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Data.Config)
 local ItemDefs = require(Shared.Data.ItemDefs)
@@ -304,7 +306,7 @@ local function tickHunt(t: Rec, dt: number, at: Vector3)
 	end
 	local goal = (if hasSight then vpos else (t.lastKnown or vpos)) - Vector3.new(0, 3, 0)
 	if hasSight then
-		Common.moveModel(t.model, goal, LIFT, THIEF.approachSpeed, dt)
+		Common.approach(t.model, goal, LIFT, THIEF.approachSpeed, dt) -- never straight through a pocket's rock
 	else
 		local _, blocked = Common.travel(t.model, goal, LIFT, THIEF.approachSpeed, dt)
 		if blocked then
@@ -468,6 +470,10 @@ local function build(regionId: string): Model
 	glow.Shadows = false
 	glow.Parent = m.PrimaryPart
 	m:SetAttribute("CreatureId", THIEF.id)
+	-- PROPOSED (review finding 10): inside a pocket's bounds plus margin it postpones that pocket's change, like a
+	-- rescue survivor, so the passage it is following never turns to rock round it. Its regions (R04, R05) hold no
+	-- other PocketBlocker check: PuzzleService's tagged-blocker reverts are in R01 and R03, and P03 counts players only.
+	CollectionService:AddTag(m, "PocketBlocker")
 	return m
 end
 

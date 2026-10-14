@@ -3,7 +3,8 @@
 -- marks, at most once per Config.Creatures.chalkHandIntervalSeconds, a thin hand withdraws into a crack
 -- (chalkhand_scratch) and a fake reversed arrow appears beside the real mark. The fake is a private cosmetic sent on
 -- the "falseMark" channel to that player only: it is never a NavRecord, never on the "nav" channel, and nothing here
--- writes, moves, deletes or transfers any saved marker (F09, F21). It expires after 90 s.
+-- writes, moves, deletes or transfers any saved marker (F09, F21). It expires after 90 s. It is never drawn on a
+-- variable pocket's surface, which a pocket change could replace under it.
 -- Requests (registered by CreatureService): chalkhand.inspect {id} and chalkhand.compare {id}.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -78,7 +79,14 @@ end
 local surfaceParams = RaycastParams.new()
 surfaceParams.FilterType = Enum.RaycastFilterType.Include
 
--- Finds a spot on a real surface near (never on) the imitated mark. Returns (position, normal) or nil.
+-- Inside a variable pocket's bounds (review finding 14): a pocket change would leave a private fake floating in void
+-- or inside a new wall, so the hand never draws there and never imitates a mark there.
+local function inPocket(p: CreatureRules.V3): boolean
+	return WorldDefs.pocketAt(p) ~= nil
+end
+
+-- Finds a spot on a real surface near (never on) the imitated mark, never on a pocket surface. Returns (position,
+-- normal) or nil.
 local function placeFake(mark: Chalk, own: { CreatureRules.V3 }): (Vector3?, Vector3?)
 	surfaceParams.FilterDescendantsInstances = { services.WorldBuilder.root() }
 	local n = mark.normal
@@ -89,7 +97,7 @@ local function placeFake(mark: Chalk, own: { CreatureRules.V3 }): (Vector3?, Vec
 			hit
 			and hit.Normal:Dot(n) > 0.8
 			and (hit.Position - cand).Magnitude < 1.2
-			and CreatureRules.farFromAll(Common.v3(hit.Position), own, H.minOffset)
+			and CreatureRules.fakeSpotAllowed(Common.v3(hit.Position), own, inPocket)
 		then
 			return hit.Position, hit.Normal
 		end
@@ -176,7 +184,8 @@ function ChalkHand.tick(dt: number)
 				lastAt[p],
 				Config.Creatures.chalkHandIntervalSeconds,
 				Common.v3(pos),
-				mine
+				mine,
+				inPocket
 			)
 			local index = if target then table.find(mine, target) else nil
 			if index and spawnFor(p, own[index], own) then
