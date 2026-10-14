@@ -378,6 +378,19 @@ end
 -- One graph hop from chamber `here` toward `toId`. A pocket corridor is entered from inside its mouth chamber by
 -- joining the route at that chamber's doorway point; from anywhere else the creature first walks to the chamber
 -- centre, as on any corridor.
+CreatureRules.CORRIDOR_AXIS_TOLERANCE = 2 -- TUNE: studs off a corridor's centre line still counted as on it
+
+-- Horizontal distance from p to the segment a-b.
+function CreatureRules.segmentOffset(a: V3, b: V3, p: V3): number
+	local dx, dz = b.x - a.x, b.z - a.z
+	local len2 = dx * dx + dz * dz
+	if len2 < 1e-9 then
+		return flatDist(a, p)
+	end
+	local t = math.clamp(((p.x - a.x) * dx + (p.z - a.z) * dz) / len2, 0, 1)
+	return flatDist(p, { x = a.x + dx * t, y = p.y, z = a.z + dz * t })
+end
+
 local function hop(nav: Nav, pos: V3, room: string?, here: string, toId: string, wades: boolean): (V3, boolean, boolean)
 	local nextId = nav.route(here, toId, wades)[1]
 	if not nextId then
@@ -391,7 +404,14 @@ local function hop(nav: Nav, pos: V3, room: string?, here: string, toId: string,
 		end
 		return guarded(nav, pos, nav.node(here), false, nil)
 	end
-	return guarded(nav, pos, nav.node(nextId), false, nav.node(here))
+	-- A corridor runs along the line between two chamber centres. Head for the next chamber only from that line;
+	-- from anywhere else (off-centre in a room, or mid-corridor once the nearest chamber has flipped) go to this
+	-- chamber's centre first, so a creature never cuts a corner through rock.
+	local hereNode, nextNode = nav.node(here), nav.node(nextId)
+	if CreatureRules.segmentOffset(hereNode, nextNode, pos) > CreatureRules.CORRIDOR_AXIS_TOLERANCE then
+		return guarded(nav, pos, hereNode, false, nil)
+	end
+	return guarded(nav, pos, nextNode, false, hereNode)
 end
 
 -- Following pocket `pk`'s route from arc position `s`. Toward a goal inside the same pocket: along the route to the
