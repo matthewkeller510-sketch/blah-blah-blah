@@ -41,7 +41,7 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | --- | --- | --- | --- |
 | 28 | Survey station and crossroads build | Walk Sluice → Station Hall, every R04 room, Map Room → R05 anchors | Region folders populated; three doors on the Room of Three Doors' north wall; S04 and S05 doors work; slopes have no gaps |
 | 29 | Pocket telegraph (F08) | Stand in the Measured Crossing more than 6 studs from a mouth | `pocket_shift` captions at both mouths, plates glow, dust (no flicker with Reduce flashes); after 20 s the passage changes and `pocket_settled` shows |
-| 30 | Pocket abort and blockers | Walk in during a telegraph; or stand, lie downed, hide, be carried inside; or leave your rope or death bag inside while online | The change aborts or never starts; nothing rebuilds under anyone |
+| 30 | Pocket abort and blockers | Walk in during a telegraph; or stand, lie downed, hide, be carried inside; or leave your rope or death bag inside while online; or light a flare inside and step out | The change aborts or never starts (a flare delays it until it burns out); nothing rebuilds under anyone |
 | 31 | Every pocket version passable | Force each version of PK1–PK3 and walk mouth to mouth, also carrying a teammate | Passable standing; the low gallery needs no crouch |
 | 32 | P06 impossible doorway | Watch from the observation step for 12 s with two clients; walk through the ● door | False-door lamps pulse in sync for both, the ● lamp is steady; ● reaches the junction; `anchor_verified` and a notebook line; false doors loop back |
 | 33 | Marker migration online (T18) | Place chalk in PK1, step out, wait for a change | Notice names the South Survey Anchor; the mark lies there labelled "moved"; notebook lists it |
@@ -55,7 +55,7 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 41 | Never two damaging threats | Thief and a Scrabbler near one player | Never both damaging the same victim at once |
 | 42 | P03 fuse bridge | Try with no roll/fuse; fit the wrong box; trace and fit the right one; leave after 20 min | Notice names organic sources; wrong box costs time and returns the fuse; R04 lamps on, `power_restored`; trips only once the room is empty |
 | 43 | P04 weight and pulley | Load three stones, latch, cross, release; stand under the grate when it should drop; pull the inner lever | Grate rises and stays latched; never drops on anyone; inner lever always opens |
-| 44 | P05 echo sequence | With sound off, tune the radio and enter the pattern; then restore power and tune again | Pattern readable as • and —; `radio_locked`; without power, "no power"; with power, Elise's log plays and the station tape is granted once |
+| 44 | P05 echo sequence | With sound off, tune the radio and enter the pattern; then restore power and tune again; watch the radio lamp with and without Reduce flashes | Pattern readable as • and —; the lamp blinks the same rhythm (amber unpowered, green powered; a gentle dip with Reduce flashes); `radio_locked`; without power, "no power"; with power, Elise's log plays and the station tape is granted once |
 | 45 | W05 sluice gates and M05 | Read both plates, turn wheels in the wrong then right order; take the cache; return to a shelter | "n of 3", wrong order resets; each turn can draw the Wader; corridor drains; own cache copy; +25 at a shelter |
 | 46 | S04 / S05 and M04 | Register both; in S04 fix the breaker (wrong then right) | Family looks; +20 experience once each; wrong breaker costs time; lights on, station power granted, +50 once; panel shows why station power cannot be bought |
 | 47 | Upgrade inheritance (T10) | Repair the breaker, then a newcomer joins the party and leaves | Newcomer keeps station power permanently; no inventory changes |
@@ -70,3 +70,5 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 56 | Touch and gamepad | Phone landscape; gamepad | 4 × 4 grid clear of the thumbstick, 52 px buttons; Sprint never sticks; shoulder and D-pad bindings work |
 | 57 | Notebook after rejoin | Rejoin | Discoveries and research listed, sorted, with no notice burst |
 | 58 | Schema 2 rollout | Join a schema-2 profile on an old (schema-1) server, then a new one | Old server refuses with a clear message and releases the lock; the new server loads at once |
+| 59 | Ray-blocking barriers | Aim a chalk mark into the flooded W05 corridor and at the closed P04 grate | The mark lands on the floor or wall, never on an invisible mid-air plane |
+| 60 | Overlapping pocket volumes | Walk PK1's loop version near its east side chamber | Only the PK1 passage is discovered, never PK2 |

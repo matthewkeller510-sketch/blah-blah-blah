@@ -92,7 +92,7 @@ Corridors: `R01.east_loop–R01.collapsed_drift`, `R01.rusted_pulley–R01.pulle
 These implement section 04 and decision D31.
 
 1. A pocket's current version is **server state** driven by a deterministic schedule: the target version is `versions[((os.time() // cycleSeconds) + offset(pocketId)) % #versions + 1]` (`Config.Pockets.cycleSeconds`, TUNE 600 s), so every server converges on the same version and a record placed on one server usually matches the next. A busy server simply lags behind the schedule until the pocket is empty.
-2. A change is attempted only when the pocket is **empty**: no player inside its bounding box (plus a 6-stud margin), no active rescue survivor inside, no bag of an online owner inside, no **rope** record of an online owner whose endpoints are inside. Any blocker postpones the change to the next cycle. Chalk and signs do not block.
+2. A change is attempted only when the pocket is **empty**: no player inside its bounding box (plus a 6-stud margin), no active rescue survivor inside, no bag of an online owner inside, no **rope** record of an online owner whose endpoints are inside, no lit flare inside (flares burn at most 45 s). Any blocker postpones the change to the next cycle. Chalk and signs do not block.
 3. Every change is **telegraphed** for `Config.Pockets.telegraphSeconds` (TUNE 20 s): survey clicks and falling dust at both mouths (`pocket_shift` cue, essential, captioned) and the threshold number plates flicker. If anything enters during the telegraph the change aborts.
 4. Every version connects the same two doors (entry/exit contract), so a valid escape path always exists.
 5. Records carry the pocket version they were placed in. When a record's version differs from the pocket's current version, the record **migrates** (persisted) to that pocket's migration anchor chamber, keeps its owner, units and route ID, gains `migratedFrom = { pocketId, version }`, and the owner sees a notice and a notebook line: "Your chalk mark in PK1 moved to the South Survey Anchor — the passage changed." Records are never deleted by variation.
@@ -209,7 +209,7 @@ Services receive the `services` table in `init`. These names are the contract; i
 | PlayerService | `snuffLight(player)` | Switch the light off without changing charge |
 | PlayerService | `setMothRangeFactor(player, factor)` | 1 = normal |
 | PlayerService | `activeFlares() -> { { position, owner, expires } }` | Lit flares |
-| PocketService | `versionOf(pocketId) -> string`, `pocketAt(position) -> pocketId?`, `onChanged(fn(pocketId, oldVersion, newVersion))` | |
+| PocketService | `versionOf(pocketId) -> string`, `pocketAt(position) -> pocketId?`, `onChanged(fn(pocketId, oldVersion, newVersion))` | `pocketAt` tests the build area between the mouth walls (the same rule records use), not the looser `WorldDefs.pocketAt` bounds |
 | PuzzleService | `isPowered() -> boolean`, `isGateOpen(gateId) -> boolean` (P01, P02, P04, W05), `radioSolvedBy(player) -> boolean` | |
 | StoryService | `onFact(player)` | Re-evaluate after any profile fact changes (existing pattern) |
 | NpcService | `say(player, npcId, lineId)` | Shows subtitled dialogue and writes the journal |
