@@ -191,6 +191,15 @@ function PartyService.accept(player: Player, fromUserId: number)
 	if not from then
 		return
 	end
+	-- Check capacity before leaving the current party, so a full party never strands the player alone.
+	local targetId = partyOf[from]
+	if targetId and partyOf[player] == targetId then
+		return
+	end
+	if targetId and #parties[targetId].members >= Config.Server.maxPartySize then
+		services.PlayerService.notify(player, "That party is full.", "warn")
+		return
+	end
 	if partyOf[player] then
 		removeFrom(player)
 	end
@@ -198,10 +207,6 @@ function PartyService.accept(player: Player, fromUserId: number)
 	local p: Party
 	if pid then
 		p = parties[pid]
-		if #p.members >= Config.Server.maxPartySize then
-			services.PlayerService.notify(player, "That party is full.", "warn")
-			return
-		end
 	else
 		local newId = HttpService:GenerateGUID(false)
 		pid = newId

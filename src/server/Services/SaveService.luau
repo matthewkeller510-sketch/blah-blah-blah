@@ -34,17 +34,23 @@ local function lockId(): string
 end
 local LOCK = lockId()
 
+-- UserIds whose release (final commit) is still in flight on this server. A same-server rejoin waits for it so
+-- it never loads the data the release is about to overwrite.
+local releasing: { [number]: boolean } = {}
+
 local function withRetry<T>(fn: () -> T): (boolean, T | string)
 	local delay = Config.Save.retryBaseSeconds
 	local lastErr: any = nil
-	for _ = 1, Config.Save.maxRetries do
+	for attempt = 1, Config.Save.maxRetries do
 		local ok, res = pcall(fn)
 		if ok then
 			return true, res
 		end
 		lastErr = res
-		task.wait(delay)
-		delay *= 2
+		if attempt < Config.Save.maxRetries then -- no pointless wait after the final attempt
+			task.wait(delay)
+			delay *= 2
+		end
 	end
 	return false, tostring(lastErr)
 end
@@ -55,8 +61,25 @@ local function setStatus(player: Player, status: string, detail: string?)
 		e.lastStatus = status
 	end
 	if services and services.PlayerService then
-		services.PlayerService.pushSaveStatus(player, status, detail)
+		-- The player may already have left during a release; a failed push must never stop the release.
+		pcall(services.PlayerService.pushSaveStatus, player, status, detail)
 	end
+end
+
+-- Drops this server's lock without touching the data (used when a loaded profile cannot be used here).
+local function releaseLockOnly(key: string)
+	if not store then
+		return
+	end
+	withRetry(function()
+		return (store :: DataStore):UpdateAsync(key, function(old)
+			if old and old.lock and old.lock.id == LOCK then
+				old.lock = nil
+				return old
+			end
+			return nil
+		end)
+	end)
 end
 
 function SaveService.init(s)
@@ -82,6 +105,10 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 	local key = "u_" .. player.UserId
 	local result: any = nil
 	local err: string? = nil
+	local waited = os.clock()
+	while releasing[player.UserId] and os.clock() - waited < 35 do
+		task.wait(0.25)
+	end
 	if available and store then
 		for attempt = 1, 6 do
 			local blocked = false
@@ -122,6 +149,11 @@ function SaveService.load(player: Player): (Profile.Profile?, string?)
 	end
 	local prof, perr = Profile.reconcile(result, player.UserId, Config.DefaultClass, WorldDefs.DepotPseudoShelterId)
 	if not prof then
+		-- The load took the lock. Give it back, or the player is locked out everywhere until it goes stale
+		-- (e.g. a newer-schema profile reaching an older server during a rollout).
+		if available then
+			releaseLockOnly(key)
+		end
 		return nil, perr
 	end
 	entries[player] =
@@ -172,8 +204,11 @@ function SaveService.commit(player: Player, release: boolean?): boolean
 	local lostLock = false
 	local ok = withRetry(function()
 		return (store :: DataStore):UpdateAsync("u_" .. player.UserId, function(old)
+			lostLock = false -- UpdateAsync may call the transform more than once
 			old = old or {}
-			if old.lock and old.lock.id ~= LOCK then
+			-- Write only while this server still holds the lock. A missing lock means another session took the
+			-- profile over (our lock went stale) and has since released it: its data is newer than ours.
+			if not (old.lock and old.lock.id == LOCK) then
 				lostLock = true
 				return nil
 			end
@@ -193,8 +228,11 @@ function SaveService.commit(player: Player, release: boolean?): boolean
 end
 
 function SaveService.release(player: Player)
+	local uid = player.UserId
+	releasing[uid] = true
 	SaveService.commit(player, true)
 	entries[player] = nil
+	releasing[uid] = nil
 end
 
 -- True while a profile entry exists (used to wait for in-flight departures on shutdown).

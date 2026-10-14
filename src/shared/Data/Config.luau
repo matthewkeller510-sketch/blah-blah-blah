@@ -6,7 +6,7 @@
 
 local Config = {}
 
-Config.SCHEMA_VERSION = 2
+Config.SCHEMA_VERSION = 2 -- must equal Profile.CURRENT_VERSION (a test checks it)
 
 -- 03. Server/party capacity (TUNE, unverified)
 Config.Server = {
@@ -175,7 +175,9 @@ Config.Save = {
 	autosaveSeconds = 90,
 	maxRetries = 5,
 	retryBaseSeconds = 1,
-	sessionLockStaleSeconds = 600,
+	-- A live session refreshes its lock every autosave (90 s), so a lock older than about three autosaves belongs to
+	-- a crashed server. Kept short so a crash does not lock the player out for long.
+	sessionLockStaleSeconds = 300,
 }
 
 -- Remote rate limiting (19: rate-limit repeated calls)

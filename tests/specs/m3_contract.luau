@@ -91,6 +91,34 @@ return function(T: any)
 		assert(type(p.progression.awarded) == "table")
 	end)
 
+	test("onboarding back-fill: played legacy profiles only; abandoned new players keep the free choice", function()
+		local played = assert(Profile.reconcile({
+			schemaVersion = 1,
+			class = "Explorer",
+			inventory = {},
+			storyStates = {},
+			discoveries = { ["R01.split_pier"] = true },
+		}, 1, "Explorer", "R00.depot"))
+		eq(played.storyStates.onboarded, "1", "legacy profile that explored")
+		local abandoned = assert(Profile.reconcile({
+			schemaVersion = 1,
+			class = "Explorer",
+			coins = 0,
+			inventory = {},
+			storyStates = {},
+			discoveries = { ["R00.mission_board"] = true },
+		}, 2, "Explorer", "R00.depot"))
+		eq(abandoned.storyStates.onboarded, nil, "new player who left before choosing")
+		local v2 = assert(Profile.reconcile({
+			schemaVersion = 2,
+			class = "Medic",
+			coins = 50,
+			inventory = {},
+			storyStates = {},
+		}, 3, "Explorer", "R00.depot"))
+		eq(v2.storyStates.onboarded, nil, "schema 2 never back-fills")
+	end)
+
 	test("every chamber is tall enough for a lintel and each open side can hold a doorway", function()
 		for _, c in WorldDefs.Chambers do
 			assert(c.size.y >= 12, c.id .. " is lower than 12")

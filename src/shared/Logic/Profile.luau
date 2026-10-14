@@ -88,6 +88,19 @@ local MIGRATIONS: { [number]: (any) -> () } = {
 	end,
 }
 
+-- True when a profile records play beyond a first visit to the depot.
+function Profile.showsPlay(p: any, defaultClass: string, startShelterId: string): boolean
+	if p.class ~= defaultClass or (p.coins or 0) > 0 or (p.lastShelterId or startShelterId) ~= startShelterId then
+		return true
+	end
+	for id in p.discoveries or {} do
+		if string.sub(id, 1, 4) ~= "R00." then
+			return true
+		end
+	end
+	return next(p.claims or {}) ~= nil or next(p.research or {}) ~= nil
+end
+
 -- Fills missing fields from defaults without overwriting saved values, then applies migrations.
 -- Returns (profile, error). A profile from a NEWER schema is refused so an old server never truncates it.
 function Profile.reconcile(
@@ -104,6 +117,7 @@ function Profile.reconcile(
 		return nil, "corrupt"
 	end
 	local v = saved.schemaVersion or 1
+	local originalVersion = v
 	if v > Profile.CURRENT_VERSION then
 		return nil, "newer_schema"
 	end
@@ -125,7 +139,13 @@ function Profile.reconcile(
 		saved.inventory = {}
 	end
 	-- Profiles saved before the starting-class briefing existed already chose their path: no free respec.
-	if saved.storyStates.onboarded == nil then
+	-- Only schema-1 profiles that show real play qualify, so a new player who left before choosing a class (and
+	-- was autosaved) still gets the free first choice (D22). Schema-2 profiles never need the back-fill.
+	if
+		saved.storyStates.onboarded == nil
+		and originalVersion < 2
+		and Profile.showsPlay(saved, defaultClass, startShelterId)
+	then
 		saved.storyStates.onboarded = "1"
 	end
 	saved.userId = userId
