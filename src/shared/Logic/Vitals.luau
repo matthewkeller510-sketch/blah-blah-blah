@@ -53,8 +53,19 @@ local function refreshCondition(cfg: HealthConfig, s: State)
 	end
 end
 
+-- F18 follows the CURRENT maximum, so a field-experience bonus raises the free-recovery ceiling proportionally.
 function Vitals.passiveCap(cfg: HealthConfig, s: State): number
 	return s.max * cfg.passiveRecoveryCapFraction
+end
+
+-- Sets the maximum (base + field-experience bonus, docs/MILESTONE-3.md 4.8). Current health is kept and only
+-- clamped: a higher maximum is never a free heal (F18), a lower one never leaves health above it.
+function Vitals.setMax(cfg: HealthConfig, s: State, max: number)
+	s.max = math.max(1, max)
+	if s.health > s.max then
+		s.health = s.max
+	end
+	refreshCondition(cfg, s)
 end
 
 -- Applies damage. Lethal damage while up leads to downed, not instant death, so rescue is possible.
@@ -127,7 +138,7 @@ function Vitals.revive(cfg: HealthConfig, s: State, health: number?): boolean
 		return false
 	end
 	s.condition = "injured"
-	s.health = math.max(1, health or cfg.stabilizedHealth)
+	s.health = math.clamp(health or cfg.stabilizedHealth, 1, s.max)
 	s.injuryFlag = true
 	s.stabilized = false
 	s.downedRemaining = 0

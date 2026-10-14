@@ -1,6 +1,8 @@
 --!strict
 -- Gameplay HUD (section 17): center marker, health state, contextual stamina, light charge, concise objective,
 -- small party list, notices and save status. No enemy radar and no map of unexplored space.
+-- Milestone 3: lantern open/shielded, flares carried and burning, the injury penalty (text, never colour alone)
+-- and the field-experience rank (docs/MILESTONE-3.md 4.7, 4.8).
 
 local TweenService = game:GetService("TweenService")
 local UI = require(script.Parent.UI)
@@ -16,6 +18,9 @@ local staminaBack: Frame
 local staminaFill: Frame
 local staminaText: TextLabel
 local lightText: TextLabel
+local flareText: TextLabel
+local injuryText: TextLabel
+local rankText: TextLabel
 local objective: TextLabel
 local partyBox: Frame
 local noticeBox: Frame
@@ -29,6 +34,8 @@ local downedText: TextLabel
 local missionObjective = ""
 local storyObjective = ""
 local inShelter = false
+local inviteToken = 0
+local missionTitle = "Mission" -- the active mission's title, so a failure names the right mission
 
 -- Priority: active mission, then the story objective, then the shelter reminder.
 local function refreshObjective()
@@ -65,6 +72,12 @@ function Hud.init(c)
 	staminaText = UI.label(status, "", 13, C.dim)
 	staminaBack, staminaFill = UI.bar(status, "Stamina", C.bone)
 	lightText = UI.label(status, "Light: —", 14)
+	flareText = UI.label(status, "", 13)
+	flareText.Visible = false
+	-- The injury penalty (D40) is spelled out: what it does and what fixes it.
+	injuryText = UI.label(status, "+ Injured: sprint slowed — a bandage or splint fixes it", 13, C.warn)
+	injuryText.Visible = false
+	rankText = UI.label(status, "Field rank 0", 12, C.dim)
 
 	objective = UI.label(gui, "", 16)
 	objective.AnchorPoint = Vector2.new(0.5, 0)
@@ -148,6 +161,7 @@ function Hud.init(c)
 			crosshair.Visible = v
 		end
 	end)
+	ctx.on("progression", Hud.progression)
 end
 
 function Hud.vitals(d: any)
@@ -164,23 +178,30 @@ function Hud.vitals(d: any)
 	healthText.TextColor3 = if cond == "healthy" then C.bone else C.warn
 	staminaBack.Visible = d.showStamina
 	staminaText.Visible = d.showStamina
-	staminaFill.Size = UDim2.fromScale(d.stamina / d.staminaMax, 1)
+	staminaFill.Size = UDim2.fromScale(math.clamp(d.stamina / math.max(1, d.staminaMax), 0, 1), 1)
 	staminaFill.BackgroundColor3 = if d.exhausted then C.dim else C.bone
 	staminaText.Text = if d.exhausted then "Exhausted — walking until you recover" else "Stamina"
 	if d.lightName then
 		lightText.Text = string.format(
-			"%s %s · %d%% · %d cell%s",
+			"%s%s %s · %d%% · %d cell%s%s",
 			d.lightName,
+			if d.isLantern then (if d.shielded then " (shielded)" else " (open)") else "",
 			if d.lightOn then "ON" else "off",
 			math.floor(d.lightCharge),
 			d.cells,
-			if d.cells == 1 then "" else "s"
+			if d.cells == 1 then "" else "s",
+			if d.lightDimmed then " · moths dim it" else ""
 		)
-		lightText.TextColor3 = if d.lightCharge < 15 then C.warn else C.bone
+		lightText.TextColor3 = if d.lightCharge < 15 or d.lightDimmed then C.warn else C.bone
 	else
 		lightText.Text = "No light"
 		lightText.TextColor3 = C.dim
 	end
+	local flares, lit = d.flares or 0, d.flaresLit or 0
+	flareText.Visible = flares > 0 or lit > 0
+	flareText.Text =
+		string.format("Flares: %d carried%s", flares, if lit > 0 then string.format(" · %d burning", lit) else "")
+	injuryText.Visible = d.injured == true and cond ~= "downed" and cond ~= "dead"
 	if d.hidden then
 		downedText.Text = "HIDDEN — creatures cannot sense you. Use the niche prompt to step out."
 	elseif cond == "downed" then
@@ -298,13 +319,18 @@ function Hud.invite(d: any)
 	UI.button(inviteBox, "Accept", function()
 		ctx.send("party.accept", { fromUserId = d.fromUserId })
 		inviteBox.Visible = false
-	end, { Size = UDim2.new(1, 0, 0, 34) })
+	end, { Size = UDim2.new(1, 0, 0, 48) })
 	UI.button(inviteBox, "Decline", function()
 		ctx.send("party.decline", { fromUserId = d.fromUserId })
 		inviteBox.Visible = false
-	end, { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = C.dim })
+	end, { Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = C.dim })
+	-- Only this invite's timer may hide the box (an older invite's timer must not hide a newer one).
+	inviteToken += 1
+	local token = inviteToken
 	task.delay(d.seconds, function()
-		inviteBox.Visible = false
+		if inviteToken == token then
+			inviteBox.Visible = false
+		end
 	end)
 end
 
@@ -320,9 +346,11 @@ function Hud.mission(d: any)
 		missionObjective = ""
 	elseif d.state == "failed" then
 		missionObjective = ""
-		Hud.notice("Rescue ended: " .. tostring(d.reason or "failed"), "warn")
+		Hud.notice(string.format("%s ended: %s", d.title or missionTitle, tostring(d.reason or "failed")), "warn")
+		missionTitle = "Mission"
 	else
 		missionObjective = d.objective or ""
+		missionTitle = if type(d.title) == "string" then d.title else "Mission"
 	end
 	refreshObjective()
 end
@@ -330,6 +358,21 @@ end
 function Hud.story(d: any)
 	storyObjective = if d.complete then "" else ("Story: " .. d.objective)
 	refreshObjective()
+end
+
+-- Field experience (F24): rank and bonuses; the server sends the rank-up notice itself.
+function Hud.progression(d: any)
+	if type(d) ~= "table" or type(d.rank) ~= "number" then
+		return
+	end
+	rankText.Text = if d.rank > 0
+		then string.format(
+			"Field rank %d · +%d stamina · +%d health",
+			d.rank,
+			d.staminaBonus or 0,
+			d.healthBonus or 0
+		)
+		else string.format("Field rank 0 · %d/%d xp", math.floor(d.xp or 0), d.nextRankXp or 0)
 end
 
 function Hud.debugPressure(d: any)

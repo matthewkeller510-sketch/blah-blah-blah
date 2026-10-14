@@ -39,6 +39,32 @@ Commerce.RECIPES = {
 		seconds = 2,
 		requiresWorkbench = false,
 	},
+	-- Milestone 3 (docs/MILESTONE-3.md 4.7). Quantities are the contract's; times are TUNE. Like the existing
+	-- recipes they need a shelter but no workbench (PROPOSED: "workbench rules unchanged").
+	{
+		id = "craft.fuse_kit",
+		inputs = { ["mat.fuse_component"] = 2, ["mat.fastener"] = 1 },
+		output = "tool.fuse_kit",
+		outputCount = 1,
+		seconds = 3,
+		requiresWorkbench = false,
+	},
+	{
+		id = "craft.splint",
+		inputs = { ["mat.plank"] = 1, ["mat.fabric"] = 1 },
+		output = "med.splint",
+		outputCount = 1,
+		seconds = 3,
+		requiresWorkbench = false,
+	},
+	{
+		id = "craft.repaired_cell",
+		inputs = { ["mat.battery_housing"] = 1, ["mat.fastener"] = 1 },
+		output = "power.cell",
+		outputCount = 1,
+		seconds = 4,
+		requiresWorkbench = false,
+	},
 } :: { Recipe }
 
 function Commerce.recipe(id: string): Recipe?
