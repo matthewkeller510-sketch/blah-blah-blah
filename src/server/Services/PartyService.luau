@@ -234,6 +234,12 @@ function PartyService.remove(leader: Player, userId: number)
 end
 
 -- Verified party ping: system-authored, so mimics cannot forge it (section 10, C10 counterplay).
+-- Listeners for verified pings (e.g. C02 Borrowed Miner, which can never answer one): fn(player, position).
+local pingListeners: { (Player, Vector3) -> () } = {}
+function PartyService.onPing(fn: (Player, Vector3) -> ())
+	table.insert(pingListeners, fn)
+end
+
 function PartyService.ping(player: Player)
 	local pos = services.PlayerService.position(player)
 	if not pos then
@@ -241,6 +247,9 @@ function PartyService.ping(player: Player)
 	end
 	for _, m in PartyService.members(player) do
 		services.PlayerService.send(m, "ping", { userId = player.UserId, name = player.DisplayName, position = pos })
+	end
+	for _, fn in pingListeners do
+		task.spawn(fn, player, pos)
 	end
 end
 

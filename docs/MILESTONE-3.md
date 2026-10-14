@@ -215,6 +215,10 @@ Services receive the `services` table in `init`. These names are the contract; i
 | NpcService | `say(player, npcId, lineId)` | Shows subtitled dialogue and writes the journal |
 | CreatureService | `research(player, creatureId, evidenceId)` | Existing research path |
 | RecoveryService | `bagsOf(player) -> { death?, logout? }` | For M11 |
+| PartyService | `onPing(fn(player, position))` | Verified party pings (lead-owned; already implemented) |
+| NavigationService | `ownRecords(player, regionId) -> { NavRecord }` | Read-only copy of a player's own records in a region (C04) |
+| any | CollectionService tag `PocketBlocker` | A model or part with this tag inside a pocket's bounds postpones a pocket change (rescue survivors, carried NPCs) |
+| StoryDefs | `src/shared/Data/StoryDefs.luau` (story package, new) | Dialogue lines, journal text, readable texts, map table position |
 
 Client features live in `src/client/Features/*.luau`. `Main.client` requires every module there after the core controllers and calls `init(ctx)`. A feature subscribes with `ctx.on(channel, fn)`. Cue captions live in `src/shared/Data/CueDefs.luau`.
 
