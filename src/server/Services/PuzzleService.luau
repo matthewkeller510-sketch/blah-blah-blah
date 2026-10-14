@@ -8,7 +8,8 @@
 -- P04 Weight and pulley (R01 Rusted Pulley): load the counterweight, then latch it or hold the lever. The grate to the
 --     Pulley Store never closes on or behind anyone, and the inner lever always raises it.
 -- P05 Echo sequence (R04 Radio Room): repeat the radio's short/long pattern in PuzzleUI. With station power on, the
---     set plays Elise Renaud's interrupted log and records the station tape (Act II step 5).
+--     set plays Elise Renaud's interrupted log and records the station tape (Act II step 5). Each client blinks the
+--     set's lamp (tag P05Lamp) from its Pattern / Powered / Epoch attributes, so Reduce flashes applies.
 -- W05 Sluice gates (R03 Silt Works, for M05): turn three wheels in the clue order; every turn is loud. Drains the
 --     corridor to the Overflow Vault; it refloods later only when nobody is in that corridor or the vault.
 -- Every timed revert (P02 reflood, P03 trip, P04 drop, W05 reflood) waits until its area holds no player (a player
@@ -50,6 +51,11 @@ local TAPE_CLAIM = "R04.unique.station_tape"
 local RADIO_HEARD = "act2.radio_heard"
 
 local folder: Folder
+-- Invisible collidable blockers (the P02 and W05 deep-water barriers, the P04 grate's collision) live in
+-- workspace.PuzzleBlockers, outside workspace.World: Roblox ignores CanQuery = false while CanCollide is true, and
+-- every world raycast (chalk, signs, ropes, flares, stones, line of sight, client aim) includes only World, so
+-- outside it they still stop players but never catch a ray.
+local blockerFolder: Folder
 local built: { [string]: boolean } = {}
 
 local p01: Puzzles.P01State
@@ -68,7 +74,6 @@ local LAMP_OFF = Color3.fromRGB(60, 58, 52)
 local LAMP_ON = Color3.fromRGB(255, 222, 170)
 local RED = Color3.fromRGB(150, 40, 30)
 local GREEN = Color3.fromRGB(70, 170, 90)
-local AMBER = Color3.fromRGB(230, 160, 60)
 
 -- Helpers --------------------------------------------------------------------------------------------
 local function v(t): Vector3
@@ -524,6 +529,7 @@ local function buildP02()
 	)
 	barrier.Transparency = 1
 	barrier.CanQuery = false
+	barrier.Parent = blockerFolder
 	local warnSign = mk(
 		"P02_Sign",
 		Vector3.new(6, 1.4, 0.2),
@@ -568,6 +574,7 @@ local p03Boxes: { Puzzles.Box } = {}
 local generatorPos: Vector3
 local stationLamps: { BasePart } = {}
 local radioDialLabel: TextLabel? = nil
+local radioLamp: BasePart? = nil -- P05's lamp (built later); carries the Powered attribute
 
 local CONDUIT_COLORS = { Color3.fromRGB(120, 60, 50), Color3.fromRGB(70, 90, 110), Color3.fromRGB(110, 100, 60) }
 
@@ -649,6 +656,9 @@ local function setStationPower(on: boolean)
 	end
 	if radioDialLabel then
 		radioDialLabel.Text = if on then "STATION RADIO\nSTATION POWER ON" else "STATION RADIO\nNO STATION POWER"
+	end
+	if radioLamp then
+		radioLamp:SetAttribute("Powered", on) -- the client blinks green with power, amber without
 	end
 	folder:SetAttribute("StationPowered", on)
 end
@@ -1117,6 +1127,7 @@ local function buildP04()
 	)
 	grateBlocker.Transparency = 1
 	grateBlocker.CanQuery = false
+	grateBlocker.Parent = blockerFolder
 	piece(grateBlocker)
 	sign(
 		"P04_GrateSign",
@@ -1159,14 +1170,8 @@ end
 
 -- P05 Echo sequence -----------------------------------------------------------------------------------
 local radioPos: Vector3
-local radioLamp: BasePart
 local radioSolved: { [Player]: boolean } = {}
 local lastAttempt: { [Player]: number } = {}
-
-local function setRadioLamp(on: boolean)
-	radioLamp.Material = if on then Enum.Material.Neon else Enum.Material.SmoothPlastic
-	radioLamp.Color = if on then (if PuzzleService.isPowered() then GREEN else AMBER) else LAMP_OFF
-end
 
 -- Elise Renaud's interrupted log (story package line), the station tape (unique, protected, once per player) and the
 -- Act II fact. Durable: committed before the tape notice.
@@ -1296,6 +1301,18 @@ local function buildP05()
 		Enum.Material.SmoothPlastic
 	)
 	lamp.Shape = Enum.PartType.Ball
+	-- The lamp blinks the rhythm for everyone nearby (shared and visual, never audio-only), but each client drives
+	-- the blink so its Reduce flashes setting can soften it (like the P06 lamps). The server keeps the off look and
+	-- publishes the contract on the part (CollectionService tag P05Lamp):
+	--   Pattern  the S/L pattern string (p05Pattern, chosen once per server),
+	--   Powered  station power (setStationPower keeps it current); the lit colour was green (70, 170, 90) with
+	--            power and amber (230, 160, 60) without, the off look is LAMP_OFF SmoothPlastic,
+	--   Epoch    workspace:GetServerTimeNow() when the pattern was chosen. One cycle is Puzzles.echoTimeline(Pattern)
+	--            followed by a 2.5 s rest, shown while the local character is within 30 studs of the set.
+	lamp:SetAttribute("Pattern", p05Pattern)
+	lamp:SetAttribute("Powered", PuzzleService.isPowered())
+	lamp:SetAttribute("Epoch", workspace:GetServerTimeNow())
+	CollectionService:AddTag(lamp, "P05Lamp")
 	radioLamp = lamp
 	local _, dial = sign("P05_Dial", Vector3.new(2.6, 1.2, 0.1), radioPos + facing * 0.9, facing, "")
 	radioDialLabel = dial
@@ -1308,29 +1325,6 @@ local function buildP05()
 	)
 	prompt(set, "Tune the radio", "Station radio").Triggered:Connect(tune)
 	setStationPower(PuzzleService.isPowered())
-end
-
--- The set's lamp blinks the rhythm for everyone nearby (shared, visual: never audio-only).
-local function blinkOnce()
-	local near = false
-	for p in services.PlayerService.all() do
-		local pos = services.PlayerService.position(p)
-		if pos and (pos - radioPos).Magnitude <= 30 then
-			near = true
-			break
-		end
-	end
-	if not near then
-		task.wait(1)
-		return
-	end
-	for _, step in Puzzles.echoTimeline(p05Pattern) do
-		setRadioLamp(true)
-		task.wait(step.on)
-		setRadioLamp(false)
-		task.wait(step.off)
-	end
-	task.wait(2.5)
 end
 
 -- W05 Sluice gates ------------------------------------------------------------------------------------
@@ -1478,6 +1472,7 @@ local function buildW05()
 		)
 		bar.Transparency = 1
 		bar.CanQuery = false
+		bar.Parent = blockerFolder
 		table.insert(sluiceBarriers, bar)
 		sign(
 			"W05_DeepSign",
@@ -1564,6 +1559,9 @@ function PuzzleService.start()
 	folder = Instance.new("Folder")
 	folder.Name = "Puzzles"
 	folder.Parent = services.WorldBuilder.root()
+	blockerFolder = Instance.new("Folder")
+	blockerFolder.Name = "PuzzleBlockers"
+	blockerFolder.Parent = workspace
 	-- P03 before P05: the radio reads the station power state.
 	local list: { Builder } = {
 		{ id = "P01", build = buildP01, tick = nil, every = 0 },
@@ -1600,18 +1598,6 @@ function PuzzleService.start()
 			end
 		end
 	end)
-	if built.P05 then
-		task.spawn(function()
-			while true do
-				local ok = xpcall(blinkOnce, function(err)
-					warn("[PuzzleService] radio lamp failed: " .. tostring(err))
-				end)
-				if not ok then
-					task.wait(5)
-				end
-			end
-		end)
-	end
 end
 
 return PuzzleService

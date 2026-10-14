@@ -2,7 +2,7 @@
 -- Variable pockets (section 04, owner rule F08; docs/MILESTONE-3.md section 3, D31).
 -- Each pocket's version is server state that follows a deterministic schedule (Logic/Pockets.targetVersion), so
 -- every server converges on the same version. A change happens only when the pocket is empty (no player, no
--- PocketBlocker, no online owner's bag or rope inside its bounds plus a margin), is telegraphed for
+-- PocketBlocker, no lit flare, no online owner's bag or rope inside its bounds plus a margin), is telegraphed for
 -- Config.Pockets.telegraphSeconds at both mouths (essential captioned cue, glowing threshold plates, client dust),
 -- and aborts if anything enters meanwhile. Every version joins the same two mouths, so an escape path always exists.
 -- After a change, records of online owners that were placed in the old version migrate to the pocket's documented
@@ -57,9 +57,12 @@ function PocketService.versionOf(pocketId: string): string?
 	return if st then st.current else nil
 end
 
--- The pocket whose bounds contain a world position (no margin), or nil.
+-- The pocket whose build area contains a world position (no margin), or nil. Same predicate as every record tag
+-- (Pockets.containing: build area only, ids in sorted order), so the crash checkpoint (PlayerService.checkpointFor)
+-- tags exactly like navigation records and bags: a mouth doorway is static, and where two pockets' bounds overlap
+-- the answer never depends on table iteration order.
 function PocketService.pocketAt(position: Vector3): string?
-	local pk = WorldDefs.pocketAt(v3(position))
+	local pk = Pockets.containing(v3(position))
 	return if pk then pk.id else nil
 end
 
@@ -94,8 +97,14 @@ local function blockedBy(def: WorldDefs.PocketDef): string?
 			table.insert(tagged, v3(inst:GetPivot().Position))
 		end
 	end
+	-- PROPOSED: a lit flare blocks too, so geometry never changes under a burning flare (it burns ItemDefs
+	-- flareSeconds, 45 s, so the delay is short)
+	local flares: { Pockets.V3 } = {}
+	for _, f in services.PlayerService.activeFlares() do
+		table.insert(flares, v3(f.position))
+	end
 	local margin = Config.Pockets.occupancyMargin
-	local reason = Pockets.blocker(def, { characters = characters, tagged = tagged }, margin)
+	local reason = Pockets.blocker(def, { characters = characters, tagged = tagged, flares = flares }, margin)
 	if reason then
 		return reason
 	end

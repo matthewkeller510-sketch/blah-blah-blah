@@ -1439,21 +1439,29 @@ function WorldBuilder.buildPocket(pocketId: string, version: string): Folder
 		Vector2.new(3.6, 1)
 	).Name =
 		"PassagePlate"
-	-- one discovery per pocket, whatever the version (DiscoveryService picks up volumes added at runtime)
+	-- one discovery per pocket, whatever the version (DiscoveryService picks up volumes added at runtime). One volume
+	-- per walkable rectangle (clipped to the build area like the grid), never the whole area box: pocket bounds may
+	-- overlap (PK1/PK2), and this pocket's volume must not cover another pocket's walkable floor.
 	local a = plan.area.box
-	local vol = part(
-		f,
-		"DiscoveryVolume",
-		Vector3.new(a.x1 - a.x0, H, a.z1 - a.z0),
-		CFrame.new((a.x0 + a.x1) / 2, y + H / 2, (a.z0 + a.z1) / 2)
-	)
-	vol.Transparency = 1
-	vol.CanCollide = false
-	vol.CanQuery = false
-	vol:SetAttribute("ChamberId", WorldBuilder.pocketDiscoveryId(pocketId))
-	vol:SetAttribute("RegionId", def.regionId)
-	vol:SetAttribute("DiscoveryLabel", Pockets.LABELS[pocketId] or pocketId)
-	CollectionService:AddTag(vol, "DiscoveryVolume")
+	for _, wb in plan.walk do
+		local x0, x1 = math.max(wb.x0, a.x0), math.min(wb.x1, a.x1)
+		local z0, z1 = math.max(wb.z0, a.z0), math.min(wb.z1, a.z1)
+		if x1 > x0 and z1 > z0 then
+			local vol = part(
+				f,
+				"DiscoveryVolume",
+				Vector3.new(x1 - x0, H, z1 - z0),
+				CFrame.new((x0 + x1) / 2, y + H / 2, (z0 + z1) / 2)
+			)
+			vol.Transparency = 1
+			vol.CanCollide = false
+			vol.CanQuery = false
+			vol:SetAttribute("ChamberId", WorldBuilder.pocketDiscoveryId(pocketId))
+			vol:SetAttribute("RegionId", def.regionId)
+			vol:SetAttribute("DiscoveryLabel", Pockets.LABELS[pocketId] or pocketId)
+			CollectionService:AddTag(vol, "DiscoveryVolume")
+		end
+	end
 	-- P06: survey symbols above each door and a lamp; the client (PocketFX) flickers the false doors' lamps in one
 	-- shared rhythm, the stable door's lamp stays steady
 	if plan.doors then

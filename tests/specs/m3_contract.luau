@@ -7,6 +7,7 @@ local ItemDefs = require("../../src/shared/Data/ItemDefs")
 local CueDefs = require("../../src/shared/Data/CueDefs")
 local Config = require("../../src/shared/Data/Config")
 local Profile = require("../../src/shared/Logic/Profile")
+local Pockets = require("../../src/shared/Logic/Pockets")
 
 type V3 = { x: number, y: number, z: number }
 
@@ -280,6 +281,28 @@ return function(T: any)
 		end
 		for _, sc in WorldDefs.ScavengeSites do
 			eq(WorldDefs.pocketAt(sc.pos), nil, sc.id)
+		end
+	end)
+
+	test("rescue spawns and mission spots stay clear of every pocket's bounds plus occupancy margin", function()
+		-- A survivor or worker waiting there is a PocketBlocker pivoted 3 studs above its spot (MissionService
+		-- buildRig): inside a pocket's blocking box it would freeze that pocket for the whole mission.
+		local margin = Config.Pockets.occupancyMargin
+		local spots: { { id: string, pos: V3 } } = {}
+		for _, sp in WorldDefs.RescueSpawns do
+			table.insert(spots, sp)
+		end
+		for _, list in WorldDefs.MissionSpots do
+			for _, sp in list do
+				table.insert(spots, sp)
+			end
+		end
+		assert(#spots > 0, "fixture: no spots")
+		for _, sp in spots do
+			local rig = { x = sp.pos.x, y = sp.pos.y + 3, z = sp.pos.z }
+			for id, pk in WorldDefs.Pockets do
+				eq(Pockets.inBounds(pk, rig, margin), false, sp.id .. " blocks " .. id)
+			end
 		end
 	end)
 
