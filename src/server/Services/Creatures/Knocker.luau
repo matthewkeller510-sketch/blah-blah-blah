@@ -1,7 +1,8 @@
 --!strict
 -- C07 Knocker (line-charge threat, cannot be killed). Lives at the ends of the long straight corridor between Split
 -- Pier and Rusted Pulley. Exactly three knocks announce the charge; leave the line or stun it while it knocks.
--- The lane is derived from the two chambers' positions and sizes.
+-- The lane is derived from the two chambers' positions and sizes. Anyone who looks at it while it is out of the floor
+-- has "seen" it, the first research stage (review R2 finding 8).
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local WorldDefs = require(Shared.Data.WorldDefs)
@@ -15,6 +16,8 @@ local ENGAGE_THRESHOLD = 0.2
 local COOLDOWN_SECONDS = 40
 local LANE_HALF_WIDTH = 7
 local BODY_HALF_HEIGHT = 3.75
+local SEEN_RADIUS = 70 -- TUNE: the whole lane (about 65 studs) from either end
+local SEEN_COS = 0.7 -- TUNE: within about 45 degrees of the look direction
 
 local pierDef = assert(WorldDefs.chamber("R01.split_pier"), "Knocker lane needs R01.split_pier")
 local pulleyDef = assert(WorldDefs.chamber("R01.rusted_pulley"), "Knocker lane needs R01.rusted_pulley")
@@ -33,6 +36,7 @@ type Rec = {
 	dir: number,
 	endZ: number,
 	hit: { [Player]: boolean },
+	seen: { [Player]: boolean }, -- who has sighted it since it last emerged
 	cooldownUntil: number,
 }
 
@@ -90,12 +94,20 @@ function Knocker.tick(dt: number)
 				k.knocks = 0
 				k.nextAt = now + 0.6
 				k.hit = {}
+				k.seen = {}
 				return
 			end
 		end
 		return
 	end
 	local bp = k.model.PrimaryPart :: BasePart
+	-- out of the floor (knocking, charging, recovering or stunned) it can be sighted
+	for p, sess in services.PlayerService.all() do
+		if not k.seen[p] and Common.perceivable(p, sess) and Common.watching(p, bp.Position, SEEN_RADIUS, SEEN_COS) then
+			k.seen[p] = true
+			Common.evidence(p, KNOCK, "seen")
+		end
+	end
 	if k.state == "knocking" then
 		if now >= k.nextAt then
 			k.knocks += 1
@@ -178,6 +190,7 @@ function Knocker.onPlayerRemoving(p: Player)
 	local k = knocker
 	if k then
 		k.hit[p] = nil
+		k.seen[p] = nil
 		if k.target == p then
 			k.target = nil -- the director already dropped this player's record; the charge finishes on its own
 		end
@@ -209,6 +222,7 @@ function Knocker.start()
 		dir = 1,
 		endZ = laneZ1,
 		hit = {},
+		seen = {},
 		cooldownUntil = 0,
 	}
 end

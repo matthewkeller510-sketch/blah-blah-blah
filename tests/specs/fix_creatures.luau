@@ -1,10 +1,14 @@
 --!strict
 -- Review fixes, batch 2: creatures in variable pockets. Finding 10: a creature never crosses a pocket's rock in a
 -- straight line; it follows the current version's creature route, leaves it only by clear legs, and keeps its body
--- under a low ceiling. Finding 14 (Chalk Hand half): no false mark on a pocket surface.
+-- under a low ceiling. Finding 14 (Chalk Hand half): no false mark on a pocket surface. Round 2: every obtainable
+-- research evidence id has a grant site (finding 8, the Knocker's "seen"); tools try threats before harmless
+-- phenomena (finding 11).
 -- Pure rules only. makeNav below mirrors the Roblox wiring in Services/Creatures/Common (the Nav table); that wiring,
--- the low-ceiling body clamp and the PocketBlocker tag still need a Studio check.
+-- the low-ceiling body clamp, the PocketBlocker tag, the tools' line-of-sight check and the weak per-player tables
+-- still need a Studio check.
 
+local fs = require("@lune/fs")
 local WorldDefs = require("../../src/shared/Data/WorldDefs")
 local Pockets = require("../../src/shared/Logic/Pockets")
 local CreatureRules = require("../../src/shared/Logic/CreatureRules")
@@ -633,5 +637,41 @@ return function(T: any)
 		eq(CreatureRules.chalkHandTarget(H.regionId, 1000, nil, 120, player, own), inPk1, "default: the nearest")
 		eq(CreatureRules.chalkHandTarget(H.regionId, 1000, nil, 120, player, own, inPocket), inAnchor)
 		eq(CreatureRules.chalkHandTarget(H.regionId, 1000, nil, 120, player, { inPk1 }, inPocket), nil)
+	end)
+
+	print("Review round 2: research grants and tool targets")
+
+	test("every obtainable research evidence id of every SLICE creature is granted by its module", function()
+		-- Progress.addEvidence raises a stage only when the evidence for every earlier stage is present, so one
+		-- missing grant (the Knocker's "seen") freezes that creature's research at stage 0 (F07)
+		local checked = 0
+		for key, def in WorldDefs.Creatures do
+			if def.status == "SLICE" then
+				local name = assert(string.match(key, "^C%d+_(%w+)$"), key)
+				local src = fs.readFile("src/server/Services/Creatures/" .. name .. ".luau")
+				local cap = (def :: any).researchCap or #def.researchEvidence
+				for i = 1, cap do
+					local id = def.researchEvidence[i]
+					assert(
+						string.find(src, 'Common%.evidence%([^\n]*"' .. id .. '"%)') ~= nil,
+						string.format("%s never grants %q (stage %d)", key, id, i)
+					)
+					checked += 1
+				end
+			end
+		end
+		assert(checked >= 8 * 3, "every SLICE creature checked")
+	end)
+
+	test("tools try threats before harmless phenomena, nearest first within each", function()
+		local order = CreatureRules.toolTargetOrder({
+			{ harmless = true, dist = 5 }, -- a roost right in front
+			{ harmless = false, dist = 12 }, -- the thief behind it
+			{ harmless = false, dist = 9 },
+			{ harmless = true, dist = 3 },
+		})
+		eq(table.concat(order, ","), "3,2,4,1")
+		eq(#CreatureRules.toolTargetOrder({}), 0)
+		eq(table.concat(CreatureRules.toolTargetOrder({ { harmless = true, dist = 4 } }), ","), "1")
 	end)
 end

@@ -55,6 +55,29 @@ function CreatureRules.watching(look: V3, to: V3, range: number, cosLimit: numbe
 	return c ~= nil and c >= cosLimit
 end
 
+-- Tools: the order in which aimed-at candidates are tried (each still needs line of sight). Threats come before
+-- harmless phenomena, so a nearer roost or miner never absorbs a swing or stun meant for a threat; within each, the
+-- nearest first (review R2 finding 11).
+export type ToolCandidate = { harmless: boolean, dist: number }
+
+function CreatureRules.toolTargetOrder(cands: { ToolCandidate }): { number }
+	local order: { number } = {}
+	for i = 1, #cands do
+		table.insert(order, i)
+	end
+	table.sort(order, function(a: number, b: number): boolean
+		local ca, cb = cands[a], cands[b]
+		if ca.harmless ~= cb.harmless then
+			return not ca.harmless
+		end
+		if ca.dist ~= cb.dist then
+			return ca.dist < cb.dist
+		end
+		return a < b
+	end)
+	return order
+end
+
 -- Research: the field-experience key for reaching `stage` of a creature (shared with the player package back-fill).
 function CreatureRules.researchXpKey(creatureId: string, stage: number): string
 	return "research:" .. creatureId .. ":" .. tostring(stage)

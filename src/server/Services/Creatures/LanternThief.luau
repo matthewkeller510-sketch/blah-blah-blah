@@ -55,7 +55,8 @@ type Rec = {
 
 local thief: Rec? = nil
 local usedFlares: { [string]: number } = {} -- flare key -> when it decoyed the thief (each flare decoys once)
-local ignoreUntil: { [Player]: number } = {}
+-- weak keys: a write during a departing player's final save never pins the Player (review R2 finding 12)
+local ignoreUntil: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 local seenCheckAt = 0
 
 local function inRegions(regionId: string): boolean

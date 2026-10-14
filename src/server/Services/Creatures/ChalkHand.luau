@@ -24,8 +24,9 @@ local TICK_SECONDS = 0.5
 type Mark = { id: string, position: Vector3, createdAt: number, seen: boolean }
 type Chalk = { position: Vector3, normal: Vector3 }
 
-local marks: { [Player]: { [string]: Mark } } = {}
-local lastAt: { [Player]: number } = {}
+-- weak keys: a write during a departing player's final save never pins the Player (review R2 finding 12)
+local marks: { [Player]: { [string]: Mark } } = setmetatable({}, { __mode = "k" }) :: any
+local lastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 local seq = 0
 local acc = 0
 
