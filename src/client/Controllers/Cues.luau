@@ -73,9 +73,16 @@ local function caption(text: string, essential: boolean)
 	end
 end
 
+-- Repeating cues (a mimic's rhythm, wing flutter, glass rattle) must not flood the caption box or pulse the screen
+-- edge over and over. An identical caption is shown again only after a short quiet window.
+local REPEAT_WINDOW_ESSENTIAL = 2
+local REPEAT_WINDOW_OTHER = 4
+local lastShown: { [string]: number } = {}
+
 function Cues.cue(d: any)
 	local def = CUES[d.id]
 	if not def then
+		warn("[Cues] unknown cue id " .. tostring(d.id) .. " (add it to Shared/Data/CueDefs)")
 		return
 	end
 	local text = def.text
@@ -90,7 +97,15 @@ function Cues.cue(d: any)
 			string.format("[the valve squeals; the gauge settles — %d of %d set right]", d.extra.correct, d.extra.of)
 	elseif d.id == "plaque_turn" and d.extra and d.extra.solved then
 		text = "[the plaque locks into place with a deep click]"
+	elseif d.extra and type(d.extra.n) == "number" and type(d.extra.of) == "number" then
+		text = string.format("%s — %d of %d", text, d.extra.n, d.extra.of)
 	end
+	local now = os.clock()
+	local window = if def.essential then REPEAT_WINDOW_ESSENTIAL else REPEAT_WINDOW_OTHER
+	if lastShown[text] and now - lastShown[text] < window then
+		return
+	end
+	lastShown[text] = now
 	caption(text .. direction(d.position), def.essential)
 	-- visual alternative for essential cues: a brief edge pulse (not a flash; respects reduceFlashes)
 	if def.essential and not ctx.settings.get("reduceFlashes") then

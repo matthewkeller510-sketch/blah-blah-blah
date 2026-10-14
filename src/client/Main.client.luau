@@ -59,25 +59,6 @@ WorldRenderer.init(ctx)
 Cues.init(ctx)
 Input.init(ctx)
 
--- Every ModuleScript in Features is required after the core controllers, in name order, and given ctx.
-local Features = script.Parent:FindFirstChild("Features")
-if Features then
-	local mods = Features:GetChildren()
-	table.sort(mods, function(a, b)
-		return a.Name < b.Name
-	end)
-	for _, m in mods do
-		if m:IsA("ModuleScript") then
-			local ok, err = pcall(function()
-				(require(m) :: any).init(ctx)
-			end)
-			if not ok then
-				warn("[Features] " .. m.Name .. " failed to start: " .. tostring(err))
-			end
-		end
-	end
-end
-
 stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 	ctx.state[channel] = data
 	if channel == "vitals" then
@@ -147,3 +128,24 @@ stateEvent.OnClientEvent:Connect(function(channel: string, data: any)
 		end
 	end
 end)
+
+-- Every ModuleScript in Features is required after the core controllers, in name order, and given ctx. This runs
+-- after the State dispatcher is connected so a slow feature cannot delay join-time pushes; a feature that needs
+-- data pushed before it started reads ctx.state[channel].
+local Features = script.Parent:FindFirstChild("Features")
+if Features then
+	local mods = Features:GetChildren()
+	table.sort(mods, function(a, b)
+		return a.Name < b.Name
+	end)
+	for _, m in mods do
+		if m:IsA("ModuleScript") then
+			local ok, err = pcall(function()
+				(require(m) :: any).init(ctx)
+			end)
+			if not ok then
+				warn("[Features] " .. m.Name .. " failed to start: " .. tostring(err))
+			end
+		end
+	end
+end

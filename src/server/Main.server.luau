@@ -61,13 +61,6 @@ local ORDER = {
 	"PlayerService", -- last: starts accepting players once everything else is ready
 }
 
-for _, name in ORDER do
-	(services :: any)[name].init(services)
-end
-for _, name in ORDER do
-	(services :: any)[name].start()
-end
-
 -- Rate limiting: token bucket per player per category ----------------------------------------------
 type Bucket = { tokens: number, last: number }
 local buckets: { [Player]: { [string]: Bucket } } = {}
@@ -113,6 +106,22 @@ local function playerById(v: any): Player?
 	local id = num(v)
 	return id and Players:GetPlayerByUserId(id) or nil
 end
+local function vec3(v: any): Vector3?
+	if typeof(v) ~= "Vector3" then
+		return nil
+	end
+	for _, c in { v.X, v.Y, v.Z } do
+		if c ~= c or math.abs(c) >= 1e6 then
+			return nil
+		end
+	end
+	return v
+end
+-- Shared payload validators for handlers registered by services (strings <= 64 chars, finite numbers).
+Router.str = str
+Router.num = num
+Router.playerById = playerById
+Router.vec3 = vec3
 
 local PS, PartyS, ShelterS, NavS =
 	services.PlayerService, services.PartyService, services.ShelterService, services.NavigationService
@@ -396,6 +405,18 @@ local CORE_HANDLERS: { [string]: Handler } = {
 
 for action, h in CORE_HANDLERS do
 	Router.register(action, h.cat, h.fn)
+end
+
+-- Each service starts in isolation: one failing service is reported instead of stopping the router below.
+for _, name in ORDER do
+	xpcall((services :: any)[name].init, function(err)
+		warn(string.format("[Main] %s.init failed: %s", name, debug.traceback(tostring(err))))
+	end, services)
+end
+for _, name in ORDER do
+	xpcall((services :: any)[name].start, function(err)
+		warn(string.format("[Main] %s.start failed: %s", name, debug.traceback(tostring(err))))
+	end)
 end
 
 Net.event(Net.Names.State) -- ensure it exists before clients connect
