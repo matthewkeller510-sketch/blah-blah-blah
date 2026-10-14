@@ -4,19 +4,34 @@
 -- text (• — • •) and plays as a visual pulse (a dot for short, a bar for long: shape and text, never colour or sound
 -- alone). Large Short / Long buttons enter the answer. The client only sends the attempt (radio.attempt { input });
 -- the server decides and answers on "radioResult" { ok, powered }. Audio for the tones is a PLACEHOLDER (none yet).
+-- The panel steps aside like the other screens: a dangerous creature's approach cue or going down closes it.
+-- The set's lamp (tag "P05Lamp", attributes Pattern / Powered / Epoch set by the server) is blinked here, on each
+-- client within 30 studs, locked to server time so everyone nearby sees the same rhythm; with Reduce flashes it
+-- swells gently instead (UIRules.echoLampLevel). Purely cosmetic; out of range the lamp keeps its own look.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Puzzles = require(Shared.Logic.Puzzles)
 local UI = require(script.Parent.Parent.Controllers.UI)
+local UIRules = require(script.Parent.Parent.Controllers.UIRules)
 
 local PuzzleUI = {}
 local ctx: any
 local player = Players.LocalPlayer
 
-local CLOSE_DISTANCE = 16 -- walking away from the set closes the panel (the server checks 12 studs per attempt)
+-- Walking away from the set closes the panel. Just inside the server's 12-stud range for attempts (RADIO_RANGE in
+-- PuzzleService), so the panel is never open where an attempt would be silently ignored.
+local CLOSE_DISTANCE = 11.5
 local REPLY_TIMEOUT = 2.5
+
+local LAMP_TAG = "P05Lamp"
+local LAMP_RANGE = 30 -- studs from the local character (the range the server lamp used)
+local LAMP_REST = 2.5 -- dark seconds between repeats of the pattern
+local LAMP_GREEN = Color3.fromRGB(70, 170, 90) -- station powered (same colours as PuzzleService)
+local LAMP_AMBER = Color3.fromRGB(230, 160, 60) -- no power
 
 type View = {
 	root: Frame,
@@ -76,6 +91,14 @@ local function showInput(v: View)
 	v.input.Text = "Your answer:  " .. (if v.entered == "" then "(nothing yet)" else Puzzles.echoSymbols(v.entered))
 end
 
+-- Farther from the set than an attempt may be sent from (unknown positions never count as far).
+local function tooFar(v: View): boolean
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	local pos = v.position
+	return pos ~= nil and hrp ~= nil and hrp:IsA("BasePart") and (hrp.Position - pos).Magnitude > CLOSE_DISTANCE
+end
+
 local function press(v: View, symbol: string)
 	if view ~= v or #v.entered >= #v.pattern then
 		return
@@ -91,6 +114,11 @@ local function press(v: View, symbol: string)
 		end
 	end)
 	if #v.entered == #v.pattern then
+		if tooFar(v) then
+			-- stepped out of range since the last check: the server would ignore the attempt; walking away closes
+			close()
+			return
+		end
 		v.status.Text = "Transmitting…"
 		v.sendToken += 1
 		local token = v.sendToken
@@ -99,7 +127,7 @@ local function press(v: View, symbol: string)
 			if view == v and v.sendToken == token then
 				v.entered = ""
 				showInput(v)
-				v.status.Text = "No answer from the set. Try again."
+				v.status.Text = "No answer from the set. Stay right beside it and try again."
 			end
 		end)
 	end
@@ -187,13 +215,8 @@ local function open(d: any)
 	task.spawn(function()
 		while view == v do
 			task.wait(0.5)
-			local character = player.Character
-			local hrp = character and character:FindFirstChild("HumanoidRootPart")
-			local pos = v.position
-			if pos and hrp and hrp:IsA("BasePart") and (hrp.Position - pos).Magnitude > CLOSE_DISTANCE then
-				if view == v then
-					close()
-				end
+			if view == v and tooFar(v) then
+				close()
 			end
 		end
 	end)
@@ -223,10 +246,91 @@ local function result(d: any)
 	end
 end
 
+-- P05 radio lamp ---------------------------------------------------------------------------------------
+type LampLook = { material: Enum.Material, color: Color3 }
+local lamps: { [BasePart]: boolean } = {} -- tagged lamps currently on this client (StreamingEnabled adds and removes)
+local driven: { [BasePart]: LampLook } = {} -- lamps being blinked here, with the look to put back
+
+local function restoreLamp(p: BasePart)
+	local look = driven[p]
+	if look then
+		driven[p] = nil
+		p.Material = look.material
+		p.Color = look.color
+	end
+end
+
+local function trackLamp(inst: Instance)
+	if inst:IsA("BasePart") then
+		lamps[inst] = true
+	end
+end
+
+local function untrackLamp(inst: Instance)
+	if inst:IsA("BasePart") then
+		lamps[inst] = nil
+		restoreLamp(inst)
+	end
+end
+
+local function driveLamps()
+	if next(lamps) == nil then
+		return
+	end
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else nil
+	local now = workspace:GetServerTimeNow()
+	local reduce = ctx.settings.get("reduceFlashes") == true
+	for p in lamps do
+		local pattern = Puzzles.normalizeEcho(p:GetAttribute("Pattern"))
+		local epoch = p:GetAttribute("Epoch")
+		if
+			p.Parent ~= nil
+			and pattern ~= nil
+			and type(epoch) == "number"
+			and origin ~= nil
+			and (p.Position - origin).Magnitude <= LAMP_RANGE
+		then
+			local look: LampLook = driven[p] or { material = p.Material, color = p.Color }
+			driven[p] = look
+			local level = UIRules.echoLampLevel(Puzzles.echoTimeline(pattern), LAMP_REST, now - epoch, reduce)
+			local onColor = if p:GetAttribute("Powered") == true then LAMP_GREEN else LAMP_AMBER
+			if reduce then
+				-- no Neon snap: the lamp's own colour swells toward the signal colour and back
+				p.Material = look.material
+				p.Color = look.color:Lerp(onColor, level)
+			else
+				p.Material = if level > 0 then Enum.Material.Neon else look.material
+				p.Color = if level > 0 then onColor else look.color
+			end
+		else
+			restoreLamp(p)
+		end
+	end
+end
+
 function PuzzleUI.init(c)
 	ctx = c
 	ctx.on("radioPattern", open)
 	ctx.on("radioResult", result)
+	-- step aside for danger, like Dialogue and MissionUI
+	ctx.on("cue", function(d: any)
+		if view and type(d) == "table" and UIRules.THREAT_CUES[d.id] then
+			close()
+		end
+	end)
+	ctx.on("vitals", function(d: any)
+		if view and type(d) == "table" and d.condition == "downed" then
+			close()
+		end
+	end)
+	for _, inst in CollectionService:GetTagged(LAMP_TAG) do
+		trackLamp(inst)
+	end
+	CollectionService:GetInstanceAddedSignal(LAMP_TAG):Connect(trackLamp)
+	CollectionService:GetInstanceRemovedSignal(LAMP_TAG):Connect(untrackLamp)
+	RunService.Heartbeat:Connect(driveLamps)
 end
 
 return PuzzleUI

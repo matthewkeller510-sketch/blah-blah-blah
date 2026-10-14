@@ -46,11 +46,16 @@ local function direction(pos: Vector3?): string
 	return string.format(" (%s, %s)", dir, range)
 end
 
+-- Captions draw above every screen and the touch grid (box and labels both, so it holds under Sibling and Global
+-- ZIndexBehavior): an essential cue stays readable with a panel open, sound muted and Reduce flashes on.
+local CAPTION_Z = 50
+
 local function caption(text: string, essential: boolean)
 	if not ctx.settings.get("subtitles") and not essential then
 		return
 	end
 	local t = UI.label(captionBox, text, 16)
+	t.ZIndex = CAPTION_Z
 	t.TextXAlignment = Enum.TextXAlignment.Center
 	t.TextStrokeTransparency = 0.3
 	task.delay(math.clamp(2.5 + #text / 20, 3, 7), function()
@@ -167,9 +172,11 @@ function Cues.init(c)
 		Size = UDim2.new(0.6, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
+		ZIndex = CAPTION_Z,
 	})
 	local l = UI.list(captionBox, 2)
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	UI.keepClearOfTouch(captionBox, ctx.gui, 0.6)
 	local t = 0
 	RunService.RenderStepped:Connect(function(dt)
 		t += dt
