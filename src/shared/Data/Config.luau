@@ -115,6 +115,7 @@ Config.Missions = {
 	waterworksCooldownSeconds = 300,
 	shelterEstablishmentCoins = 40,
 	act2CompletionCoins = 80,
+	lostBelongingsXpCooldownSeconds = 900, -- M11: own-recovery experience at most this often (relog cannot farm it)
 }
 
 -- 04 / F08. Variable pockets (docs/MILESTONE-3.md section 3). TUNE.

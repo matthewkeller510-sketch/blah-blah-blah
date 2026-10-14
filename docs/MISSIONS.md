@@ -113,12 +113,12 @@ Common rules for every template:
 | --- | --- |
 | Offer | Personal. Offered when you have a death or departure bag (`RecoveryService.bagsOf`); the death bag is chosen first. This is your own journey, not a paid recovery service. |
 | Objective | Names the bag kind, its region and the nearest room label (the bag's stable anchor): an honest location, never a GPS route. |
-| Complete | When that bag no longer exists because you recovered it, or a party member moved it into your shelter escrow. If items did not fit, the bag stays and so does the objective. |
-| Reward | No coins, ever (no incentive to die). Field experience once per bag (`bag:<bagId>`, 5 TUNE). |
+| Complete | When that bag no longer exists because you recovered it, or a party member moved it into your shelter escrow (that completes it too, without experience: claim the items at any shelter). If items did not fit, the bag stays and so does the objective. |
+| Reward | No coins, ever (no incentive to die). Field experience only for recovering it **yourself**: once per bag (`bag:<bagId>`, 5 TUNE) and at most once every 15 minutes (`missionCooldowns["M11.xp"]`), so relogging to make new bags cannot farm it. |
 | Failure | A newer bag of the same kind replaced it (only the latest death bag persists, F16): "a newer bag replaced the one you were looking for". |
 | Death | Only matters if it replaces the bag this journey is for. |
 | Disconnect / abandon | Ends it; the bag itself is untouched. |
-| Timeout / cooldown | None. |
+| Timeout / cooldown | None for the mission itself; the experience has the 15-minute limit above. |
 
 ## Act II story rescue: Noah Perrin (story objective, not on the board)
 

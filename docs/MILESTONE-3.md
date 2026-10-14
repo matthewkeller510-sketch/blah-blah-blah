@@ -140,7 +140,7 @@ All follow `docs/MISSIONS.md` conventions: estimate and risk shown, never a GPS 
 | M04 Power Restoration | Registered S04 without `station_power`: collect or craft a fuse kit, bring a repair tool roll, trace the private breaker circuit inside your S04 interior (a private P03 layout) and restart the station supply. Completion grants the permanent functional upgrade `station_power` (party-union inherited like any upgrade). | 50 coins once | none (one per shelter facility) |
 | M05 Waterworks Passage | Reach the Overflow Vault (either set the loud sluice gates or take the long dry route), open **your own** sluice-keeper's cache, and return to a shelter. | cache contents + 25 coins at a shelter | 300 s; cache restocks per player |
 | M09 Shelter Establishment | Pick a known shelter you have not secured: register it and build stage 1 of any safety upgrade. Further protection is separate. | 40 coins once per shelter | none |
-| M11 Lost Belongings | Offered when you have a death or logout bag. Names its region and the nearest chamber (honest location). Completes when the owner recovers it. Not a paid recovery service; no coin reward (no incentive to die); grants field experience once per bag. | experience only | none |
+| M11 Lost Belongings | Offered when you have a death or logout bag. Names its region and the nearest chamber (honest location). Completes when the owner recovers it (a party member's escrow recovery completes it without experience). Not a paid recovery service; no coin reward (no incentive to die); field experience once per bag, at most once every 15 minutes. | experience only | none (experience: 15 min) |
 
 ### 4.5 Act II — Contradictory Records
 
@@ -193,7 +193,7 @@ Injury penalty (D40, PROPOSED): while `injuryFlag` is set, sprint speed is multi
 
 ### 4.8 Progression (F24, T23 — D37)
 
-- Experience is granted once per dedupe key: first discovery of a place or shelter (5), shelter registration (20), research stage (10), story step (25), rescue or mission completion (10, bounded by mission cooldowns), M11 bag recovery (5 once per bag).
+- Experience is granted once per dedupe key: first discovery of a place or shelter (5), shelter registration (20), research stage (10), story step (25), rescue or mission completion (10, bounded by mission cooldowns), M11 own bag recovery (5 once per bag, at most once every 15 minutes).
 - `rank = floor(sqrt(xp / 50))`. `bonus(rank) = cap × (1 − 0.85^rank)`, cap 15 for max stamina and 15 for max health. Rank 1 ≈ +2, rank 5 ≈ +8, rank 10 ≈ +12; it never exceeds +15.
 - The half-health passive cap (F18) applies to the new maximum. No enemy stat scales with rank. Equipment remains the larger advantage.
 

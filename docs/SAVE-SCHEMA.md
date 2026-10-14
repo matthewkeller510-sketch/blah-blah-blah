@@ -35,11 +35,12 @@ Section 20. Source of truth: `src/shared/Logic/Profile.luau` (`Profile.default`,
 | `escrow` | `{ [itemId]: count }` | Delegate recoveries and store overflow |
 | `appliedOps` | `{ opId }` | Last 64 bag operation IDs, for idempotence |
 | `receipts` | `{ [purchaseId]: true }` | Developer-product dedupe |
-| `missionCooldowns` | `{ [key]: number }` | Mission and scavenging cooldowns (unix time), plus `scavleft:<siteId>\|<itemId>` = units a player left in a site because their pack was full |
+| `missionCooldowns` | `{ [key]: number }` | Mission and scavenging cooldowns (unix time), `M11.xp` (own-recovery experience limit), plus `scavleft:<siteId>\|<itemId>` = units a player left in a site because their pack was full |
 | `toolCharges` | `{ [itemId]: number }` | Stun device charges |
 | `checkpoint` | anchor or nil | Crash reconciliation; `pocketVersion` is a string and `pocketId` is set inside a pocket |
 | `settings` | table | Reserved (settings are per device for now) |
-| `progression` | `{ xp, awarded = { [key]: true } }` | Schema 2. Field experience (F24, D37). `awarded` holds the keys already paid: `disc:<id>`, `shelter:<id>`, `research:<Cxx>:<stage>`, `story:<stepId>`, `mission:<Mxx>:<n>`, `bag:<bagId>`. It grows slowly (one key per first discovery, research stage, story step, mission completion and recovered bag) |
+| `progression` | `{ xp, awarded = { [key]: true }, missionPaid = { [Mxx]: n }, bagsPaid = { bagKey } }` | Schema 2. Field experience (F24, D37). `awarded` holds `disc:<id>`, `shelter:<id>`, `research:<Cxx>:<stage>` and `story:<stepId>` keys, so it is bounded by world content. Mission experience is a high-water mark per template (`missionPaid`, paid once per new completion count); the last 64 paid bag keys sit in `bagsPaid`. `Progression.normalize` folds older `mission:`/`bag:` keys out of `awarded` without paying anything |
+| `vitals` | `{ health, injured }` or nil | Schema 2, optional. Current health and injury flag, written every 5 s and on departure, restored on join and clamped to the progression-raised maximum, so a rejoin never heals (F18). Absent on new or older profiles (full health). Downed at logout → back injured at 15 health |
 
 `storyStates` keys in use: `onboarded`, `A1.complete`, `act2.noah_rescued`, `act2.radio_heard`, `act2.logs_compared`, `act2.complete`, `<Mxx>.completions`, `M04.<shelterId>` (breaker repaired), `M04.reward`. `claims` gains `R03.unique.waterworks_log` and `R04.unique.station_tape`; `discoveries` gains pocket passages (`R05.passage_pk1..3`), `R05.p06_verified`, `R04.thief_notes`, `P03.solved`, `W05.solved`.
 

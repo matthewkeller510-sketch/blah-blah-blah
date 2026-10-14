@@ -63,7 +63,7 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 49 | Act II spine (sec 05) | Finish Act I; talk to Moreau; rescue Noah; take the waterworks log; register S04; power + radio; compare at the map table; report to Mara | Each step advances in order with journal lines; +80 coins once at the end; works solo |
 | 50 | Elise's note | Read it in a party | Text panel; partner gains the discovery and the text; the thief's strike gate opens for both |
 | 51 | M03 Medical Delivery | Accept with nothing, then with two bandages | Text names rooms with supplies (never a store); +30 coins; the worker walks off |
-| 52 | M09 and M11 | Establish a shelter; die, accept M11, recover the bag | +40 once; M11 pays experience only and fails if a newer bag replaces it |
+| 52 | M09 and M11 | Establish a shelter; die, accept M11, recover the bag; repeat within 15 minutes; let a party member recover it to escrow | +40 once; M11 pays experience only for your own recovery, at most once per 15 minutes; escrow recovery completes it without experience; it fails if a newer bag replaces it |
 | 53 | Lantern and flares | Equip the lantern, toggle shield (V); place flares (N) three times; try in a shelter | Omni light seen by others; range 9 shielded; two flares land, the third is refused; refused in shelters and at the depot |
 | 54 | Injury and splint | Take an injuring hit, sprint, then apply a splint | Sprint about 14.5, walk 11; HUD injury line; splint clears it |
 | 55 | Field experience (F24, T23) | Explore past 50 experience; rejoin an older profile | Rank-up notice, max health and stamina +2, no free heal; one back-fill notice for older profiles and no second payment on rejoin |
@@ -72,3 +72,4 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 58 | Schema 2 rollout | Join a schema-2 profile on an old (schema-1) server, then a new one | Old server refuses with a clear message and releases the lock; the new server loads at once |
 | 59 | Ray-blocking barriers | Aim a chalk mark into the flooded W05 corridor and at the closed P04 grate | The mark lands on the floor or wall, never on an invisible mid-air plane |
 | 60 | Overlapping pocket volumes | Walk PK1's loop version near its east side chamber | Only the PK1 passage is discovered, never PK2 |
+| 61 | No heal on rejoin (F18) | Drop to low health in a tunnel and rejoin; get downed and leave; rejoin | Same health as before leaving, no heal; back injured at 15 health after leaving while downed |
