@@ -12,11 +12,11 @@ Section 20. Source of truth: `src/shared/Logic/Profile.luau` (`Profile.default`,
 - **Autosave:** every 90 s for dirty profiles. `BindToClose` runs departure handling for everyone still connected.
 - **Crash reconciliation:** the expedition checkpoint is saved every 5 s as `{regionId, pocketVersion, pocketId?, anchorId, offset}`. If a profile loads with unbanked expedition items, the previous session did not depart cleanly, so those items move to a logout bag at the checkpoint (a copy of it; the bag never shares the checkpoint table).
 
-## Profile fields (schema 2)
+## Profile fields (schema 3)
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `schemaVersion` | number | 2 (Milestone 3) |
+| `schemaVersion` | number | 3 (Milestone 3) |
 | `userId` | number | Overwritten from the live player on load |
 | `class` | string | Explorer, Medic, Runner or Technician |
 | `coins` | number | Survives death (F16) |
@@ -53,6 +53,10 @@ Temporary party state is **never** stored.
 3. `reconcile` applies migrations in order, then fills missing fields from defaults without overwriting saved values.
 4. A server that sees a **newer** schema than it knows refuses the profile (`newer_schema`) instead of truncating it. Roll out new servers before writing new fields.
 5. Add a unit test that loads a fixture of the previous version.
+
+### Migration 2 → 3 (Milestone 3 review fixes)
+
+`MIGRATIONS[2]` is a no-op. The bump exists because mission and bag experience moved out of `progression.awarded` into `missionPaid`/`bagsPaid` (folded by `Progression.normalize` on load) and the optional `vitals` field was added: a server still on the earlier schema-2 build must refuse these profiles (`newer_schema`, lock released) rather than re-pay the folded keys.
 
 ### Migration 1 → 2 (Milestone 3)
 

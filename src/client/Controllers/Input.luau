@@ -10,6 +10,7 @@
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local UI = require(script.Parent.UI)
 local UIRules = require(script.Parent.UIRules)
@@ -438,8 +439,22 @@ end
 
 function Input.init(c)
 	ctx = c
+	-- Gamepad Y toggles the light, but a shown prompt may also use Y (the P04 lever): while one is on screen, Y
+	-- belongs to the prompt only.
+	local yPrompts: { [ProximityPrompt]: boolean } = {}
+	ProximityPromptService.PromptShown:Connect(function(pp)
+		if pp.GamepadKeyCode == Enum.KeyCode.ButtonY then
+			yPrompts[pp] = true
+		end
+	end)
+	ProximityPromptService.PromptHidden:Connect(function(pp)
+		yPrompts[pp] = nil
+	end)
 	UserInputService.InputBegan:Connect(function(io, processed)
 		if processed then
+			return
+		end
+		if io.KeyCode == Enum.KeyCode.ButtonY and next(yPrompts) ~= nil then
 			return
 		end
 		if io.KeyCode == Enum.KeyCode.LeftShift then

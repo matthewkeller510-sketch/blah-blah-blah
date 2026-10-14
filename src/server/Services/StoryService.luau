@@ -59,9 +59,9 @@ local function say(player: Player, npcId: string, lineId: string)
 	end
 end
 
-local function show(player: Player, name: string, lines: { string }, journal: string?)
+local function show(player: Player, name: string, lines: { string }, journal: string?, pushed: boolean?)
 	if services.NpcService then
-		services.NpcService.show(player, nil, name, lines, journal)
+		services.NpcService.show(player, nil, name, lines, journal, pushed)
 	end
 end
 
@@ -217,7 +217,7 @@ function StoryService.read(player: Player, readableId: string)
 	for _, m in newcomers do
 		local ms = services.PlayerService.get(m)
 		if ms and ms.profile.discoveries[readableId] then
-			show(m, text.title .. " (shared by " .. player.DisplayName .. ")", text.lines, text.journal)
+			show(m, text.title .. " (shared by " .. player.DisplayName .. ")", text.lines, text.journal, true)
 			StoryService.onFact(m)
 		end
 	end

@@ -316,7 +316,7 @@ function PuzzleUI.init(c)
 	ctx.on("radioResult", result)
 	-- step aside for danger, like Dialogue and MissionUI
 	ctx.on("cue", function(d: any)
-		if view and type(d) == "table" and UIRules.THREAT_CUES[d.id] then
+		if view and UIRules.isThreatCue(d) then
 			close()
 		end
 	end)

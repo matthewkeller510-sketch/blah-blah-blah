@@ -4,13 +4,16 @@
 -- and steps aside for threats: it closes when the player goes down or an approach cue for a dangerous creature
 -- arrives, so it never covers the screen during a chase. Important instructions are echoed as a journal notice;
 -- the persistent journal lives in the notebook (story channel).
--- Next is Modal while the strip shows, so the first-person PC cursor is free to click it. The buttons are full touch
+-- Next is Modal while the strip shows a conversation the player asked for, so the first-person PC cursor is free to
+-- click it; dialogue the server pushes unasked (a teammate's shared note, a line after a rescue) leaves mouse-look
+-- alone and is advanced with Enter or dismissed with Backspace (D88). The buttons are full touch
 -- targets. A line too long for the strip at the chosen text size (it may take up to 60% of the screen height) is
 -- shown in pages, so nothing falls off the screen; the strip stays left of the touch grid (UIRules).
 -- Also applies per-player character visibility (`"npcs"` channel): a figure the server marks hidden for this
 -- player (Noah at the depot before you rescued him) is hidden locally. Purely cosmetic; the server decides talk.
 
 local CollectionService = game:GetService("CollectionService")
+local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 
 local UI = require(script.Parent.Parent.Controllers.UI)
@@ -20,7 +23,7 @@ local Dialogue = {}
 local ctx: any
 local C = UI.Colors
 
-type Conversation = { name: string, lines: { string } }
+type Conversation = { name: string, lines: { string }, pushed: boolean }
 
 local panel: Frame
 local nameLabel: TextLabel
@@ -37,17 +40,6 @@ local token = 0
 -- Until the server's first "npcs" message arrives, Noah's depot figure stays hidden (he appears only after a rescue).
 local hidden: { [string]: boolean } = { N06 = true }
 local watched: { [Instance]: RBXScriptConnection } = {}
-
--- Approach cues of damaging creatures: the panel gets out of the way.
-local THREAT_CUES = {
-	scrabbler_windup = true,
-	knocker_knock = true,
-	wader_drag = true,
-	wader_strike = true,
-	thief_rattle = true,
-	thief_strike = true,
-	shelter_probe = true,
-}
 
 local function readSeconds(text: string): number
 	return math.clamp(3 + #text / 22, 3, 9)
@@ -133,7 +125,7 @@ showLine = function()
 	local last = index >= #conv.lines and page >= #pages and #queue == 0
 	nextButton.Text = if last then "Done" else "Next ▸"
 	panel.Visible = true
-	nextButton.Modal = true
+	nextButton.Modal = not conv.pushed
 	if auto then
 		task.delay(readSeconds(text), function()
 			if token == my then
@@ -156,7 +148,8 @@ local function receive(d: any)
 	if #lines == 0 then
 		return
 	end
-	local conv: Conversation = { name = if type(d.name) == "string" then d.name else "", lines = lines }
+	local conv: Conversation =
+		{ name = if type(d.name) == "string" then d.name else "", lines = lines, pushed = d.pushed == true }
 	if type(d.journal) == "string" and d.journal ~= "" then
 		ctx.hud.notice("Journal: " .. d.journal, "info")
 	end
@@ -202,6 +195,18 @@ end
 
 function Dialogue.init(c: any)
 	ctx = c
+	-- Keyboard controls for any open strip (needed for pushed lines, which keep the cursor locked): Enter advances,
+	-- Backspace closes. Neither key is bound elsewhere.
+	UserInputService.InputBegan:Connect(function(io, processed)
+		if processed or not panel or not panel.Visible then
+			return
+		end
+		if io.KeyCode == Enum.KeyCode.Return or io.KeyCode == Enum.KeyCode.KeypadEnter then
+			advance()
+		elseif io.KeyCode == Enum.KeyCode.Backspace then
+			close()
+		end
+	end)
 	panel = UI.frame(ctx.gui, {
 		Name = "Dialogue",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -256,7 +261,7 @@ function Dialogue.init(c: any)
 
 	ctx.on("dialogue", receive)
 	ctx.on("cue", function(d: any)
-		if type(d) == "table" and THREAT_CUES[d.id] and panel.Visible then
+		if (UIRules.isThreatCue(d) or (type(d) == "table" and d.id == "shelter_probe")) and panel.Visible then
 			close()
 		end
 	end)

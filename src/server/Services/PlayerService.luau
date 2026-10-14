@@ -846,8 +846,15 @@ function PlayerService.stabilize(player: Player, target: Player)
 		return
 	end
 	Vitals.stabilize(Config.Health, t.vitals)
+	-- Inside a shelter cell, reaching safety already counts (as entering does for a carried teammate): leaving and
+	-- carrying are refused there (D99), so stabilizing revives at the stabilized health.
+	if t.insideShelterId and Vitals.revive(Config.Health, t.vitals) then
+		syncHumanoidHealth(t)
+		PlayerService.notify(target, player.DisplayName .. " got you back on your feet.", "info")
+	else
+		PlayerService.notify(target, player.DisplayName .. " stabilized you.", "info")
+	end
 	t.dirtyState = true
-	PlayerService.notify(target, player.DisplayName .. " stabilized you.", "info")
 end
 
 -- Carrying a downed teammate (section 07). Uses a weld; detaches safely on drop, party change or downing.

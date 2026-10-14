@@ -69,7 +69,7 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 55 | Field experience (F24, T23) | Explore past 50 experience; rejoin an older profile | Rank-up notice, max health and stamina +2, no free heal; one back-fill notice for older profiles and no second payment on rejoin |
 | 56 | Touch and gamepad | Phone landscape (390 px tall) and tablet; gamepad | 5 × 3 grid clear of the thumbstick and above the jump button, 52 px buttons; party list in the left column; Sprint never sticks; shoulder and D-pad bindings work |
 | 57 | Notebook after rejoin | Rejoin | Discoveries and research listed, sorted, with no notice burst |
-| 58 | Schema 2 rollout | Join a schema-2 profile on an old (schema-1) server, then a new one | Old server refuses with a clear message and releases the lock; the new server loads at once |
+| 58 | Schema 3 rollout | Join a schema-3 profile on an older (schema-1 or schema-2) server, then a new one | The older server refuses with a clear message and releases the lock; the new server loads at once |
 | 59 | Ray-blocking barriers | Aim a chalk mark into the flooded W05 corridor and at the closed P04 grate | The mark lands on the floor or wall, never on an invisible mid-air plane |
 | 60 | Overlapping pocket volumes | Walk PK1's loop version near its east side chamber | Only the PK1 passage is discovered, never PK2 |
 | 61 | No heal on rejoin (F18) | Drop to low health in a tunnel and rejoin; get downed and leave; rejoin | Same health as before leaving, no heal; back injured at 15 health after leaving while downed |
@@ -82,5 +82,8 @@ Lower `Config.Pockets.cycleSeconds` in a test place to see pocket changes quickl
 | 68 | Death costs its loot (F16) | Die next to loot, then try to recover your own new bag before respawning; recover it after respawning | Refused while dead; works after walking back |
 | 69 | Death inside a shelter | Die inside an interior (e.g. a probe at an open entrance) | The bag is just outside that shelter's door; the notice says so |
 | 70 | Abandon while carrying | Carry a survivor, then abandon the mission (solo and in a party) | The survivor is set down first; you can sprint, hide and use tools; nobody is welded to anyone |
-| 71 | Prompt keys | On keyboard and gamepad, use the Carry (J) and lever (U) prompts and the escort prompt | Each prompt fires without also toggling the light or another action; note any gamepad clash |
+| 71 | Prompt keys | On keyboard and gamepad, use the Carry (J) and lever (U / gamepad Y) prompts and the escort prompt | Each prompt fires without also toggling the light or another action (Y lights nothing while the lever prompt shows); note any gamepad clash |
 | 72 | Marker pacing | Four players in a party place markers quickly | Lists update within a few seconds; leaving the party hides markers at once |
+| 73 | Pushed dialogue on PC | A party member reads Elise's note while you look around; rescue Noah with a friend | The shared text appears but mouse-look keeps working; Enter advances, Backspace closes |
+| 74 | Stalking rattle | Open the notebook while the Lantern Thief only stalks nearby | The rattle is captioned but the notebook stays open; it closes when the thief starts its approach |
+| 75 | Revive inside a shelter | Get downed by a probe inside an unsecured shelter; a party member stabilizes you | You are back on your feet at low health, injured |

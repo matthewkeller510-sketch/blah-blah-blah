@@ -218,7 +218,7 @@ local function closePanel()
 	end
 end
 
--- A compact strip at the top of the screen, kept left of the touch action grid (no button lies over a grid button)
+-- A compact strip just below the HUD Status column (health, light, party stay visible), kept left of the touch action grid (no button lies over a grid button)
 -- and, at default text size, above the bottom-left thumbstick area. Close is Modal so the first-person PC cursor can
 -- click it. It closes after one choice, after 20 s, on a dangerous creature's approach cue and when the player goes
 -- down. PROPOSED.
@@ -238,6 +238,22 @@ local function showInspect(id: string)
 	UI.pad(f, 10)
 	UI.list(f, 8)
 	UI.keepClearOfTouch(f, ctx.gui, 0.8, 420)
+	-- Below the Status column so health, light charge and the party list stay visible during the encounter.
+	local status = ctx.gui:FindFirstChild("Status") :: GuiObject?
+	local function placeBelowStatus()
+		local top = 8
+		if status and status.Visible then
+			top = math.floor(status.AbsolutePosition.Y - ctx.gui.AbsolutePosition.Y + status.AbsoluteSize.Y + 8)
+		end
+		f.Position = UDim2.new(f.Position.X.Scale, f.Position.X.Offset, 0, top)
+	end
+	placeBelowStatus()
+	if status then
+		local c = status:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeBelowStatus)
+		f.Destroying:Connect(function()
+			c:Disconnect()
+		end)
+	end
 	local t = UI.label(f, "This mark is not in your notebook.", 17)
 	t.TextXAlignment = Enum.TextXAlignment.Center
 	t.LayoutOrder = 1
@@ -384,7 +400,7 @@ function CreatureFX.init(c: any)
 	end)
 	-- the inspect strip steps aside for danger, like the other screens
 	ctx.on("cue", function(d: any)
-		if type(d) == "table" and UIRules.THREAT_CUES[d.id] then
+		if UIRules.isThreatCue(d) then
 			closePanel()
 		end
 	end)

@@ -546,7 +546,7 @@ function Panels.init(c)
 	end)
 	-- A screen never covers the view during a chase: a dangerous creature's approach cue closes it (PROPOSED).
 	ctx.on("cue", function(d: any)
-		if type(d) == "table" and UIRules.THREAT_CUES[d.id] and current ~= nil and current ~= "onboarding" then
+		if UIRules.isThreatCue(d) and current ~= nil and current ~= "onboarding" then
 			close()
 		end
 	end)
@@ -882,7 +882,7 @@ function Panels.shelter(d: any, requested: boolean?)
 	if current == "onboarding" then
 		return
 	end
-	if requested or current == nil or current == "shelter" then
+	if requested or current == "shelter" or (current == nil and not d.quiet) then
 		renderShelter(d)
 	end
 end

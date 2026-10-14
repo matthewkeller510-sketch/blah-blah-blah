@@ -52,7 +52,7 @@ export type Profile = {
 
 local Profile = {}
 
-Profile.CURRENT_VERSION = 2
+Profile.CURRENT_VERSION = 3
 
 function Profile.default(userId: number, defaultClass: string, startShelterId: string): Profile
 	return {
@@ -99,6 +99,11 @@ local MIGRATIONS: { [number]: (any) -> () } = {
 			p.progression = { xp = 0, awarded = {}, missionPaid = {}, bagsPaid = {} }
 		end
 	end,
+	-- 2 -> 3 (Milestone 3 review fixes): mission and bag experience moved out of progression.awarded into compact
+	-- records (Progression.normalize folds them on load, idempotently), and the optional vitals field was added.
+	-- The bump makes a server still on the earlier schema-2 build refuse such a profile (newer_schema, lock
+	-- released) instead of re-paying the folded keys. Nothing needs transforming, so the step is a no-op.
+	[2] = function(_p) end,
 }
 
 -- True when a profile records play beyond a first visit to the depot.

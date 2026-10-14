@@ -674,4 +674,35 @@ return function(T: any)
 		eq(#CreatureRules.toolTargetOrder({}), 0)
 		eq(table.concat(CreatureRules.toolTargetOrder({ { harmless = true, dist = 4 } }), ","), "1")
 	end)
+
+	test("a creature on the strip beside PK3's mouth wall can always walk out of the Room of Three Doors", function()
+		local homes = (WorldDefs.Creatures.C08_LanternThief :: any).homes :: { string }
+		for _, version in WorldDefs.Pockets.PK3.versions do
+			local versions = defaults()
+			versions.PK3 = version
+			local nav = makeNav(versions)
+			for _, x in { -12, -8, 2, 12, 20, 24 } do
+				for _, home in homes do
+					local pos = v(x, -84 + 1, 1310.3)
+					local left = false
+					for _ = 1, 400 do
+						local target, _final, blocked = CreatureRules.nextLeg(nav, pos, node(home), false)
+						assert(not blocked, string.format("PK3 %s: blocked at x=%d toward %s", version, x, home))
+						local dx, dz = target.x - pos.x, target.z - pos.z
+						local d = math.sqrt(dx * dx + dz * dz)
+						if d < 0.5 then
+							break
+						end
+						local step = math.min(d, 1)
+						pos = v(pos.x + dx / d * step, target.y, pos.z + dz / d * step)
+						if nav.chamberAt(pos) ~= "R05.doorway_room" then
+							left = true
+							break
+						end
+					end
+					assert(left, string.format("PK3 %s: never leaves from x=%d toward %s", version, x, home))
+				end
+			end
+		end
+	end)
 end

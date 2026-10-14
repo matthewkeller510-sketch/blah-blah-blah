@@ -73,7 +73,7 @@ function MissionUI.init(c: any)
 	ctx = c
 	ctx.on("missionDeliver", openChooser)
 	ctx.on("cue", function(d: any)
-		if type(d) == "table" and UIRules.THREAT_CUES[d.id] then
+		if UIRules.isThreatCue(d) then
 			close()
 		end
 	end)

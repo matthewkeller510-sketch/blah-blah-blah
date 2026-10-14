@@ -329,8 +329,18 @@ local function guarded(nav: Nav, pos: V3, target: V3, final: boolean, via: V3?):
 	if not nav.crosses(pos, target) then
 		return target, final, false
 	end
-	if via and flatDist(pos, via) > CreatureRules.ROUTE_ARRIVE and not nav.crosses(pos, via) then
+	-- A leg that stays inside one chamber is never refused: a chamber interior is an open box (as the same-room
+	-- shortcut in nextLeg assumes), even on the strip beside a pocket's mouth wall.
+	local room = nav.chamberAt(pos)
+	if
+		via
+		and flatDist(pos, via) > CreatureRules.ROUTE_ARRIVE
+		and (not nav.crosses(pos, via) or (room ~= nil and room == nav.chamberAt(via)))
+	then
 		return via, false, false
+	end
+	if room ~= nil and room == nav.chamberAt(target) then
+		return target, final, false
 	end
 	return pos, false, true
 end
@@ -540,7 +550,13 @@ function CreatureRules.nextLeg(nav: Nav, pos: V3, goal: V3, wades: boolean): (V3
 	end
 	-- the chamber graph
 	if here == there then
-		return guarded(nav, pos, goal, true, nav.node(here))
+		-- D98 also for the last leg: straight for the goal only from the line between this chamber's centre and
+		-- the goal; from mid-corridor or another corridor around this chamber, return to the centre first.
+		local hereNode = nav.node(here)
+		if CreatureRules.segmentOffset(hereNode, goal, pos) > CreatureRules.CORRIDOR_AXIS_TOLERANCE then
+			return guarded(nav, pos, hereNode, false, nil)
+		end
+		return guarded(nav, pos, goal, true, hereNode)
 	end
 	return hop(nav, pos, room, here, there, wades)
 end

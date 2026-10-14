@@ -1017,7 +1017,8 @@ local function classNames(): { string }
 	return out
 end
 
-function ShelterService.pushPanel(player: Player)
+-- quiet: refresh for another occupant (their screen is not opened over whatever they are doing; D88).
+function ShelterService.pushPanel(player: Player, quiet: boolean?)
 	local s = services.PlayerService.get(player)
 	local cell = cellOf(player)
 	if not s or not cell then
@@ -1077,6 +1078,7 @@ function ShelterService.pushPanel(player: Player)
 	end
 	services.PlayerService.send(player, "shelterPanel", {
 		open = true,
+		quiet = quiet == true,
 		name = def.name,
 		fortification = Shelters.fortification(def, shared),
 		entrances = entrances,
@@ -1151,7 +1153,7 @@ function ShelterService.upgrade(player: Player, upgradeId: string)
 	refreshCellVisuals(cell)
 	services.PlayerService.pushInventory(player)
 	for p in cell.occupants do
-		ShelterService.pushPanel(p)
+		ShelterService.pushPanel(p, p ~= player)
 	end
 	if Shelters.isSecured(def, s.profile.shelterUpgrades) then
 		services.PlayerService.notify(
@@ -1297,7 +1299,7 @@ function ShelterService.fixBreaker(player: Player, breakerLabel: string)
 	services.PlayerService.pushInventory(player)
 	for p in cell.occupants do
 		services.PlayerService.send(p, "cue", { id = "power_restored", position = where })
-		ShelterService.pushPanel(p)
+		ShelterService.pushPanel(p, p ~= player)
 	end
 	safeCall("StoryService", "onFact", player)
 	task.spawn(function()

@@ -280,7 +280,8 @@ local function tickHunt(t: Rec, dt: number, at: Vector3)
 				t.stateUntil = now + R.warnSeconds
 				t.nextRattle = now + R.rattleInterval
 				-- the essential warning reaches the victim even at the edge of the stalking distance (T04)
-				for _, p in Common.cueAll(at, math.max(R.rattleRadius, d + 5), "thief_rattle") do
+				-- warn = true: this rattle starts an approach (screens step aside); the periodic stalking rattle does not
+				for _, p in Common.cueAll(at, math.max(R.rattleRadius, d + 5), "thief_rattle", { warn = true }) do
 					Common.evidence(p, THIEF, "heard_rattle")
 				end
 			end

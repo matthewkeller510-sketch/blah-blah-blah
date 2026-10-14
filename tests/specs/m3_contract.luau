@@ -79,17 +79,33 @@ return function(T: any)
 	print("Milestone 3 data contract")
 
 	test("schema 2 adds progression and migrates a version-1 profile without loss", function()
-		eq(Profile.CURRENT_VERSION, 2)
-		eq(Config.SCHEMA_VERSION, 2)
+		eq(Profile.CURRENT_VERSION, 3)
+		eq(Config.SCHEMA_VERSION, Profile.CURRENT_VERSION)
 		local v1 = Profile.default(7, "Explorer", "R00.depot") :: any
 		v1.schemaVersion = 1
 		v1.progression = nil
 		v1.coins = 33
 		local p = assert(Profile.reconcile(v1, 7, "Explorer", "R00.depot"))
-		eq(p.schemaVersion, 2)
+		eq(p.schemaVersion, Profile.CURRENT_VERSION)
 		eq(p.coins, 33)
 		eq(p.progression.xp, 0)
 		assert(type(p.progression.awarded) == "table")
+	end)
+
+	test("schema 3: a schema-2 profile migrates without loss and older servers refuse schema 3", function()
+		local v2 = Profile.default(9, "Explorer", "R00.depot") :: any
+		v2.schemaVersion = 2
+		v2.coins = 12
+		v2.progression = { xp = 70, awarded = { ["mission:M01:1"] = true, ["disc:R01.split_pier"] = true } }
+		local p = assert(Profile.reconcile(v2, 9, "Explorer", "R00.depot"))
+		eq(p.schemaVersion, 3)
+		eq(p.coins, 12)
+		eq((p :: any).progression.xp, 70)
+		local newer = Profile.default(9, "Explorer", "R00.depot") :: any
+		newer.schemaVersion = Profile.CURRENT_VERSION + 1
+		local refused, err = Profile.reconcile(newer, 9, "Explorer", "R00.depot")
+		eq(refused, nil)
+		eq(err, "newer_schema")
 	end)
 
 	test("onboarding back-fill: played legacy profiles only; abandoned new players keep the free choice", function()

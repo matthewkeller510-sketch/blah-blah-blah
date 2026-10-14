@@ -16,9 +16,20 @@ UIRules.THREAT_CUES = {
 	knocker_knock = true,
 	wader_drag = true,
 	wader_strike = true,
-	thief_rattle = true,
 	thief_strike = true,
 } :: { [string]: boolean }
+
+-- True for a cue that starts a chase. The Lantern Thief rattles every few seconds while it only stalks; only the
+-- rattle that starts its approach (extra.warn) counts, so screens are not closed over and over during a stalk.
+function UIRules.isThreatCue(d: any): boolean
+	if type(d) ~= "table" then
+		return false
+	end
+	if d.id == "thief_rattle" then
+		return type(d.extra) == "table" and d.extra.warn == true
+	end
+	return UIRules.THREAT_CUES[d.id] == true
+end
 
 -- Roblox's default touch jump button (PlayerModule TouchJump): a 70 px button at UDim2.new(1, -95, 1, -90) when the
 -- screen's shorter side is at most 500 px, otherwise a 120 px button at UDim2.new(1, -170, 1, -210).

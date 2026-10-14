@@ -336,9 +336,10 @@ function RecoveryService.recover(requester: Player, ownerUserId: number, kind: s
 			services.PlayerService.notify(owner, "Some items did not fit and stay in the bag.", "warn")
 		end
 		services.PlayerService.pushInventory(owner)
-		-- M11 pays field experience only for the owner's own recovery, never for a delegate's escrow recovery.
+		-- M11 pays field experience only for the owner's own complete recovery, never for a delegate's escrow recovery.
+		-- A partial recovery leaves a same-id leftover in the slot, so it must not mark the bag.
 		local missions = services.MissionService
-		if missions and missions.noteOwnerRecovered then
+		if Inventory.isEmpty(leftover) and missions and missions.noteOwnerRecovered then
 			missions.noteOwnerRecovered(owner, bag.bagId)
 		end
 	end

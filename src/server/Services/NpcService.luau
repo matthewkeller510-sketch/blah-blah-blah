@@ -264,11 +264,24 @@ end
 
 -- Sends a subtitled dialogue panel to one player. `journal` is echoed to the journal on the client; the
 -- persistent journal is derived from facts by StoryService (Story.notes / step journals).
-function NpcService.show(player: Player, npcId: string?, name: string, lines: { string }, journal: string?)
+-- pushed: the player did not ask for this (a teammate's shared note, a line after a rescue). The client then keeps
+-- mouse-look locked and offers keyboard controls instead of freeing the cursor (D88).
+function NpcService.show(
+	player: Player,
+	npcId: string?,
+	name: string,
+	lines: { string },
+	journal: string?,
+	pushed: boolean?
+)
 	if not player.Parent or not services.PlayerService.get(player) then
 		return
 	end
-	services.PlayerService.send(player, "dialogue", { npcId = npcId, name = name, lines = lines, journal = journal })
+	services.PlayerService.send(
+		player,
+		"dialogue",
+		{ npcId = npcId, name = name, lines = lines, journal = journal, pushed = pushed == true }
+	)
 end
 
 local function characterName(npcId: string): string
@@ -290,14 +303,14 @@ end
 
 -- Contract API: shows a specific line from StoryDefs (e.g. say(player, "N05", "radio_log") for Elise's recording)
 -- and writes its journal echo.
-function NpcService.say(player: Player, npcId: string, lineId: string)
+function NpcService.say(player: Player, npcId: string, lineId: string, pushed: boolean?)
 	local byNpc = StoryDefs.Lines[npcId]
 	local line = byNpc and byNpc[lineId]
 	if not line then
 		warn(string.format("[NpcService] no line %s.%s", tostring(npcId), tostring(lineId)))
 		return
 	end
-	NpcService.show(player, npcId, characterName(npcId), line.lines, line.journal)
+	NpcService.show(player, npcId, characterName(npcId), line.lines, line.journal, pushed)
 	if npcId == "N05" then
 		raiseMet(player, "N05", "encountered") -- heard in a recording
 	end

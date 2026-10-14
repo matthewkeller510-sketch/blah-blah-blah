@@ -165,6 +165,38 @@ return function(T: any)
 		walk(v(-90, 1, 340), v(-180, -23, 446), "R01 rubble to R02 inspection room")
 	end)
 
+	test("no trip between room corners and corridor middles cuts through rock (R01, R04)", function()
+		for _, region in { "R01", "R04" } do
+			local points: { V3 } = {}
+			for _, c in WorldDefs.Chambers do
+				if c.regionId == region then
+					local hx, hz = c.size.x / 2 - 3, c.size.z / 2 - 3
+					table.insert(points, v(c.pos.x, c.pos.y + 1, c.pos.z))
+					for _, sx in { -1, 1 } do
+						for _, sz in { -1, 1 } do
+							table.insert(points, v(c.pos.x + sx * hx, c.pos.y + 1, c.pos.z + sz * hz))
+						end
+					end
+				end
+			end
+			for _, cor in WorldDefs.Corridors do
+				local a, b = assert(WorldDefs.chamber(cor.from)), assert(WorldDefs.chamber(cor.to))
+				if cor.pocket == nil and cor.gate == nil and a.regionId == region and b.regionId == region then
+					if a.pos.y == b.pos.y then
+						table.insert(points, v((a.pos.x + b.pos.x) / 2, a.pos.y + 1, (a.pos.z + b.pos.z) / 2))
+					end
+				end
+			end
+			for i, from in points do
+				for j, to in points do
+					if i ~= j then
+						walk(from, to, string.format("%s %d->%d", region, i, j))
+					end
+				end
+			end
+		end
+	end)
+
 	test("the corridor-axis rule: leave only from the line between two centres", function()
 		local a, b = v(0, 0, 0), v(0, 0, 100)
 		eq(CreatureRules.segmentOffset(a, b, v(0, 0, 50)), 0)

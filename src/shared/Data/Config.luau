@@ -6,7 +6,7 @@
 
 local Config = {}
 
-Config.SCHEMA_VERSION = 2 -- must equal Profile.CURRENT_VERSION (a test checks it)
+Config.SCHEMA_VERSION = 3 -- must equal Profile.CURRENT_VERSION (a test checks it)
 
 -- 03. Server/party capacity (TUNE, unverified)
 Config.Server = {

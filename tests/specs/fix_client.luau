@@ -114,10 +114,15 @@ return function(T)
 			assert(def ~= nil, "unknown cue " .. id)
 			assert(def.essential, id .. " should be essential")
 		end
-		eq(n, 6, "chase approach cues")
-		for _, id in { "scrabbler_windup", "knocker_knock", "wader_drag", "thief_rattle" } do
-			assert(UIRules.THREAT_CUES[id], id .. " closes screens")
+		eq(n, 5, "chase approach cues")
+		for _, id in { "scrabbler_windup", "knocker_knock", "wader_drag", "thief_strike" } do
+			assert(UIRules.isThreatCue({ id = id }), id .. " closes screens")
 		end
+		-- the Lantern Thief's rattle closes screens only when it starts an approach, not while it merely stalks
+		assert(UIRules.isThreatCue({ id = "thief_rattle", extra = { warn = true } }), "engagement rattle")
+		assert(not UIRules.isThreatCue({ id = "thief_rattle" }), "stalking rattle")
+		assert(not UIRules.isThreatCue({ id = "miner_rhythm" }), "harmless cue")
+		assert(not UIRules.isThreatCue(nil), "no payload")
 	end)
 
 	-- Touch grid and the jump button (findings 19, 20) ------------------------------------------------------

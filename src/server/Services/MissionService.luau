@@ -1292,7 +1292,7 @@ local function completeRescue(m: Mission)
 				services.SaveService.markDirty(p)
 				commitThen(p, StoryDefs.Rescue.done)
 				if services.NpcService then
-					services.NpcService.say(p, "N06", "rescued")
+					services.NpcService.say(p, "N06", "rescued", true)
 				end
 				task.defer(storyOnFact, p)
 			else
