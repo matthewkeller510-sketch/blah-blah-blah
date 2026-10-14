@@ -23,6 +23,48 @@ local services: any
 local KIND_ITEM = { chalk = "nav.chalk", sign = "nav.sign", rope = "nav.rope" }
 local PLACE_RANGE = 10
 
+-- Paced full lists (review round 2, finding 17). A client always receives its whole visible list (up to
+-- maxPlacedPerPlayer x party size entries), so sending one on every place, retrieve, permission, party or pocket
+-- change let a few requests a second flood a whole party. Each owner now carries a record revision; every refresh
+-- except the join snapshot is queued (RESEND_MIN_SECONDS batches bursts); a queued viewer is sent a new list only
+-- when the owners they see or those owners' revisions changed (NavRecords.viewSignature). When only records
+-- changed, one viewer gets at most one list per NavRecords.resendGap; when the owners they see changed (a party
+-- joined or left), the list goes at the batching delay so visibility follows the current party (D32).
+local RESEND_MIN_SECONDS = 0.25 -- TUNE: batches bursts (a party change queues every member at once)
+local RESEND_MAX_SECONDS = 6 -- TUNE: the longest a record change waits for a viewer with a very long list
+local RESEND_ENTRIES_PER_SECOND = 400 -- TUNE: per-viewer budget; sets the gap after a long list
+
+local WEAK_KEYS = { __mode = "k" }
+local revSeq = 0
+local revOf: { [Player]: number } = setmetatable({}, WEAK_KEYS) :: any -- owner -> record revision
+local sentSig: { [Player]: string } = setmetatable({}, WEAK_KEYS) :: any -- viewer -> signature of the last list
+local sentOwners: { [Player]: string } = setmetatable({}, WEAK_KEYS) :: any -- viewer -> owners of the last list
+local sentAt: { [Player]: number } = setmetatable({}, WEAK_KEYS) :: any -- viewer -> os.clock() of that list
+local sentCount: { [Player]: number } = setmetatable({}, WEAK_KEYS) :: any -- viewer -> entries in that list
+local pending: { [Player]: boolean } = setmetatable({}, WEAK_KEYS) :: any -- viewers waiting for a list
+local flushAt = math.huge
+local flushSeq = 0
+
+-- A new revision whenever an owner's records change. Revisions are unique on this server, so an owner who left
+-- and rejoined never matches a list sent before.
+local function bump(owner: Player)
+	revSeq += 1
+	revOf[owner] = revSeq
+end
+
+local function revisionOf(owner: Player): number
+	if revOf[owner] == nil then
+		bump(owner)
+	end
+	return revOf[owner]
+end
+
+-- A dead player (a body waiting to respawn) places and picks up nothing (review round 2, finding 14). Downed
+-- players keep placing and picking up markers as before.
+local function alive(s: any): boolean
+	return s.alive == true and s.vitals.condition ~= "dead"
+end
+
 local function vec(t): Vector3
 	return Vector3.new(t.x, t.y, t.z)
 end
@@ -49,7 +91,7 @@ end
 
 function NavigationService.place(player: Player, payload: any)
 	local s = services.PlayerService.get(player)
-	if not s or type(payload) ~= "table" then
+	if not s or type(payload) ~= "table" or not alive(s) then
 		return
 	end
 	local kind = payload.kind
@@ -129,6 +171,7 @@ function NavigationService.place(player: Player, payload: any)
 		return
 	end
 	Inventory.remove(s.profile.inventory, itemId, 1)
+	bump(player)
 	services.SaveService.markDirty(player)
 	services.PlayerService.pushInventory(player)
 	NavigationService.refreshGroup(player)
@@ -136,6 +179,10 @@ end
 
 function NavigationService.retrieve(player: Player, ownerUserId: number, recordId: string)
 	if type(recordId) ~= "string" or type(ownerUserId) ~= "number" then
+		return
+	end
+	local rs = services.PlayerService.get(player)
+	if not rs or not alive(rs) then
 		return
 	end
 	local owner = Players:GetPlayerByUserId(ownerUserId)
@@ -176,6 +223,7 @@ function NavigationService.retrieve(player: Player, ownerUserId: number, recordI
 		return
 	end
 	Inventory.add(os_.profile.inventory, ItemDefs.get, res.itemId :: string, res.units :: number, "loadout")
+	bump(owner)
 	services.SaveService.markDirty(owner)
 	services.PlayerService.pushInventory(owner)
 	NavigationService.refreshGroup(owner)
@@ -189,8 +237,10 @@ function NavigationService.setPartyRecovery(player: Player, recordId: string, al
 			rec = rec or pg[recordId]
 		end
 	end
-	if rec then
+	-- Unchanged: no save and no resend.
+	if rec and rec.allowPartyRecovery ~= (allow == true) then
 		rec.allowPartyRecovery = allow == true
+		bump(player)
 		services.SaveService.markDirty(player)
 		NavigationService.refreshGroup(player)
 	end
@@ -236,6 +286,7 @@ function NavigationService.migrateStale(owner: Player): number
 		end
 	end
 	if total > 0 then
+		bump(owner)
 		services.SaveService.markDirty(owner)
 	end
 	return total
@@ -272,20 +323,47 @@ function NavigationService.ropeBlocks(pocketDef: WorldDefs.PocketDef): boolean
 	return Pockets.blocker(pocketDef, { nav = nav }, Config.Pockets.occupancyMargin) ~= nil
 end
 
--- Sends the viewer every record they may see: their own, plus their current party members'. Records of a pocket
--- version that does not exist here migrate first (lazy migration, rule 6).
-function NavigationService.refreshFor(viewer: Player)
-	local out = {}
-	local owners = services.PartyService.members(viewer)
+-- Records of a pocket version that does not exist here migrate first (lazy migration, rule 6). `done` (one flush)
+-- migrates each owner once however many viewers see them.
+local function migrateOwners(owners: { Player }, done: { [Player]: boolean }?)
 	for _, owner in owners do
-		if NavigationService.migrateStale(owner) > 0 then
-			-- the owner's party sees the move too (the second pass finds nothing stale, so this does not repeat)
-			task.defer(function()
-				if owner.Parent and services.PlayerService.get(owner) then
-					NavigationService.refreshGroup(owner)
-				end
-			end)
+		if done then
+			if done[owner] then
+				continue
+			end
+			done[owner] = true
 		end
+		if NavigationService.migrateStale(owner) > 0 then
+			-- the owner's party sees the move too (queued; the second pass finds nothing stale, so this does not repeat)
+			NavigationService.refreshGroup(owner)
+		end
+	end
+end
+
+local function signature(owners: { Player }): string
+	local list: { NavRecords.OwnerRevision } = {}
+	for _, owner in owners do
+		if services.PlayerService.get(owner) then
+			table.insert(list, { id = owner.UserId, rev = revisionOf(owner) })
+		end
+	end
+	return NavRecords.viewSignature(list)
+end
+
+local function ownerSetKey(owners: { Player }): string
+	local ids = {}
+	for _, owner in owners do
+		if services.PlayerService.get(owner) then
+			table.insert(ids, owner.UserId)
+		end
+	end
+	return NavRecords.ownerSetKey(ids)
+end
+
+-- Sends the viewer every record they may see: their own, plus their current party members'.
+local function sendList(viewer: Player, owners: { Player }, sig: string)
+	local out = {}
+	for _, owner in owners do
 		local s = services.PlayerService.get(owner)
 		if s then
 			local ids = services.PartyService.memberIds(owner)
@@ -316,18 +394,108 @@ function NavigationService.refreshFor(viewer: Player)
 		end
 	end
 	services.PlayerService.send(viewer, "nav", out)
+	sentSig[viewer] = sig
+	sentOwners[viewer] = ownerSetKey(owners)
+	sentAt[viewer] = os.clock()
+	sentCount[viewer] = #out
+	pending[viewer] = nil
 end
 
-function NavigationService.refreshGroup(player: Player)
-	for _, m in services.PartyService.members(player) do
-		NavigationService.refreshFor(m)
+-- Sends the viewer's list now (the join snapshot).
+function NavigationService.refreshFor(viewer: Player)
+	local owners = services.PartyService.members(viewer)
+	migrateOwners(owners, nil)
+	sendList(viewer, owners, signature(owners))
+end
+
+-- A queued viewer: a new list only if what they see changed since the last one.
+local function refreshIfChanged(viewer: Player, migrated: { [Player]: boolean })
+	local owners = services.PartyService.members(viewer)
+	migrateOwners(owners, migrated)
+	local sig = signature(owners)
+	if sig ~= sentSig[viewer] then
+		sendList(viewer, owners, sig)
 	end
 end
 
+-- Earliest time a queued viewer may be sent a list: at once when the owners they see changed (party joined or
+-- left: D32 visibility), otherwise one resendGap after their last list.
+local function dueAt(viewer: Player): number
+	if ownerSetKey(services.PartyService.members(viewer)) ~= sentOwners[viewer] then
+		return -math.huge
+	end
+	local gap =
+		NavRecords.resendGap(sentCount[viewer] or 0, RESEND_ENTRIES_PER_SECOND, RESEND_MIN_SECONDS, RESEND_MAX_SECONDS)
+	return (sentAt[viewer] or -math.huge) + gap
+end
+
+local scheduleFlush: (at: number) -> ()
+
+-- Sends every queued viewer whose gap has passed; the others wait for a later flush.
+local function flush()
+	local now = os.clock()
+	local due: { Player } = {}
+	local nextAt = math.huge
+	for viewer in pending do
+		if not viewer.Parent or not services.PlayerService.get(viewer) then
+			pending[viewer] = nil
+		else
+			local at = dueAt(viewer)
+			if at <= now then
+				pending[viewer] = nil
+				table.insert(due, viewer)
+			else
+				nextAt = math.min(nextAt, at)
+			end
+		end
+	end
+	local migrated: { [Player]: boolean } = {}
+	for _, viewer in due do
+		-- one viewer's failure never stops the others
+		xpcall(refreshIfChanged, function(err)
+			warn("[NavigationService] refresh failed: " .. debug.traceback(tostring(err)))
+		end, viewer, migrated)
+	end
+	if nextAt < math.huge then
+		scheduleFlush(nextAt)
+	end
+end
+
+-- One flush is scheduled at a time, at the earliest time any queued viewer needs one.
+scheduleFlush = function(at: number)
+	if at >= flushAt then
+		return
+	end
+	flushAt = at
+	flushSeq += 1
+	local seq = flushSeq
+	task.delay(math.max(0, at - os.clock()), function()
+		if seq ~= flushSeq then
+			return -- an earlier flush was scheduled since; it reschedules whatever is still waiting
+		end
+		flushAt = math.huge
+		flush()
+	end)
+end
+
+-- Queues a viewer for a new list (coalesced and paced; see RESEND_*).
+function NavigationService.queueFor(viewer: Player)
+	pending[viewer] = true
+	scheduleFlush(math.max(os.clock() + RESEND_MIN_SECONDS, dueAt(viewer)))
+end
+
+-- Everyone who sees `player`'s records: the player and their current party.
+function NavigationService.refreshGroup(player: Player)
+	for _, m in services.PartyService.members(player) do
+		NavigationService.queueFor(m)
+	end
+end
+
+-- Party and pocket changes: every viewer is queued; only those whose list changed are sent one.
 function NavigationService.refreshAll()
 	for _, p in Players:GetPlayers() do
 		if services.PlayerService.get(p) then
-			NavigationService.refreshFor(p)
+			NavigationService.queueFor(p)
 		end
 	end
 end

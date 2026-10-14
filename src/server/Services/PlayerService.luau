@@ -681,10 +681,22 @@ function PlayerService.damage(player: Player, amount: number, causesInjury: bool
 	return true
 end
 
--- Cancelable held action. Returns true if it completed without moving or being damaged.
+local function upright(s: Session): boolean
+	return PlayerRules.canAct(s.alive, s.vitals.condition)
+end
+
+-- Contract for other services: the player has a session and can act (alive, not downed, not dead, not carried).
+-- Recoveries, pickups and mission interactions check it before they start and again after their hold.
+function PlayerService.canAct(player: Player): boolean
+	local s = sessions[player]
+	return s ~= nil and upright(s) and s.carriedBy == nil
+end
+
+-- Cancelable held action. Returns true if it completed without moving or being damaged. Only a player who can act
+-- starts one, and going down or dying ends it (a body waiting to respawn never finishes a hold).
 function PlayerService.hold(player: Player, seconds: number, allowMove: boolean?): boolean
 	local s = sessions[player]
-	if not s then
+	if not s or not upright(s) then
 		return false
 	end
 	if os.clock() < s.busyUntil then
@@ -704,7 +716,7 @@ function PlayerService.hold(player: Player, seconds: number, allowMove: boolean?
 			return false
 		end
 		local p = PlayerService.position(player)
-		if not allowMove and start and p and (p - start).Magnitude > 2.5 then
+		if not upright(s) or (not allowMove and start and p and (p - start).Magnitude > 2.5) then
 			s.busyUntil = 0
 			s.busyToken += 1
 			PlayerService.send(player, "hold", { cancelled = true })
@@ -715,10 +727,6 @@ function PlayerService.hold(player: Player, seconds: number, allowMove: boolean?
 	s.dirtyState = true
 	PlayerService.send(player, "hold", { done = true })
 	return true
-end
-
-local function upright(s: Session): boolean
-	return s.alive and s.vitals.condition ~= "downed" and s.vitals.condition ~= "dead"
 end
 
 -- Bandage, dressing or splint (the splint heals 5 and removes the injury penalty through the same path).
@@ -849,6 +857,11 @@ function PlayerService.startCarry(player: Player, target: Player)
 		return
 	end
 	if not upright(s) or s.hiddenAt or s.carriedBy then
+		return
+	end
+	-- Never inside a private interior cell (either side): carrying there is never needed, and ShelterService refuses
+	-- leaving a shelter while carrying or carried (defence in depth).
+	if s.insideShelterId or t.insideShelterId then
 		return
 	end
 	if not services.PartyService.sameParty(player, target) or t.vitals.condition ~= "downed" then
@@ -1253,11 +1266,45 @@ local function onCharacter(s: Session, character: Model)
 	s.dirtyState = true
 end
 
+local function v3(v: Vector3): PlayerRules.V3
+	return { x = v.X, y = v.Y, z = v.Z }
+end
+
+-- Where this death's bag lies (PlayerRules.deathBagSpot). A death inside an interior cell, or while the exit
+-- teleport out of one is still pending, puts it at the stand point outside that shelter's door. Returns
+-- (position, died inside a cell).
+local function deathSpot(player: Player, s: Session): (Vector3, boolean)
+	local here = PlayerService.position(player)
+	local inCell = s.insideShelterId ~= nil
+		or (here ~= nil and services.WorldBuilder.regionAt(here) == "SHELTER_INTERIOR")
+	local door: PlayerRules.V3? = nil
+	if inCell then
+		-- every interior cell belongs to the player's last shelter (entering registers it), so it is the fallback
+		local sid = s.insideShelterId or s.profile.lastShelterId
+		if type(sid) == "string" and WorldDefs.Shelters[sid] then
+			local _, stand = services.WorldBuilder.shelterDoor(sid)
+			door = v3(stand.Position)
+		end
+	end
+	local spot = PlayerRules.deathBagSpot({
+		position = if here then v3(here) else nil,
+		lastGrounded = if s.lastGrounded then v3(s.lastGrounded) else nil,
+		inCell = inCell,
+		door = door,
+		fallback = v3(PlayerService.spawnCFrame(s).Position),
+	})
+	return Vector3.new(spot.x, spot.y, spot.z), inCell
+end
+
 function PlayerService.onDeath(player: Player, _source: string)
 	local s = sessions[player]
 	if not s then
 		return
 	end
+	-- A death ends any held action at once, whichever way it came (damage, bleed-out, Reset, falling out of the
+	-- world): the body never finishes a treatment, a delivery or a bag recovery (review round 2, finding 14).
+	s.busyUntil = 0
+	s.busyToken += 1
 	if s.carrying then
 		PlayerService.dropCarry(player)
 	end
@@ -1268,17 +1315,16 @@ function PlayerService.onDeath(player: Player, _source: string)
 	s.lightOn = false
 	s.lightDiedOn = false
 	resetLightMods(s)
-	local pos = PlayerService.position(player) or s.lastGrounded or Vector3.zero
-	if s.lastGrounded and (pos - s.lastGrounded).Magnitude < 30 then
-		pos = s.lastGrounded -- prefer the last valid grounded location
-	end
+	local pos, inCell = deathSpot(player, s)
 	services.RecoveryService.createDeathBag(player, pos)
 	if services.MissionService then
 		services.MissionService.onPlayerDied(player)
 	end
 	PlayerService.notify(
 		player,
-		"You died. Your unprotected supplies are in a death bag where you fell. Coins and navigation supplies are kept. A later death replaces this death bag.",
+		"You died. Your unprotected supplies are in a death bag "
+			.. (if inCell then "just outside the shelter door" else "where you fell")
+			.. ". Coins and navigation supplies are kept. A later death replaces this death bag.",
 		"danger"
 	)
 	local h = humanoid(player)
@@ -1339,7 +1385,11 @@ local function onPlayerAdded(player: Player)
 	end
 	if not profile then
 		player:Kick(
-			"Your expedition record could not be loaded safely (" .. tostring(err) .. "). Please rejoin in a moment."
+			if err == "previous_session_saving"
+				then "Your previous session on this server is still saving. Please rejoin in a moment."
+				else "Your expedition record could not be loaded safely ("
+					.. tostring(err)
+					.. "). Please rejoin in a moment."
 		)
 		return
 	end

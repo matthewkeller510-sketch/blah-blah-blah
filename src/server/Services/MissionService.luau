@@ -160,6 +160,13 @@ local function notify(p: Player, text: string, kind: string?)
 	end
 end
 
+-- Every rescue, delivery and cache interaction needs a player who can act (alive, not downed, not dead, not
+-- carried), checked when it starts and again after its hold: a body waiting to respawn never joins, treats,
+-- escorts, carries, collects or delivers (review round 2, finding 14).
+local function canAct(p: Player): boolean
+	return services.PlayerService.canAct(p)
+end
+
 local function openGates(): { [string]: boolean }
 	local ok, gates = pcall(function()
 		return services.PuzzleService.openGates()
@@ -1048,7 +1055,8 @@ local function addCarryPrompt(npc: Model)
 	carry.Name = "CarryPrompt"
 	carry.ActionText = "Carry (slower)"
 	carry.ObjectText = npc.Name
-	carry.KeyboardKeyCode = Enum.KeyCode.V
+	-- PROPOSED: J, a key nothing else binds. V is the lantern shield (D79) and E is the Escort prompt beside this one.
+	carry.KeyboardKeyCode = Enum.KeyCode.J
 	carry.UIOffset = Vector2.new(0, 60)
 	carry.HoldDuration = 0.5
 	carry.MaxActivationDistance = 8
@@ -1063,12 +1071,12 @@ local function addCarryPrompt(npc: Model)
 end
 
 function MissionService.interact(player: Player, m: Mission)
-	if missions[m.id] ~= m or not tryJoin(player, m) then
+	if missions[m.id] ~= m or not canAct(player) or not tryJoin(player, m) then
 		return
 	end
 	local s = services.PlayerService.get(player)
 	local npc = m.npc
-	if not s or not npc or s.vitals.condition == "downed" then
+	if not s or not npc then
 		return
 	end
 	local h = npc:FindFirstChildOfClass("Humanoid")
@@ -1093,7 +1101,13 @@ function MissionService.interact(player: Player, m: Mission)
 			return
 		end
 		-- B2: re-check after the hold; another participant may have finished treating or started moving them.
-		if missions[m.id] ~= m or m.state ~= "treat" or m.npc ~= npc or not m.participants[player.UserId] then
+		if
+			missions[m.id] ~= m
+			or m.state ~= "treat"
+			or m.npc ~= npc
+			or not m.participants[player.UserId]
+			or not canAct(player)
+		then
 			return
 		end
 		if useItem then
@@ -1183,20 +1197,22 @@ function MissionService.carry(player: Player, m: Mission)
 	if missions[m.id] ~= m or not npc or (m.state ~= "ready" and m.state ~= "escort") then
 		return
 	end
+	local sess = services.PlayerService.get(player)
+	if not sess then
+		return
+	end
+	if not canAct(player) then
+		if sess.vitals.condition == "downed" then
+			notify(player, "You cannot carry anyone while you are down.", "warn")
+		end
+		return
+	end
 	if not tryJoin(player, m) then
 		return
 	end
 	local pr = services.PlayerService.rootPart(player)
 	local root = npc:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not pr or not root or (pr.Position - root.Position).Magnitude > 9 then
-		return
-	end
-	local sess = services.PlayerService.get(player)
-	if not sess then
-		return
-	end
-	if sess.vitals.condition == "downed" then
-		notify(player, "You cannot carry anyone while you are down.", "warn")
 		return
 	end
 	if sess.carrying then
@@ -1315,7 +1331,7 @@ function MissionService.startStoryRescue(player: Player, model: Model)
 	local s = services.PlayerService.get(player)
 	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local pos = services.PlayerService.position(player)
-	if not s or not root or not pos or (pos - root.Position).Magnitude > 10 or s.vitals.condition == "downed" then
+	if not s or not root or not pos or (pos - root.Position).Magnitude > 10 or not canAct(player) then
 		return
 	end
 	local needed = false
@@ -1386,7 +1402,7 @@ end
 -- M02 Missing Survey Cache ---------------------------------------------------------------------------
 
 function MissionService.collectCache(player: Player, m: Mission)
-	if missions[m.id] ~= m or m.state ~= "collect" then
+	if missions[m.id] ~= m or m.state ~= "collect" or not canAct(player) then
 		return
 	end
 	if m.collected[player.UserId] then
@@ -1399,12 +1415,13 @@ function MissionService.collectCache(player: Player, m: Mission)
 	if not services.PlayerService.hold(player, 1.5) then
 		return
 	end
-	-- re-check after the hold: the mission may have ended or the player abandoned meanwhile
+	-- re-check after the hold: the mission may have ended, the player abandoned, gone down or died meanwhile
 	if
 		missions[m.id] ~= m
 		or m.state ~= "collect"
 		or not m.participants[player.UserId]
 		or m.collected[player.UserId]
+		or not canAct(player)
 	then
 		return
 	end
@@ -1428,7 +1445,7 @@ end
 
 -- Opens the amount chooser for this player (or explains where supplies can be found). Never a store.
 function MissionService.openDelivery(player: Player, m: Mission)
-	if missions[m.id] ~= m or m.state ~= "deliver" then
+	if missions[m.id] ~= m or m.state ~= "deliver" or not canAct(player) then
 		return
 	end
 	if m.collected[player.UserId] then
@@ -1481,7 +1498,7 @@ function MissionService.deliver(player: Player, itemId: string, n: number)
 	if not s or not root or not pos or (pos - root.Position).Magnitude > DELIVERY_RANGE then
 		return
 	end
-	if s.vitals.condition == "downed" then
+	if not canAct(player) then
 		return
 	end
 	local max = Config.Missions.medicalDeliveryMaxItems
@@ -1499,6 +1516,7 @@ function MissionService.deliver(player: Player, itemId: string, n: number)
 		or m.state ~= "deliver"
 		or not m.participants[player.UserId]
 		or m.collected[player.UserId]
+		or not canAct(player)
 		or not MissionRules.validateDelivery(s.profile.inventory, itemId, n, max)
 	then
 		return
@@ -1529,7 +1547,7 @@ function MissionService.openWaterworksCache(player: Player)
 	local cache = m05Cache
 	local pos = services.PlayerService.position(player)
 	local s = services.PlayerService.get(player)
-	if not cache or not pos or not s or (pos - cache.Position).Magnitude > CACHE_RANGE then
+	if not cache or not pos or not s or (pos - cache.Position).Magnitude > CACHE_RANGE or not canAct(player) then
 		return
 	end
 	local m = missionFor(player)
@@ -1565,7 +1583,7 @@ function MissionService.openWaterworksCache(player: Player)
 	if not services.PlayerService.hold(player, 1.5) then
 		return
 	end
-	if missions[mission.id] ~= mission or not mission.participants[player.UserId] then
+	if missions[mission.id] ~= mission or not mission.participants[player.UserId] or not canAct(player) then
 		return
 	end
 	if not MissionRules.claimOnce(mission.collected, player.UserId) then
@@ -1826,6 +1844,12 @@ local function handOver(player: Player, reason: string, endedText: string?, left
 	local m = missionFor(player)
 	if not m then
 		return
+	end
+	-- Abandoning behaves like leaving: put a carried survivor down first, as death and disconnect already have,
+	-- so the leaver is never left with a stale carry or the survivor welded to them (review round 2, finding 0).
+	local s = services.PlayerService.get(player)
+	if m.npc and s and s.carrying and s.carrying.kind == "npc" and s.carrying.target == m.npc then
+		services.PlayerService.dropCarry(player)
 	end
 	m.participants[player.UserId] = nil
 	if m.template == "M02" or m.template == "M03" or m.template == "M05" then

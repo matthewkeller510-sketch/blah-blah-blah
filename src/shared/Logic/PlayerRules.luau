@@ -1,7 +1,8 @@
 --!strict
 -- Pure rules behind PlayerService (sections 07, 08; owner rules F05, F19; docs/MILESTONE-3.md 4.7).
 -- One truth for "is this light actually lit", the light's effective range (lantern shield, Wick Moth factor),
--- flare placement validation, and movement speed with the injury penalty. No Roblox globals.
+-- flare placement validation, movement speed with the injury penalty, who can act and where a death bag lies.
+-- No Roblox globals.
 
 local PlayerRules = {}
 
@@ -168,6 +169,46 @@ function PlayerRules.regenFactors(
 	out[1] = classMultiplier or 1
 	out[2] = if injured then I.staminaRegenMultiplier else 1
 	return out
+end
+
+-- Acting and dying ---------------------------------------------------------------------------------------
+
+-- The one "can this player act" predicate: alive, and neither downed nor dead. Every held action, interaction,
+-- recovery and pickup needs it when it starts and again when it finishes, so a body waiting to respawn never
+-- recovers its own new death bag or finishes anything else (F16; review round 2, findings 14 and 16).
+function PlayerRules.canAct(alive: boolean, condition: string): boolean
+	return alive and condition ~= "downed" and condition ~= "dead"
+end
+
+export type V3 = { x: number, y: number, z: number }
+
+export type DeathSpotInput = {
+	position: V3?, -- the body's root part, when it still exists
+	lastGrounded: V3?, -- the last grounded tunnel point (only tunnels update it)
+	inCell: boolean, -- inside an isolated shelter interior cell (or still standing in one while leaving it)
+	door: V3?, -- the stand point outside the door of that cell's shelter, when a real shelter is known
+	fallback: V3, -- where to put it when nothing else is known (the respawn point)
+}
+
+PlayerRules.DEATH_SNAP_RADIUS = 30 -- the last grounded point wins when the body lies this close to it
+
+-- Where a death bag lies (F16: where the player fell). Interior cells are far outside the map, so a death inside
+-- one leaves the bag just outside that shelter's door (PROPOSED, review round 2 finding 15); it never maps the
+-- cell's coordinates onto whichever chamber happens to be nearest. Elsewhere: the last grounded point when the
+-- body lies near it, else the body, else the last grounded point.
+function PlayerRules.deathBagSpot(i: DeathSpotInput): V3
+	if i.inCell then
+		return i.door or i.lastGrounded or i.fallback
+	end
+	local pos, grounded = i.position, i.lastGrounded
+	if pos and grounded then
+		local dx, dy, dz = pos.x - grounded.x, pos.y - grounded.y, pos.z - grounded.z
+		if math.sqrt(dx * dx + dy * dy + dz * dz) < PlayerRules.DEATH_SNAP_RADIUS then
+			return grounded
+		end
+		return pos
+	end
+	return pos or grounded or { x = 0, y = 0, z = 0 }
 end
 
 return PlayerRules

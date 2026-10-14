@@ -227,12 +227,14 @@ function RecoveryBags.migratePocket(
 	return moved
 end
 
+-- Returns true only when something changed: false when there is no bag or the user was never authorized for it.
 function RecoveryBags.revoke(p: BagProfile, kind: BagKind, userId: number): boolean
 	local bag = p.bags[kind]
-	if not bag then
+	local key = tostring(userId)
+	if not bag or bag.authorized[key] == nil then
 		return false
 	end
-	bag.authorized[tostring(userId)] = nil
+	bag.authorized[key] = nil
 	return true
 end
 

@@ -245,6 +245,41 @@ function NavRecords.migratePocketRecords(
 	return list
 end
 
+-- Full-list resends (review round 2, finding 17). Clients receive their whole visible list each time, so the
+-- server coalesces resends per viewer and skips a viewer whose list did not change.
+
+-- What a viewer's list is made of: every record of the viewer and of each current party member (all of them see
+-- each other's records, D32), so the owners present and each owner's record revision decide the whole list. Two
+-- equal signatures mean the same list. Order-independent.
+export type OwnerRevision = { id: number, rev: number }
+
+function NavRecords.viewSignature(owners: { OwnerRevision }): string
+	local parts = {}
+	for _, o in owners do
+		table.insert(parts, tostring(o.id) .. ":" .. tostring(o.rev))
+	end
+	table.sort(parts)
+	return table.concat(parts, ",")
+end
+
+-- Who a viewer's list is from (the viewer and their current party), whatever the revisions. When it changes the
+-- viewer gains or loses visibility (D32), so that list is not held back by resendGap. Order-independent.
+function NavRecords.ownerSetKey(ownerIds: { number }): string
+	local parts = {}
+	for _, id in ownerIds do
+		table.insert(parts, tostring(id))
+	end
+	table.sort(parts)
+	return table.concat(parts, ",")
+end
+
+-- Shortest time between two full lists to the same viewer when only records changed: proportional to the size of
+-- the last list, so one viewer never receives more than about `entriesPerSecond` entries a second however often
+-- records change.
+function NavRecords.resendGap(entries: number, entriesPerSecond: number, minGap: number, maxGap: number): number
+	return math.clamp(entries / entriesPerSecond, minGap, maxGap)
+end
+
 -- A deep copy that callers outside this module may read without touching the saved record.
 function NavRecords.copy(r: NavRecord): NavRecord
 	local c = table.clone(r)
