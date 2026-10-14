@@ -208,7 +208,8 @@ return function(T: any)
 		eq(byKey["story:A1.1"], P.xp.story, "A1.1 survey board")
 		eq(byKey["story:A1.2"], P.xp.story, "A1.2 one rescue")
 		eq(byKey["story:A1.3"], nil, "A1.3 not done")
-		eq(byKey["mission:M01:1"], P.xp.mission)
+		-- one award per template up to its completions (paid against the high-water mark), not one per completion
+		eq(byKey["mission:M01:1"], nil)
 		eq(byKey["mission:M01:2"], P.xp.mission)
 		eq(byKey["mission:M01:3"], nil)
 		for i = 2, #awards do

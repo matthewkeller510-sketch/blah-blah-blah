@@ -18,6 +18,7 @@ local Net = require(Shared.Net)
 local Director = require(Shared.Logic.Director)
 local Progress = require(Shared.Logic.Progress)
 local Progression = require(Shared.Logic.Progression)
+local Discovery = require(Shared.Logic.Discovery)
 local PlayerRules = require(Shared.Logic.PlayerRules)
 PlayerRules.SHIELDED_BRIGHTNESS = Config.Lantern.shieldedBrightness
 local Story = require(Shared.Logic.Story)
@@ -66,10 +67,11 @@ local FLARE_ID = "tool.flare"
 local PROGRESSION_SYNC_SECONDS = 10 -- PROPOSED: periodic idempotent re-sync of fact-based experience
 local CUE_RADIUS = 60
 
--- Discoveries that record an item claim (unique pickups) pay no place experience.
-local ITEM_CLAIM_DISCOVERIES: { [string]: boolean } = {}
+-- Discoveries that pay no place experience in the back-fill: item claims (unique pickups) and puzzle records (D78),
+-- the same exclusion Discovery.isPlaceDiscovery applies to the live grant.
+local NO_PLACE_XP: { [string]: boolean } = table.clone(Discovery.PUZZLE_RECORDS)
 for _, u in WorldDefs.UniquePickups do
-	ITEM_CLAIM_DISCOVERIES[u.discoveryId] = true
+	NO_PLACE_XP[u.discoveryId] = true
 end
 
 -- Notebook labels for the join-time snapshot (matches DiscoveryService's labels for places).
@@ -321,6 +323,18 @@ local function syncHumanoidHealth(s: Session)
 	end
 end
 
+-- Keeps profile.vitals (health and the injury flag, Vitals.persisted) current so the next join restores them
+-- instead of healing (F18). The autosave and the departure commit write the profile as it stands.
+local function saveVitals(s: Session)
+	local v = Vitals.persisted(Config.Health, s.vitals)
+	local cur = s.profile.vitals
+	if type(cur) == "table" and cur.health == v.health and cur.injured == v.injured then
+		return
+	end
+	s.profile.vitals = v
+	services.SaveService.markDirty(s.player)
+end
+
 -- Flares -----------------------------------------------------------------------------------------------
 
 type Flare = { id: number, position: Vector3, owner: Player, expires: number, part: BasePart }
@@ -491,7 +505,7 @@ local function factAwards(s: Session): { Progression.Award }
 		discoveries = p.discoveries,
 		research = p.research,
 		storyStates = p.storyStates,
-	}, ITEM_CLAIM_DISCOVERIES, stepIds)
+	}, NO_PLACE_XP, stepIds)
 end
 
 local function progressionPayload(snap: Progression.Snapshot)
@@ -1308,6 +1322,9 @@ function PlayerService.handleDeparture(player: Player)
 	if services.PartyService then
 		services.PartyService.onPlayerLeft(player)
 	end
+	-- Health and injury as they are now (a downed player comes back injured at low health; Vitals.persisted).
+	-- Protected: the release below must always run.
+	pcall(saveVitals, s)
 	services.SaveService.release(player)
 	sessions[player] = nil
 	-- Lit flares keep burning after their owner leaves; they simply expire.
@@ -1366,13 +1383,15 @@ local function onPlayerAdded(player: Player)
 		services.RecoveryService.reconcileCrash(player)
 	end
 	-- Field experience: back-fill idempotently from existing facts (earlier play, offline changes), then apply
-	-- the bonuses before the character exists. A fresh session starts at full health as before (vitals are not
-	-- persisted), now at the raised maximum.
+	-- the bonuses before the character exists. Health and the injury flag return as last saved, clamped to the
+	-- raised maximum (F18: a rejoin is never a free heal); a brand-new profile, or one saved before vitals were
+	-- persisted, starts at full health.
 	local rec = Progression.normalize(profile)
 	local added = Progression.applyAwards(rec, factAwards(s))
 	s.rank = Progression.rank(Config.Progression, rec.xp)
 	applyProgression(s, false)
-	s.vitals.health = s.vitals.max
+	Vitals.restore(Config.Health, s.vitals, profile.vitals)
+	syncHumanoidHealth(s) -- a character that loaded during the profile load shows the restored health at once
 	s.stamina.value = Stamina.maxOf(Config.Stamina, s.stamina)
 	if added > 0 then
 		services.SaveService.markDirty(player)
@@ -1588,6 +1607,7 @@ function PlayerService.start()
 			if accCheckpoint >= CHECKPOINT_PERIOD then
 				accCheckpoint = 0
 				for player, s in sessions do
+					pcall(saveVitals, s) -- never stops the loop
 					local grounded = s.lastGrounded
 					if grounded and WorldDefs.isTunnel(s.regionId) then
 						local ok, cp = pcall(checkpointFor, grounded)

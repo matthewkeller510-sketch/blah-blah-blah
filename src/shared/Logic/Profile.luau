@@ -36,8 +36,18 @@ export type Profile = {
 		offset: { x: number, y: number, z: number },
 	}?,
 	settings: { [string]: any },
-	-- Schema 2 (Milestone 3): field experience (F24). awarded holds the dedupe keys already paid.
-	progression: { xp: number, awarded: { [string]: boolean } },
+	-- Schema 2 (Milestone 3): field experience (F24). awarded holds the one-off dedupe keys already paid; mission
+	-- experience is a per-template high-water mark (missionPaid) and paid bag keys a bounded FIFO (bagsPaid).
+	-- Logic/Progression.normalize repairs and folds older records.
+	progression: {
+		xp: number,
+		awarded: { [string]: boolean },
+		missionPaid: { [string]: number },
+		bagsPaid: { string },
+	},
+	-- Schema 2, optional: health and the injury flag at the end of the last session (F18: a rejoin is never a free
+	-- heal). nil for a brand-new profile or one saved before the field existed: that session starts at full health.
+	vitals: { health: number, injured: boolean }?,
 }
 
 local Profile = {}
@@ -75,7 +85,8 @@ function Profile.default(userId: number, defaultClass: string, startShelterId: s
 		toolCharges = {},
 		checkpoint = nil,
 		settings = {},
-		progression = { xp = 0, awarded = {} },
+		progression = { xp = 0, awarded = {}, missionPaid = {}, bagsPaid = {} },
+		vitals = nil, -- written by the session (PlayerService); absent means "start at full health"
 	}
 end
 
@@ -85,7 +96,7 @@ local MIGRATIONS: { [number]: (any) -> () } = {
 	-- Logic/Progression (idempotent per key), so this migration only creates the empty record.
 	[1] = function(p)
 		if type(p.progression) ~= "table" then
-			p.progression = { xp = 0, awarded = {} }
+			p.progression = { xp = 0, awarded = {}, missionPaid = {}, bagsPaid = {} }
 		end
 	end,
 }
