@@ -35,7 +35,8 @@ export type PressureInputs = {
 	inShelter: boolean,
 }
 
--- Encounter states are distinct (section 11).
+-- Encounter states are distinct (section 11). The C08 Lantern Thief maps onto them: roam = idle/search, stalk =
+-- stalking, warn = warning, approach = pursuit, withdraw/decoyed/repelled = disengage.
 export type EncounterState = "observation" | "stalking" | "warning" | "pursuit" | "search" | "disengage" | "idle"
 
 local Director = {}
@@ -55,6 +56,18 @@ function Director.pressure(cfg: DirectorConfig, i: PressureInputs): number
 		p *= cfg.partyPressureScale
 	end
 	return math.clamp(p, 0, 1)
+end
+
+-- Medical supplies for pressure: every held item whose definition is medical (bandage, dressing, splint, ...), so new
+-- medical items count without editing a hard-coded list. `counts` maps item id -> units held.
+function Director.medicalCount(counts: { [string]: number }, isMedical: (string) -> boolean): number
+	local n = 0
+	for id, c in counts do
+		if c > 0 and isMedical(id) then
+			n += c
+		end
+	end
+	return n
 end
 
 -- Stalking distance shrinks as pressure rises: low supplies encourage closer stalking (F06).
@@ -95,6 +108,33 @@ end
 
 function Director.afterRescue(cfg: DirectorConfig, victim: VictimRecord, now: number)
 	victim.cooldownUntil = math.max(victim.cooldownUntil, now + cfg.recoveryIntervalAfterRescueSeconds)
+end
+
+-- A threat that ended without a chase still spaces the next one by minSecondsBetweenThreats.
+function Director.afterThreat(cfg: DirectorConfig, victim: VictimRecord, now: number)
+	victim.cooldownUntil = math.max(victim.cooldownUntil, now + cfg.minSecondsBetweenThreats)
+end
+
+-- A specific recovery interval (e.g. after a Lantern Thief strike). Never shortens an existing one.
+function Director.recover(victim: VictimRecord, now: number, seconds: number)
+	victim.cooldownUntil = math.max(victim.cooldownUntil, now + seconds)
+end
+
+-- Light exposure (docs/MILESTONE-3.md 4.3, Config.Lantern): an open, working lantern widens how far creatures notice
+-- its carrier. `light` is the effective state (on = really emitting), never the raw toggle.
+export type LightExposure = { on: boolean, isLantern: boolean, shielded: boolean }
+
+function Director.exposure(light: LightExposure, multiplier: number): number
+	return if light.on and light.isLantern and not light.shielded then multiplier else 1
+end
+
+-- Sight-radius factor for creatures that see by the player's light: a working light is easier to see (1.4), darkness
+-- harder (0.6); an open lantern multiplies the lit factor by its exposure.
+function Director.sightFactor(light: LightExposure, exposureMultiplier: number): number
+	if not light.on then
+		return 0.6
+	end
+	return 1.4 * Director.exposure(light, exposureMultiplier)
 end
 
 -- Deterministic per-recipient seed for individual perception events (section 11).
