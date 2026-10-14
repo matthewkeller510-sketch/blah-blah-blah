@@ -169,6 +169,9 @@ Config.Puzzles = {
 	fuseWrongBoxSeconds = 4, -- a wrong box costs time, never health, and returns the fuse
 	pulleyDropSeconds = 300, -- P04 grate drops this long after unlatching, only when nobody is under or behind it
 	sluiceRefloodSeconds = 600,
+	pulleySlipSeconds = 15, -- a full basket alone (no latch, no lever) holds the grate this long
+	pulleyLeverSeconds = 30, -- one "hold the lever" action keeps the grate up this long
+	sluiceLoudness = 3, -- each wheel turn's splash, as a multiple of the Wader's hearing radius
 }
 
 -- 20. Saving (Roblox DataStore limits documented in source S06)

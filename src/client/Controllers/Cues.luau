@@ -100,6 +100,8 @@ function Cues.cue(d: any)
 			string.format("[the valve squeals; the gauge settles — %d of %d set right]", d.extra.correct, d.extra.of)
 	elseif d.id == "plaque_turn" and d.extra and d.extra.solved then
 		text = "[the plaque locks into place with a deep click]"
+	elseif d.id == "pulley_creak" and d.extra and type(d.extra.stones) == "number" and type(d.extra.of) == "number" then
+		text = string.format("[the pulley creaks — counterweight %d of %d]", d.extra.stones, d.extra.of)
 	elseif d.extra and type(d.extra.n) == "number" and type(d.extra.of) == "number" then
 		text = string.format("%s — %d of %d", text, d.extra.n, d.extra.of)
 	end

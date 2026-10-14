@@ -746,7 +746,11 @@ local function renderShelter(d: any)
 		UI.pad(row, 6)
 		UI.list(row, 3)
 		UI.label(row, string.format("%s (%s) — stage %d/%d", nice(u.id), u.kind, u.stage, u.maxStage), 15)
-		if u.cost then
+		if u.cost and u.locked then
+			-- grant-only improvements (e.g. station power: repair the breaker cabinet instead)
+			UI.label(row, "Needs: " .. countsText(u.cost), 13, C.dim)
+			UI.label(row, tostring(u.lockReason or "Cannot be built from this panel."), 13, C.warn)
+		elseif u.cost then
 			UI.label(row, "Needs: " .. countsText(u.cost), 13, C.dim)
 			button(row, if u.affordable then "Build" else "Not enough materials", function()
 				if u.affordable then
