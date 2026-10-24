@@ -663,7 +663,10 @@ function Panels.onboarding(d)
 	refreshIf("character")
 	if not onboardingNoticeShown then
 		onboardingNoticeShown = true
-		ctx.hud.notice("Pick a starting class any time: Menu → Character (free once).", "info")
+		ctx.hud.notice(
+			string.format("Pick a starting class any time: %s → Character (free once).", UI.menuHint()),
+			"info"
+		)
 	end
 end
 

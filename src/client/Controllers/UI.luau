@@ -152,6 +152,18 @@ function UI.isTouchMode(): boolean
 	return touchMode
 end
 
+-- How to open the Menu with the input in use, for instructions such as "<menu> → Character".
+function UI.menuHint(): string
+	if touchMode then
+		return "Menu"
+	end
+	local last = game:GetService("UserInputService"):GetLastInputType()
+	if string.find(last.Name, "Gamepad") then
+		return "D-pad up"
+	end
+	return "M"
+end
+
 function UI.setConsumableCount(n: number)
 	if n ~= consumableCount then
 		consumableCount = n

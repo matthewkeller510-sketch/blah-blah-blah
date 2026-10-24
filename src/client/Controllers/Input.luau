@@ -256,6 +256,9 @@ local KEYMAP: { [Enum.KeyCode]: () -> () } = {
 	[Enum.KeyCode.K] = function()
 		ctx.panels.toggle("character")
 	end,
+	[Enum.KeyCode.M] = function()
+		ctx.panels.toggle("menu")
+	end,
 	[Enum.KeyCode.ButtonL3] = function()
 		setCrouch(not crouch)
 	end,

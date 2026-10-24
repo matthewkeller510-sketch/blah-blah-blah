@@ -72,7 +72,7 @@ Work only in a **new or explicitly designated** place (spec section 01). Never s
 | Throw a stone (distraction) | B | Throw (bottom row) | D-pad right |
 | Hide in a niche / step out | E at the niche | tap prompt | prompt |
 | Carry a survivor (rescue prompt) | J | tap prompt | prompt |
-| Notebook · inventory · party · settings · character | Tab · I · P · O · K | Menu (bottom row) | D-pad up (menu) |
+| Menu · notebook · inventory · party · settings · character | M · Tab · I · P · O · K | Menu (bottom row) | D-pad up (menu) |
 | Interact (search, shelter, rescue, recover bag, talk, puzzles) | E (hold) | tap prompt | prompt |
 
 On PC the cursor is freed whenever a screen is open (first person otherwise locks it to the centre). HUD (D108): health top left; consumables as an icon column on the left with counts (key hints on PC); battery bottom right; on touch screens a row of action slots along the bottom, ending beside the jump button, and very small Crouch and Light buttons on the right. Icons are drawn from shapes until art is uploaded (D109). Screens close on a chase cue or when you go down.

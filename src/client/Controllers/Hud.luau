@@ -441,9 +441,12 @@ function Hud.invite(d: any)
 	local name = if type(d.fromName) == "string" then d.fromName else "Someone"
 	local seconds = if type(d.seconds) == "number" then d.seconds else 60
 	pendingInvite = { fromUserId = d.fromUserId, fromName = name, expiresAt = os.clock() + seconds }
-	inviteText.Text = string.format("%s invites you: Menu → Party", name)
+	inviteText.Text = string.format("%s invites you: %s → Party", name, UI.menuHint())
 	inviteText.Visible = true
-	Hud.notice(name .. " invites you to explore together. Answer in Menu → Party.", "info")
+	Hud.notice(
+		string.format("%s invites you to explore together. Answer in %s → Party.", name, UI.menuHint()),
+		"info"
+	)
 	ctx.panels.refreshIf("party")
 	-- Only this invite's timer may clear it (an older invite's timer must not clear a newer one).
 	inviteToken += 1
