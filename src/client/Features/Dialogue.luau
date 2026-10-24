@@ -8,7 +8,8 @@
 -- click it; dialogue the server pushes unasked (a teammate's shared note, a line after a rescue) leaves mouse-look
 -- alone and is advanced with Enter or dismissed with Backspace (D88). The buttons are full touch
 -- targets. A line too long for the strip at the chosen text size (it may take up to 60% of the screen height) is
--- shown in pages, so nothing falls off the screen; the strip stays left of the touch grid (UIRules).
+-- shown in pages, so nothing falls off the screen; the strip sits above the touch action row, between the side
+-- controls (UIRules.hudLayout lowBand).
 -- Also applies per-player character visibility (`"npcs"` channel): a figure the server marks hidden for this
 -- player (Noah at the depot before you rescued him) is hidden locally. Purely cosmetic; the server decides talk.
 
@@ -92,7 +93,7 @@ local function lineWidth(): number
 	if w >= 40 then
 		return w
 	end
-	local _, bw = UIRules.band(ctx.gui.AbsoluteSize.X, UI.touchReserve, 0.56, 620, UIRules.EDGE)
+	local bw = UIRules.bandWidth(ctx.gui.AbsoluteSize.X, UI.layout.lowBand, 0.56, 620)
 	return math.max(40, bw - 2 * UIRules.DIALOGUE_PAD - 116)
 end
 
@@ -224,7 +225,7 @@ function Dialogue.init(c: any)
 	UI.corner(panel, 8)
 	UI.pad(panel, UIRules.DIALOGUE_PAD)
 	UI.list(panel, 8, true)
-	UI.keepClearOfTouch(panel, ctx.gui, 0.56, 620)
+	UI.keepInBand(panel, "low", 0.56, 620, 0) -- above the touch action row, between the side columns
 	local textCol = UI.frame(panel, {
 		Size = UDim2.new(1, -116, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,

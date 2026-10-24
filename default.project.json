@@ -24,7 +24,8 @@
       "$properties": {
         "CameraMode": "LockFirstPerson",
         "CharacterWalkSpeed": 11,
-        "EnableMouseLockOption": false
+        "EnableMouseLockOption": false,
+        "DevTouchMovementMode": "DynamicThumbstick"
       },
       "StarterCharacterScripts": {
         "$className": "StarterCharacterScripts",

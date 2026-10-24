@@ -7,6 +7,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Net = require(Shared.Net)
 
 local Controllers = script.Parent:WaitForChild("Controllers")
+local UI = require(Controllers.UI)
 local Settings = require(Controllers.Settings)
 local Hud = require(Controllers.Hud)
 local Input = require(Controllers.Input)
@@ -27,7 +28,11 @@ gui.Name = "ExpeditionUI"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = false
 gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets -- respect safe areas and system UI
+-- ZIndex orders siblings only: an icon's shapes (Controllers/Icons) layer inside their button and never above a
+-- screen, and a screen draws over the HUD (UI.panel).
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = player:WaitForChild("PlayerGui")
+UI.attach(gui) -- the HUD layout (UIRules.hudLayout) every controller places its elements from
 
 -- Feature modules (src/client/Features/*.luau) subscribe to State channels with ctx.on(channel, fn).
 local listeners: { [string]: { (any) -> () } } = {}

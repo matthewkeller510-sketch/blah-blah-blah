@@ -59,23 +59,23 @@ Work only in a **new or explicitly designated** place (spec section 01). Never s
 | Action | Keyboard / mouse | Touch | Gamepad |
 | --- | --- | --- | --- |
 | Move / look | WASD / mouse | left stick zone / right drag | sticks |
-| Sprint | hold Shift (toggle in Settings) | Sprint | hold L2 |
-| Crouch | C | Crouch | L3 |
-| Light on/off · swap cell | F · R | Light · Cell | Y · D-pad left |
-| Lantern shutters (shielded lantern) | V | Shield | L1 |
-| Light a flare ahead | N | Flare | R1 |
-| Use medical | H | Med | D-pad down |
-| Use tool (iron bar / stun) · switch tool | click · Q | Use | R2 |
-| Chalk · sign · rope (two points) | G · T · Y | Mark (chalk) | — |
-| Help a downed teammate (stabilize, then carry) / drop | X | Help | B |
-| Verified party ping | Z | Ping | R3 |
-| Throw a stone (distraction) | B | Throw | D-pad right |
+| Sprint | hold Shift (toggle in Settings) | Sprint (bottom row) | hold L2 |
+| Crouch | C | small Crouch button (right) | L3 |
+| Light on/off · swap cell | F · R | small Light button (right) · Cell (left column) | Y · D-pad left |
+| Lantern shutters (shielded lantern) | V | Shield (bottom row) | L1 |
+| Light a flare ahead | N | Flare (left column) | R1 |
+| Use medical | H | Medical (left column) | D-pad down |
+| Use tool (iron bar / stun) · switch tool | click · Q | Use (bottom row) | R2 |
+| Chalk · sign · rope (two points) | G · T · Y | Chalk · Sign · Rope (left column; sign and rope while carried) | — |
+| Help a downed teammate (stabilize, then carry) / drop | X | Help (bottom row) | B |
+| Verified party ping | Z | Ping (bottom row) | R3 |
+| Throw a stone (distraction) | B | Throw (bottom row) | D-pad right |
 | Hide in a niche / step out | E at the niche | tap prompt | prompt |
 | Carry a survivor (rescue prompt) | J | tap prompt | prompt |
-| Notebook · inventory · party · settings · character | Tab · I · P · O · K | Menu | D-pad up (menu) |
+| Notebook · inventory · party · settings · character | Tab · I · P · O · K | Menu (bottom row) | D-pad up (menu) |
 | Interact (search, shelter, rescue, recover bag, talk, puzzles) | E (hold) | tap prompt | prompt |
 
-On PC the cursor is freed whenever a screen is open (first person otherwise locks it to the centre). The touch grid is 5 × 3 buttons of 52 px above the jump button. Screens close on a chase cue or when you go down.
+On PC the cursor is freed whenever a screen is open (first person otherwise locks it to the centre). HUD (D108): health top left; consumables as an icon column on the left with counts (key hints on PC); battery bottom right; on touch screens a row of action slots along the bottom, ending beside the jump button, and very small Crouch and Light buttons on the right. Icons are drawn from shapes until art is uploaded (D109). Screens close on a chase cue or when you go down.
 
 ## Ground rules followed
 

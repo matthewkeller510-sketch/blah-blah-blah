@@ -1,6 +1,6 @@
 # Audio cue list
 
-Section 17 asks for a cue spreadsheet before final sound production. **No sound assets are bound yet.** Every cue below is delivered today as a caption with a rough direction (ahead, behind, left, right; close, near, far). Essential cues also get a brief screen-edge pulse, unless "Reduce flashes" is on. Captions for essential cues show even with subtitles off, so counterplay survives muted audio.
+Section 17 asks for a cue spreadsheet before final sound production. **No sound assets are bound yet.** Every cue below is delivered today as a caption with a rough direction (ahead, behind, left, right; close, near, far). Captions for essential cues show even with subtitles off (the screen-edge pulse was removed at the owner's request, D110), so counterplay survives muted audio.
 
 | Cue ID | Source | Essential | Caption | Intended sound (to produce) | Gameplay meaning |
 | --- | --- | --- | --- | --- | --- |
@@ -35,7 +35,7 @@ Region ambience still to produce for R02 (dry stillness, distant settling bone, 
 
 ## Milestone 3 cues
 
-Same rules: every cue below is delivered today as a caption (`src/shared/Data/CueDefs.luau`); essential ones also pulse the screen edge unless "Reduce flashes" is on, and show even with subtitles off.
+Same rules: every cue below is delivered today as a caption (`src/shared/Data/CueDefs.luau`); essential ones show even with subtitles off.
 
 | Cue ID | Source | Essential | Caption | Intended sound (to produce) | Gameplay meaning |
 | --- | --- | --- | --- | --- | --- |

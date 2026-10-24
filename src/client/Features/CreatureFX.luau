@@ -218,10 +218,10 @@ local function closePanel()
 	end
 end
 
--- A compact strip just below the HUD Status column (health, light, party stay visible), kept left of the touch action grid (no button lies over a grid button)
--- and, at default text size, above the bottom-left thumbstick area. Close is Modal so the first-person PC cursor can
--- click it. It closes after one choice, after 20 s, on a dangerous creature's approach cue and when the player goes
--- down. PROPOSED.
+-- A compact strip in the top band under the objective (UIRules.hudLayout topBand, noticeTop): between the health
+-- readout and the party list, above the touch action row, so it covers no HUD button or readout; it draws over
+-- notices. Close is Modal so the first-person PC cursor can click it. It closes after one choice, after 20 s, on a
+-- dangerous creature's approach cue and when the player goes down. PROPOSED.
 local function showInspect(id: string)
 	closePanel()
 	local f = UI.frame(ctx.gui, {
@@ -237,23 +237,11 @@ local function showInspect(id: string)
 	UI.corner(f, 8)
 	UI.pad(f, 10)
 	UI.list(f, 8)
-	UI.keepClearOfTouch(f, ctx.gui, 0.8, 420)
-	-- Below the Status column so health, light charge and the party list stay visible during the encounter.
-	local status = ctx.gui:FindFirstChild("Status") :: GuiObject?
-	local function placeBelowStatus()
-		local top = 8
-		if status and status.Visible then
-			top = math.floor(status.AbsolutePosition.Y - ctx.gui.AbsolutePosition.Y + status.AbsoluteSize.Y + 8)
-		end
-		f.Position = UDim2.new(f.Position.X.Scale, f.Position.X.Offset, 0, top)
-	end
-	placeBelowStatus()
-	if status then
-		local c = status:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeBelowStatus)
-		f.Destroying:Connect(function()
-			c:Disconnect()
-		end)
-	end
+	f.ZIndex = 5
+	UI.keepInBand(f, "top", 0.8, 420)
+	UI.onLayout(f, function(l)
+		f.Position = UDim2.new(f.Position.X.Scale, f.Position.X.Offset, 0, l.noticeTop)
+	end)
 	local t = UI.label(f, "This mark is not in your notebook.", 17)
 	t.TextXAlignment = Enum.TextXAlignment.Center
 	t.LayoutOrder = 1

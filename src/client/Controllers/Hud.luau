@@ -1,15 +1,15 @@
 --!strict
--- Gameplay HUD (section 17): center marker, health state, contextual stamina, light charge, concise objective,
--- small party list, notices and save status. No enemy radar and no map of unexplored space.
--- Milestone 3: lantern open/shielded, flares carried and burning, the injury penalty (text, never colour alone)
--- and the field-experience rank (docs/MILESTONE-3.md 4.7, 4.8).
--- Layout: the party list and a pending party invitation sit in the left Status column, and notices stay left of the
--- touch action grid, so the grid on the right never hides them (T21). An invitation is answered in the Party screen
--- (Accept / Decline there): a box with buttons on the HUD would sit under the grid on phones, cannot be clicked with
--- the first-person PC cursor, and must not interrupt movement (section 14). PROPOSED.
+-- Gameplay HUD (section 17), laid out per D108 (owner request): no status panel. A slim health readout sits top
+-- left, the battery gauge bottom right, the active objective and notices top centre, and the party list, an open
+-- party invitation and save problems top right. The consumable column, the touch action row and the very small
+-- Crouch and Light buttons belong to Input. No enemy radar and no map of unexplored space.
+-- States are never colour alone: the health number, "Exhausted", the injury line and the battery's words
+-- ("off", "low", "shut", "moths", "No light") carry them. An invitation is answered in the Party screen (section 14).
 
 local TweenService = game:GetService("TweenService")
 local UI = require(script.Parent.UI)
+local UIRules = require(script.Parent.UIRules)
+local Icons = require(script.Parent.Icons)
 
 local Hud = {}
 local ctx: any
@@ -18,15 +18,14 @@ local C = UI.Colors
 local healthText: TextLabel
 local healthFill: Frame
 local capMarker: Frame
-local staminaBack: Frame
+local staminaRow: Frame
 local staminaFill: Frame
-local staminaText: TextLabel
-local lightText: TextLabel
-local flareText: TextLabel
-local injuryText: TextLabel
-local rankText: TextLabel
+local statusText: TextLabel
+local batteryText: TextLabel
+local batteryBody: Frame
+local batteryFill: Frame
 local objective: TextLabel
-local partyBox: Frame
+local membersBox: Frame
 local noticeBox: Frame
 local saveText: TextLabel
 local holdBack: Frame
@@ -39,9 +38,11 @@ local missionObjective = ""
 local storyObjective = ""
 local inShelter = false
 local inviteToken = 0
+local saveToken = 0
 type Invite = { fromUserId: number, fromName: string, expiresAt: number }
 local pendingInvite: Invite? = nil
 local missionTitle = "Mission" -- the active mission's title, so a failure names the right mission
+local MAX_NOTICES = 3
 
 -- Priority: active mission, then the story objective, then the shelter reminder.
 local function refreshObjective()
@@ -52,22 +53,43 @@ local function refreshObjective()
 		else ""
 end
 
+-- A row of the vitals readout: a 16 px icon slot on the left, a bar in the middle, room for a number on the right.
+local function barRow(parent: Instance, name: string, height: number, barHeight: number, color: Color3, order: number)
+	local row = UI.frame(parent, {
+		Name = name,
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+	})
+	local back, fill = UI.bar(row, name .. "Bar", color)
+	back.AnchorPoint = Vector2.new(0, 0.5)
+	back.Position = UDim2.new(0, 22, 0.5, 0)
+	back.Size = UDim2.new(1, -62, 0, barHeight)
+	back.BackgroundTransparency = 0.35
+	return row, back, fill
+end
+
+local function outlined(t: TextLabel): TextLabel
+	t.TextStrokeTransparency = 0.45
+	t.TextStrokeColor3 = C.charcoal
+	return t
+end
+
 function Hud.init(c)
 	ctx = c
 	local gui = ctx.gui
 
-	local status = UI.frame(gui, {
-		Name = "Status",
-		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(250, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-	})
-	UI.corner(status)
-	UI.pad(status, 8)
-	UI.list(status, 4)
-	healthText = UI.label(status, "Health", 15)
-	local hb
-	hb, healthFill = UI.bar(status, "Health", C.injury)
+	-- Vitals, top left: heart, health bar with the half-cap marker (F18) and the number; stamina only while it
+	-- matters; one status line (exhausted, or the injury penalty and what fixes it).
+	local vitals = UI.frame(gui, { Name = "Vitals", BackgroundTransparency = 1 })
+	UI.onLayout(vitals, function(l)
+		UI.place(vitals, l.vitals)
+	end)
+	UI.list(vitals, 3)
+	local healthRow, hb
+	healthRow, hb, healthFill = barRow(vitals, "Health", 16, 8, C.injury, 1)
+	local heart = UI.frame(healthRow, { Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1 })
+	Icons.draw(heart, "heart")
 	capMarker = UI.frame(hb, {
 		Name = "Cap",
 		Size = UDim2.new(0, 2, 1, 4),
@@ -75,53 +97,116 @@ function Hud.init(c)
 		BackgroundColor3 = C.bone,
 		BackgroundTransparency = 0.3,
 	})
-	staminaText = UI.label(status, "", 13, C.dim)
-	staminaBack, staminaFill = UI.bar(status, "Stamina", C.bone)
-	lightText = UI.label(status, "Light: —", 14)
-	flareText = UI.label(status, "", 13)
-	flareText.Visible = false
-	-- The injury penalty (D40) is spelled out: what it does and what fixes it.
-	injuryText = UI.label(status, "+ Injured: sprint slowed — a bandage or splint fixes it", 13, C.warn)
-	injuryText.Visible = false
-	rankText = UI.label(status, "Field rank 0", 12, C.dim)
-	-- Party conditions under the player's own status (the right side belongs to the touch grid).
-	partyBox = UI.frame(status, {
-		Name = "Party",
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		LayoutOrder = 10,
-		Visible = false,
-	})
-	UI.list(partyBox, 2)
-	inviteText = UI.label(status, "", 13, C.teal)
-	inviteText.LayoutOrder = 11
-	inviteText.Visible = false
+	healthText = outlined(UI.label(healthRow, "", 14))
+	healthText.AnchorPoint = Vector2.new(1, 0.5)
+	healthText.Position = UDim2.new(1, 0, 0.5, 0)
+	healthText.Size = UDim2.new(0, 36, 1, 0)
+	healthText.AutomaticSize = Enum.AutomaticSize.None
+	healthText.TextXAlignment = Enum.TextXAlignment.Right
+	local sRow, _, sFill = barRow(vitals, "Stamina", 8, 5, C.bone, 2)
+	staminaRow, staminaFill = sRow, sFill
+	staminaRow.Visible = false
+	statusText = outlined(UI.label(vitals, "", 12, C.warn))
+	statusText.LayoutOrder = 3
+	statusText.Visible = false
 
-	objective = UI.label(gui, "", 16)
+	-- Battery gauge, bottom right: the words before the percentage say off / low / shut / moths.
+	local battery = UI.frame(gui, { Name = "Battery", BackgroundTransparency = 1 })
+	UI.onLayout(battery, function(l)
+		UI.place(battery, l.battery)
+	end)
+	local nub = UI.frame(battery, {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.fromOffset(3, 8),
+		BackgroundColor3 = C.bone,
+		BackgroundTransparency = 0.2,
+	})
+	UI.corner(nub, 1)
+	batteryBody = UI.frame(battery, {
+		Name = "Body",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -4, 0.5, 0),
+		Size = UDim2.fromOffset(34, 16),
+		BackgroundColor3 = C.charcoal,
+		BackgroundTransparency = 0.5,
+	})
+	UI.corner(batteryBody, 3)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = C.bone
+	stroke.Thickness = 2
+	stroke.Parent = batteryBody
+	local inner = UI.frame(batteryBody, {
+		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.new(1, -6, 1, -6),
+		BackgroundTransparency = 1,
+	})
+	batteryFill = UI.frame(inner, { Name = "Fill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.bone })
+	UI.corner(batteryFill, 1)
+	batteryText = outlined(UI.label(battery, "No light", 13, C.dim))
+	batteryText.AnchorPoint = Vector2.new(1, 0.5)
+	batteryText.Position = UDim2.new(1, -44, 0.5, 0)
+	batteryText.Size = UDim2.new(1, -44, 1, 0)
+	batteryText.AutomaticSize = Enum.AutomaticSize.None
+	batteryText.TextXAlignment = Enum.TextXAlignment.Right
+	batteryText.TextWrapped = false
+
+	-- Objective and notices, top centre between the vitals and the party list. The objective is one line.
+	objective = outlined(UI.label(gui, "", 15))
 	objective.AnchorPoint = Vector2.new(0.5, 0)
-	objective.Position = UDim2.new(0.5, 0, 0, 12)
-	objective.Size = UDim2.new(0.5, 0, 0, 0)
+	objective.Position = UDim2.new(0.5, 0, 0, UIRules.TOP)
+	objective.Size = UDim2.new(0.5, 0, 0, UIRules.OBJECTIVE_H)
+	objective.AutomaticSize = Enum.AutomaticSize.None
+	objective.TextWrapped = false
+	objective.TextTruncate = Enum.TextTruncate.AtEnd
 	objective.TextXAlignment = Enum.TextXAlignment.Center
-	objective.TextStrokeTransparency = 0.6
+	UI.keepInBand(objective, "top", 0.5, 460)
 
 	noticeBox = UI.frame(gui, {
 		Name = "Notices",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -150),
-		Size = UDim2.new(0.55, 0, 0, 0),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, UI.layout.noticeTop),
+		Size = UDim2.new(0.5, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 	})
 	local l = UI.list(noticeBox, 4)
-	l.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	UI.keepClearOfTouch(noticeBox, gui, 0.55)
+	UI.keepInBand(noticeBox, "top", 0.5, 460)
 
-	saveText = UI.label(gui, "", 12, C.dim)
-	saveText.AnchorPoint = Vector2.new(0, 1)
-	saveText.Position = UDim2.new(0, 12, 1, -8)
-	saveText.Size = UDim2.fromOffset(300, 0)
+	-- Party list, invitation, save problems and the debug readout, top right.
+	local topRight = UI.frame(gui, {
+		Name = "Party",
+		AnchorPoint = Vector2.new(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	})
+	UI.onLayout(topRight, function(lay)
+		topRight.Position = UDim2.fromOffset(lay.party.x + lay.party.w, lay.party.y)
+		topRight.Size = UDim2.fromOffset(lay.party.w, 0)
+	end)
+	local tl = UI.list(topRight, 2)
+	tl.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	membersBox = UI.frame(topRight, {
+		Name = "Members",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		Visible = false,
+	})
+	UI.list(membersBox, 2)
+	inviteText = outlined(UI.label(topRight, "", 12, C.teal))
+	inviteText.LayoutOrder = 2
+	inviteText.TextXAlignment = Enum.TextXAlignment.Right
+	inviteText.Visible = false
+	saveText = outlined(UI.label(topRight, "", 11, C.dim))
+	saveText.LayoutOrder = 3
+	saveText.TextXAlignment = Enum.TextXAlignment.Right
+	saveText.Visible = false
+	pressureText = outlined(UI.label(topRight, "", 11, C.dim))
+	pressureText.LayoutOrder = 4
+	pressureText.TextXAlignment = Enum.TextXAlignment.Right
 
 	holdBack, holdFill = UI.bar(gui, "Hold", C.amber)
 	holdBack.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -145,21 +230,44 @@ function Hud.init(c)
 	downedText.Size = UDim2.new(0.7, 0, 0, 0)
 	downedText.TextXAlignment = Enum.TextXAlignment.Center
 	downedText.TextStrokeTransparency = 0.4
-	-- the DOWN / HIDDEN instructions stay readable over the touch grid (text only: taps still reach the buttons)
+	-- the DOWN / HIDDEN instructions stay readable over every HUD button (text only: taps still reach the buttons)
 	downedText.ZIndex = 50
-
-	pressureText = UI.label(gui, "", 12, C.dim)
-	pressureText.AnchorPoint = Vector2.new(1, 1)
-	pressureText.Position = UDim2.new(1, -12, 1, -8)
-	pressureText.Size = UDim2.fromOffset(200, 0)
-	pressureText.TextXAlignment = Enum.TextXAlignment.Right
 
 	ctx.settings.onChanged(function(k, v)
 		if k == "crosshair" then
 			crosshair.Visible = v
 		end
 	end)
-	ctx.on("progression", Hud.progression)
+end
+
+local function battery(d: any)
+	if not d.lightName then
+		batteryFill.Size = UDim2.fromScale(0, 1)
+		batteryText.Text = "No light"
+		batteryText.TextColor3 = C.dim
+		local s = batteryBody:FindFirstChildOfClass("UIStroke")
+		if s then
+			s.Color = C.dim
+		end
+		return
+	end
+	local charge = math.clamp(d.lightCharge, 0, 100)
+	local low = charge < 15
+	local word = if not d.lightOn
+		then "off"
+		elseif d.lightDimmed then "moths"
+		elseif d.isLantern and d.shielded then "shut"
+		elseif low then "low"
+		else nil
+	batteryText.Text = (if word then word .. " · " else "") .. string.format("%d%%", math.floor(charge))
+	local tone = if low or d.lightDimmed then C.warn elseif d.lightOn then C.bone else C.dim
+	batteryText.TextColor3 = tone
+	batteryFill.BackgroundColor3 = tone
+	batteryFill.Size = UDim2.fromScale(charge / 100, 1)
+	local s = batteryBody:FindFirstChildOfClass("UIStroke")
+	if s then
+		s.Color = if d.lightOn then C.bone else C.dim
+	end
 end
 
 function Hud.vitals(d: any)
@@ -167,39 +275,20 @@ function Hud.vitals(d: any)
 	healthFill.Size = UDim2.fromScale(math.clamp(frac, 0, 1), 1)
 	capMarker.Position = UDim2.new(d.passiveCap / d.maxHealth, -1, 0, -2)
 	local cond = d.condition
-	local word = if cond == "healthy"
-		then "Steady"
-		elseif cond == "injured" then "Injured"
-		elseif cond == "downed" then "DOWN"
-		else "Dead"
-	healthText.Text = string.format("%s · %d/%d", word, math.floor(d.health + 0.5), d.maxHealth)
+	healthText.Text = tostring(math.floor(d.health + 0.5))
 	healthText.TextColor3 = if cond == "healthy" then C.bone else C.warn
-	staminaBack.Visible = d.showStamina
-	staminaText.Visible = d.showStamina
+	staminaRow.Visible = d.showStamina == true
 	staminaFill.Size = UDim2.fromScale(math.clamp(d.stamina / math.max(1, d.staminaMax), 0, 1), 1)
 	staminaFill.BackgroundColor3 = if d.exhausted then C.dim else C.bone
-	staminaText.Text = if d.exhausted then "Exhausted — walking until you recover" else "Stamina"
-	if d.lightName then
-		lightText.Text = string.format(
-			"%s%s %s · %d%% · %d cell%s%s",
-			d.lightName,
-			if d.isLantern then (if d.shielded then " (shielded)" else " (open)") else "",
-			if d.lightOn then "ON" else "off",
-			math.floor(d.lightCharge),
-			d.cells,
-			if d.cells == 1 then "" else "s",
-			if d.lightDimmed then " · moths dim it" else ""
-		)
-		lightText.TextColor3 = if d.lightCharge < 15 or d.lightDimmed then C.warn else C.bone
-	else
-		lightText.Text = "No light"
-		lightText.TextColor3 = C.dim
-	end
-	local flares, lit = d.flares or 0, d.flaresLit or 0
-	flareText.Visible = flares > 0 or lit > 0
-	flareText.Text =
-		string.format("Flares: %d carried%s", flares, if lit > 0 then string.format(" · %d burning", lit) else "")
-	injuryText.Visible = d.injured == true and cond ~= "downed" and cond ~= "dead"
+	-- One status line: exhaustion while it lasts, otherwise the injury penalty (D40) and what fixes it.
+	local injured = d.injured == true and cond ~= "downed" and cond ~= "dead"
+	statusText.Text = if d.exhausted
+		then "Exhausted: walk to recover"
+		elseif injured then "Injured: slow sprint — bandage or splint"
+		else ""
+	statusText.TextColor3 = if d.exhausted then C.bone else C.warn
+	statusText.Visible = statusText.Text ~= ""
+	battery(d)
 	if d.hidden then
 		downedText.Text = "HIDDEN — creatures cannot sense you. Use the niche prompt to step out."
 	elseif cond == "downed" then
@@ -220,6 +309,7 @@ end
 
 function Hud.inventory(_d: any) end
 
+-- Compact notices under the objective; at most three at once, the oldest goes first.
 function Hud.notice(text: string, kind: string?)
 	local f = UI.frame(noticeBox, {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -227,11 +317,12 @@ function Hud.notice(text: string, kind: string?)
 		BackgroundColor3 = if kind == "danger"
 			then C.injury
 			elseif kind == "warn" then Color3.fromRGB(70, 56, 30)
-			else C.panel,
+			else C.charcoal,
+		BackgroundTransparency = 0.35,
 	})
 	UI.corner(f)
-	UI.pad(f, 6)
-	local t = UI.label(f, (if kind == "danger" then "! " elseif kind == "warn" then "• " else "") .. text, 15)
+	UI.pad(f, 4)
+	local t = UI.label(f, (if kind == "danger" then "! " elseif kind == "warn" then "• " else "") .. text, 14)
 	t.TextXAlignment = Enum.TextXAlignment.Center
 	local kids = 0
 	for _, c in noticeBox:GetChildren() do
@@ -239,7 +330,7 @@ function Hud.notice(text: string, kind: string?)
 			kids += 1
 		end
 	end
-	if kids > 4 then
+	if kids > MAX_NOTICES then
 		for _, c in noticeBox:GetChildren() do
 			if c:IsA("Frame") and c ~= f then
 				c:Destroy()
@@ -259,16 +350,32 @@ function Hud.notice(text: string, kind: string?)
 	end)
 end
 
+-- Save status (T20), top right. A problem stays on screen until the next status; routine saves show briefly.
 function Hud.save(d: any)
 	local map = {
 		loaded = "Profile loaded",
 		saving = "Saving…",
 		saved = "Saved",
-		failed = "Save failed — will retry",
-		offline = "Not saving: data store unavailable",
+		failed = "Save failed — retrying",
+		offline = "Not saving",
 	}
-	saveText.Text = (map[d.status] or d.status) .. (if d.detail then (" (" .. d.detail .. ")") else "")
-	saveText.TextColor3 = if d.status == "failed" or d.status == "offline" then C.warn else C.dim
+	local problem = d.status == "failed" or d.status == "offline"
+	saveText.Text = map[d.status] or tostring(d.status)
+	saveText.TextColor3 = if problem then C.warn else C.dim
+	saveText.Visible = true
+	saveToken += 1
+	if problem then
+		if d.detail then
+			Hud.notice(tostring(d.detail), "warn")
+		end
+		return
+	end
+	local token = saveToken
+	task.delay(3, function()
+		if saveToken == token then
+			saveText.Visible = false
+		end
+	end)
 end
 
 local holdTween: Tween?
@@ -294,16 +401,20 @@ function Hud.hold(d: any)
 end
 
 function Hud.party(d: any)
-	UI.clear(partyBox)
-	partyBox.Visible = #d.members > 0
+	UI.clear(membersBox)
+	membersBox.Visible = #d.members > 0
 	for _, m in d.members do
 		local cond = if m.condition == "healthy"
 			then "ok"
 			elseif m.condition == "injured" then "injured"
 			elseif m.condition == "downed" then "DOWN"
 			else m.condition
-		local t =
-			UI.label(partyBox, string.format("%s%s · %s", if m.leader then "★ " else "", m.name, cond), 14, C.teal)
+		local t = outlined(
+			UI.label(membersBox, string.format("%s%s · %s", if m.leader then "★ " else "", m.name, cond), 13, C.teal)
+		)
+		t.TextXAlignment = Enum.TextXAlignment.Right
+		t.TextWrapped = false
+		t.TextTruncate = Enum.TextTruncate.AtEnd
 		if m.condition == "downed" then
 			t.TextColor3 = C.warn
 		end
@@ -324,7 +435,7 @@ function Hud.invite(d: any)
 	local name = if type(d.fromName) == "string" then d.fromName else "Someone"
 	local seconds = if type(d.seconds) == "number" then d.seconds else 60
 	pendingInvite = { fromUserId = d.fromUserId, fromName = name, expiresAt = os.clock() + seconds }
-	inviteText.Text = string.format("%s invites you to explore together. Answer in Menu → Party (P).", name)
+	inviteText.Text = string.format("%s invites you: Menu → Party", name)
 	inviteText.Visible = true
 	Hud.notice(name .. " invites you to explore together. Answer in Menu → Party.", "info")
 	ctx.panels.refreshIf("party")
@@ -382,21 +493,6 @@ end
 function Hud.story(d: any)
 	storyObjective = if d.complete then "" else ("Story: " .. d.objective)
 	refreshObjective()
-end
-
--- Field experience (F24): rank and bonuses; the server sends the rank-up notice itself.
-function Hud.progression(d: any)
-	if type(d) ~= "table" or type(d.rank) ~= "number" then
-		return
-	end
-	rankText.Text = if d.rank > 0
-		then string.format(
-			"Field rank %d · +%d stamina · +%d health",
-			d.rank,
-			d.staminaBonus or 0,
-			d.healthBonus or 0
-		)
-		else string.format("Field rank 0 · %d/%d xp", math.floor(d.xp or 0), d.nextRankXp or 0)
 end
 
 function Hud.debugPressure(d: any)

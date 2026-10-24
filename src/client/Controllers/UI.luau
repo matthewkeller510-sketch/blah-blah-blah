@@ -111,40 +111,83 @@ function UI.bar(parent: Instance, name: string, color: Color3): (Frame, Frame)
 	return back, fill
 end
 
--- Width at the right edge taken by the touch action grid while it is shown (0 otherwise). Input sets it; HUD strips
--- and small popups stay left of it (keepClearOfTouch) so nothing they show lies under, or on top of, its buttons.
-UI.touchReserve = 0
-local touchReserveChanged = Instance.new("BindableEvent")
+-- HUD layout (UIRules.hudLayout, D108) for the current screen size, input mode and number of consumable slots.
+-- Hud and Input place their elements from it; centred strips and popups stay inside its bands (keepInBand).
+UI.BAR_SLOTS = 7 -- touch action row: Menu, Ping, Help, Shield, Throw, Use, Sprint
+UI.layout = (nil :: any) :: UIRules.HudLayout
+local layoutChanged = Instance.new("BindableEvent")
+local layoutGui: GuiBase2d? = nil
+local touchMode = false
+local consumableCount = 4
 
-function UI.setTouchReserve(px: number)
-	if px ~= UI.touchReserve then
-		UI.touchReserve = px
-		touchReserveChanged:Fire()
+function UI.relayout()
+	local gui = layoutGui
+	if not gui then
+		return
+	end
+	local s = gui.AbsoluteSize
+	local cam = workspace.CurrentCamera
+	local view = if cam then cam.ViewportSize else s
+	UI.layout = UIRules.hudLayout(s.X, s.Y, view.X, view.Y, touchMode, consumableCount, UI.BAR_SLOTS)
+	layoutChanged:Fire()
+end
+
+-- Called once by Main with the HUD's ScreenGui, before any controller builds its elements.
+function UI.attach(gui: GuiBase2d)
+	layoutGui = gui
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(UI.relayout)
+	UI.relayout()
+end
+
+function UI.setTouchMode(on: boolean)
+	if on ~= touchMode then
+		touchMode = on
+		UI.relayout()
 	end
 end
 
--- Keeps a horizontally centred element (AnchorPoint.X = 0.5) between the left margin and the touch grid while the
--- grid is shown (UIRules.band); otherwise it is centred at `frac` of the screen width as before. Only X changes.
--- Follows screen size and grid changes until the element is destroyed.
-function UI.keepClearOfTouch(obj: GuiObject, gui: GuiBase2d, frac: number, maxW: number?)
-	local function apply()
-		local w = gui.AbsoluteSize.X
-		local pos, size = obj.Position, obj.Size
-		if UI.touchReserve <= 0 or w <= 0 then
-			obj.Position = UDim2.new(0.5, 0, pos.Y.Scale, pos.Y.Offset)
-			obj.Size = UDim2.new(frac, 0, size.Y.Scale, size.Y.Offset)
-		else
-			local x, bw = UIRules.band(w, UI.touchReserve, frac, maxW or math.huge, UIRules.EDGE)
-			obj.Position = UDim2.new(0, math.floor(x + bw / 2), pos.Y.Scale, pos.Y.Offset)
-			obj.Size = UDim2.new(0, math.floor(bw), size.Y.Scale, size.Y.Offset)
-		end
+function UI.isTouchMode(): boolean
+	return touchMode
+end
+
+function UI.setConsumableCount(n: number)
+	if n ~= consumableCount then
+		consumableCount = n
+		UI.relayout()
 	end
-	apply()
-	local a = gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(apply)
-	local b = touchReserveChanged.Event:Connect(apply)
-	obj.Destroying:Connect(function()
-		a:Disconnect()
-		b:Disconnect()
+end
+
+-- Calls fn with the layout now and after every change, until `owner` is destroyed.
+function UI.onLayout(owner: Instance, fn: (UIRules.HudLayout) -> ())
+	fn(UI.layout)
+	local c = layoutChanged.Event:Connect(function()
+		fn(UI.layout)
+	end)
+	owner.Destroying:Connect(function()
+		c:Disconnect()
+	end)
+end
+
+-- Puts a GuiObject on a layout rectangle (offsets from the gui's top-left corner).
+function UI.place(obj: GuiObject, r: UIRules.Rect)
+	obj.AnchorPoint = Vector2.zero
+	obj.Position = UDim2.fromOffset(r.x, r.y)
+	obj.Size = UDim2.fromOffset(r.w, r.h)
+end
+
+-- Keeps a horizontally centred element (AnchorPoint.X = 0.5) inside a layout band: "top" (objective, notices) or
+-- "low" (captions, the dialogue strip, popups). The bands are symmetric, so only the width changes. With
+-- `bottomGap`, the element's bottom (AnchorPoint.Y = 1) also sits that far above the low band's bottom edge, which
+-- is above the touch action row.
+function UI.keepInBand(obj: GuiObject, band: "top" | "low", frac: number, maxW: number?, bottomGap: number?)
+	UI.onLayout(obj, function(l)
+		local w = if layoutGui then layoutGui.AbsoluteSize.X else 0
+		local b = if band == "top" then l.topBand else l.lowBand
+		local size, pos = obj.Size, obj.Position
+		local bw = UIRules.bandWidth(w, b, frac, maxW or math.huge)
+		obj.Size = UDim2.new(0, math.floor(bw), size.Y.Scale, size.Y.Offset)
+		local y = if bottomGap then UDim.new(1, -(l.lowBottom + bottomGap)) else pos.Y
+		obj.Position = UDim2.new(0.5, 0, y.Scale, y.Offset)
 	end)
 end
 
@@ -160,6 +203,7 @@ function UI.panel(parent: Instance, title: string, onClose: () -> ()): (Frame, S
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.new(UIRules.PANEL_SCALE_W, 0, UIRules.PANEL_SCALE_H, 0),
 		BackgroundTransparency = 0.05,
+		ZIndex = 10, -- over the HUD's consumable column and action row; captions (50) stay above
 	})
 	local cons = Instance.new("UISizeConstraint")
 	cons.MaxSize = Vector2.new(UIRules.PANEL_MAX_W, UIRules.PANEL_MAX_H)

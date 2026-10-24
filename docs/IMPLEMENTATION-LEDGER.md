@@ -6,7 +6,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 
 | Label | Meaning |
 | --- | --- |
-| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 341 tests in `tests/specs`). |
+| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 349 tests in `tests/specs`). |
 | `CODED` | Roblox code exists, compiles, passes the strict type check against the Roblox API definitions and lints clean, but **has not been run in Studio or on a device**. |
 | `PARTIAL` | Part of the requirement is coded; the gap is stated. |
 | `PLANNED` | Specified, not built. |
@@ -28,7 +28,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 
 | Rule | Status | Notes |
 | --- | --- | --- |
-| F01 Mature horror, phones/tablets/PC first | PARTIAL | Touch-first controls: a 5 × 3 grid of 52 px buttons above the jump button, a free cursor on PC whenever a screen is open, screens that close during a chase. Tone needs art, audio and device testing. Content direction recorded (D36); the rating questionnaire is not done (section 22). |
+| F01 Mature horror, phones/tablets/PC first | PARTIAL | Touch-first HUD (D108): consumable icons on the left, action slots along the bottom beside the jump button, very small Crouch and Light on the right, battery bottom right; a free cursor on PC whenever a screen is open, screens that close during a chase. Tone needs art, audio and device testing. Content direction recorded (D36); the rating questionnaire is not done (section 22). |
 | F02 Historical tunnels get stranger with depth | PARTIAL | R00–R03 grounded, R04 survey station with mis-dated equipment, R05 changing passages. R06–R09 are PLANNED. |
 | F03 Repeatable activities + long adventure | PARTIAL | Repeatable M01, M02, M03, M05, M07, scavenging and research; Acts I–II (roughly 3–5 hours of the 40-hour target, untested). Acts III–V PLANNED. |
 | F04 Light and medical are the primary resources | CODED | Adds the shielded lantern, flares, splints and battery crafting. |
@@ -70,7 +70,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | 14 Parties | CODED | Shelter occupants regroup when parties change. |
 | 15 Death, logout, recovery | CODED / LOGIC-TESTED | Pocket-aware anchors; health saved across sessions. |
 | 16 Navigation persistence | CODED / LOGIC-TESTED | Pocket versions and migration; preset route ids only. |
-| 17 UI, accessibility, audio | PARTIAL | Dialogue, mission and puzzle screens; captions above panels; Reduce flashes respected by every new effect. Still no audio assets. |
+| 17 UI, accessibility, audio | PARTIAL | Dialogue, mission and puzzle screens; captions above panels; Reduce flashes respected by every new effect. HUD redesigned at the owner's request (D108–D111): no status panel, icons drawn from shapes, no screen-edge pulse, Crouch and Light below the 48 px minimum by request. Still no audio or image assets. |
 | 18 Visual production | PLANNED | Greybox only. |
 | 19 Performance / client–server | PARTIAL | No device profiling. |
 | 20 Save model | CODED | Schema 3 (`docs/SAVE-SCHEMA.md`): field experience, pocket-versioned records, saved health. |
@@ -101,7 +101,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | T18 Navigation visibility after party change | LOGIC-TESTED / CODED | Includes pocket migration |
 | T19 Receipts exactly once | LOGIC-TESTED / CODED | No products configured |
 | T20 Save failure visible; no concurrent overwrite | CODED | Lock-release and same-server rejoin fixes |
-| T21 Phone/tablet/PC layouts | PARTIAL | Layout arithmetic tested for phones and tablets; needs devices |
+| T21 Phone/tablet/PC layouts | PARTIAL | HUD layout arithmetic (D108) tested for phones, tablets and desktops; needs devices |
 | T22 Real-device performance | PLANNED | |
 | T23 Long-term progression without real money | LOGIC-TESTED | Field experience; no paid path |
 | T24 Content audit | This ledger | |

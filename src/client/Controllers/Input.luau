@@ -1,8 +1,9 @@
 --!strict
 -- Input (section 07, 17): touch first, then keyboard/mouse and gamepad. Sends intents and requests only.
--- Touch layout: landscape, default Roblox left thumbstick for movement, right side for look, separated action
--- buttons (48-52 px) clustered just above the default jump button, whose size and place depend on the screen size
--- (UIRules.touchGrid), inside safe areas.
+-- On-screen controls (D108, owner request; geometry in UIRules.hudLayout): consumables as an icon column on the
+-- left (shown on every device, with key hints on PC); on touch screens a row of action slots along the very bottom,
+-- ending just left of the default jump button, and very small Crouch and Light buttons on the right. Landscape,
+-- dynamic thumbstick on the left, camera drag on the right, inside safe areas.
 -- Milestone 3 bindings (docs/MILESTONE-3.md 4.7): lantern shield V / ButtonL1 / touch "Shield"; place a flare
 -- N / ButtonR1 / touch "Flare"; character and field experience K. Gamepad also gains Menu (DPadUp), medical
 -- (DPadDown, moved off ButtonX, the default ProximityPrompt key), swap cell (DPadLeft), throw (DPadRight),
@@ -14,6 +15,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local UI = require(script.Parent.UI)
 local UIRules = require(script.Parent.UIRules)
+local Icons = require(script.Parent.Icons)
 
 local Input = {}
 local ctx: any
@@ -30,9 +32,7 @@ local WEAPONS = { "tool.iron_bar", "tool.stun_device" }
 local WEAPON_NAMES: { [string]: string } =
 	{ ["tool.iron_bar"] = "Short Iron Bar", ["tool.stun_device"] = "Stun Device" }
 local sprintTouch: InputObject? = nil -- the touch that holds Sprint (released wherever that finger lifts)
-local touchButtons: { TextButton } = {}
-local flareButton: TextButton? = nil
-local shieldButton: TextButton? = nil
+local refreshControls: () -> () = function() end
 
 local function aim(range: number): RaycastResult?
 	local cam = workspace.CurrentCamera
@@ -62,6 +62,7 @@ local function setCrouch(v: boolean)
 		h.CameraOffset = if crouch then Vector3.new(0, -1.6, 0) else Vector3.zero
 	end
 	sendIntents()
+	refreshControls()
 end
 
 local function inv(): { [string]: number }
@@ -279,162 +280,407 @@ local KEYMAP: { [Enum.KeyCode]: () -> () } = {
 	end,
 }
 
-local function refreshTouchLabels()
-	local fb = flareButton
-	if fb then
-		local n = inv()["tool.flare"] or 0
-		fb.Text = if n > 0 then string.format("Flare %d", n) else "Flare"
-		fb.TextTransparency = if n > 0 then 0 else 0.45
-	end
-	local sb = shieldButton
-	if sb then
-		local v = ctx.state.vitals
-		local lantern = v ~= nil and v.isLantern == true
-		sb.Text = if lantern and v.shielded then "Open" else "Shield"
-		sb.TextTransparency = if lantern then 0 else 0.45
-	end
-end
-
 local function releaseTouchSprint()
 	sprintTouch = nil
 	if not ctx.settings.get("sprintToggle") then
 		sprintHeld = false
 		sendIntents()
 	end
+	refreshControls()
 end
 
--- Touch grid: 5 columns x 3 rows (13 used), filled from the bottom-right corner so the most used actions (Sprint,
--- Crouch, Use, Med, Light) sit nearest the thumb. It sits just above the default jump button, which is 70 px on
--- phones and 120 px and higher up on tablets, so the offset follows the screen size. At 52 px it fits a 390-px-tall
--- phone; cells shrink only on shorter screens and never below 48 px (UIRules.touchGrid). It stays on the right side:
--- the left thumbstick zone is never covered, and the HUD strips and popups keep clear of it (UI.setTouchReserve).
--- PROPOSED (D79 revised from 4 x 4), to be checked on real phones (T21).
-local function buildTouch()
-	local frame = UI.frame(ctx.gui, {
-		Name = "TouchActions",
-		AnchorPoint = Vector2.new(1, 1),
-		BackgroundTransparency = 1,
-	})
-	local grid = Instance.new("UIGridLayout")
-	grid.SortOrder = Enum.SortOrder.LayoutOrder
-	grid.StartCorner = Enum.StartCorner.BottomRight
-	grid.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	grid.VerticalAlignment = Enum.VerticalAlignment.Bottom
-	grid.Parent = frame
-	-- Size and place the grid for the current screen; tell the HUD how much of the right edge it takes.
-	local function place()
-		local s = ctx.gui.AbsoluteSize
-		local cam = workspace.CurrentCamera
-		local view = if cam then cam.ViewportSize else s
-		local g = UIRules.touchGrid(s.X, s.Y, view.X, view.Y)
-		frame.Position = UDim2.new(1, -g.right, 1, -g.bottom)
-		frame.Size = UDim2.fromOffset(g.width, g.height)
-		grid.CellSize = UDim2.fromOffset(g.cell, g.cell)
-		grid.CellPadding = UDim2.fromOffset(g.gap, g.gap)
-		UI.setTouchReserve(if frame.Visible then g.reserve else 0)
-	end
-	local order = 0
-	local function btn(text: string, onDown: (InputObject) -> (), onUp: (() -> ())?): TextButton
-		local b = Instance.new("TextButton")
-		order += 1
-		b.LayoutOrder = order
-		b.Text = text
-		b.Font = UI.font()
-		b.TextSize = math.floor(13 * UI.TextScale)
-		b.TextWrapped = true
-		b.TextColor3 = UI.Colors.bone
-		b.BackgroundColor3 = UI.Colors.charcoal
-		b.BackgroundTransparency = 0.25
-		UI.corner(b, 26)
-		b.Parent = frame
-		b.InputBegan:Connect(function(io)
+-- A HUD button that acts the moment it is touched or clicked (no wait for release), like the default jump button.
+local function pressable(b: GuiButton, onDown: (InputObject) -> (), onUp: (() -> ())?)
+	b.InputBegan:Connect(function(io)
+		if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
+			onDown(io)
+			refreshControls()
+		end
+	end)
+	if onUp then
+		b.InputEnded:Connect(function(io)
 			if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
-				onDown(io)
+				onUp()
+				refreshControls()
 			end
 		end)
-		if onUp then
-			b.InputEnded:Connect(function(io)
-				if
-					io.UserInputType == Enum.UserInputType.Touch
-					or io.UserInputType == Enum.UserInputType.MouseButton1
-				then
-					onUp()
-				end
-			end)
-		end
-		table.insert(touchButtons, b)
-		return b
 	end
-	-- bottom row, right to left: Sprint, Crouch, Use, Med, Light
-	btn("Sprint", function(io)
-		if ctx.settings.get("sprintToggle") then
-			sprintToggled = not sprintToggled
-		else
-			sprintHeld = true
-			sprintTouch = io
-		end
-		sendIntents()
-	end, function()
-		if sprintHeld then
-			releaseTouchSprint()
-		end
-	end)
-	btn("Crouch", function()
-		setCrouch(not crouch)
-	end)
-	btn("Use", function()
-		useTool()
-	end)
-	btn("Med", function()
-		useMedical()
-	end)
-	btn("Light", function()
-		ctx.send("light.toggle")
-	end)
-	-- second row: Cell, Throw, Mark, Flare, Shield
-	btn("Cell", function()
-		ctx.send("light.swap")
-	end)
-	btn("Throw", function()
-		ctx.send("throw")
-	end)
-	btn("Mark", function()
-		placeMarker("chalk")
-	end)
-	flareButton = btn("Flare", function()
-		placeFlare()
-	end)
-	shieldButton = btn("Shield", function()
-		shieldLantern()
-	end)
-	-- top row: Help, Ping, Menu
-	btn("Help", function()
-		rescueAction()
-	end)
-	btn("Ping", function()
-		ctx.send("party.ping")
-	end)
-	btn("Menu", function()
-		ctx.panels.toggle("menu")
-	end)
-	refreshTouchLabels()
-	ctx.on("inventory", refreshTouchLabels)
-	ctx.on("vitals", refreshTouchLabels)
-	ctx.settings.onChanged(function(k, v)
-		if k == "textScale" then
-			for _, b in touchButtons do
-				b.TextSize = math.floor(13 * v)
+end
+
+local function slotButton(parent: Instance, name: string, order: number): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.LayoutOrder = order
+	b.Text = ""
+	b.AutoButtonColor = true
+	b.BackgroundColor3 = UI.Colors.charcoal
+	b.BackgroundTransparency = 0.3
+	b.BorderSizePixel = 0
+	UI.corner(b, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "Active"
+	stroke.Color = UI.Colors.amber
+	stroke.Thickness = 2
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Enabled = false
+	stroke.Parent = b
+	b.Parent = parent
+	return b
+end
+
+local function cornerLabel(parent: Instance, size: number, color: Color3, anchor: Vector2): TextLabel
+	local t = UI.label(parent, "", size, color)
+	t.AnchorPoint = anchor
+	t.Position = UDim2.new(anchor.X, if anchor.X > 0 then -3 else 4, anchor.Y, if anchor.Y > 0 then -1 else 2)
+	t.Size = UDim2.new(1, -6, 0, size + 2)
+	t.AutomaticSize = Enum.AutomaticSize.None
+	t.TextWrapped = false
+	t.TextXAlignment = if anchor.X > 0 then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left
+	t.TextStrokeTransparency = 0.3
+	t.TextStrokeColor3 = UI.Colors.charcoal
+	t.ZIndex = 2
+	return t
+end
+
+-- A small count badge in a slot's bottom-right corner, on its own dark backing so it reads over the icon.
+local function countBadge(parent: Instance): TextLabel
+	local t = UI.label(parent, "", 12, UI.Colors.bone)
+	t.AnchorPoint = Vector2.new(1, 1)
+	t.Position = UDim2.new(1, -2, 1, -2)
+	t.Size = UDim2.fromOffset(0, 15)
+	t.AutomaticSize = Enum.AutomaticSize.X
+	t.TextWrapped = false
+	t.TextXAlignment = Enum.TextXAlignment.Center
+	t.BackgroundColor3 = UI.Colors.charcoal
+	t.BackgroundTransparency = 0.15
+	t.ZIndex = 2
+	UI.corner(t, 4)
+	local p = Instance.new("UIPadding")
+	p.PaddingLeft, p.PaddingRight = UDim.new(0, 3), UDim.new(0, 3)
+	p.Parent = t
+	return t
+end
+
+type Consumable = {
+	name: string,
+	icon: string,
+	hint: string, -- keyboard key, shown on PC
+	optional: boolean, -- shown only while carried
+	count: (have: { [string]: number }) -> number,
+	act: () -> (),
+	button: TextButton?,
+	iconFrame: Frame?,
+	countLabel: TextLabel?,
+	hintLabel: TextLabel?,
+	extraLabel: TextLabel?,
+}
+
+local function itemCount(id: string): (have: { [string]: number }) -> number
+	return function(have)
+		return have[id] or 0
+	end
+end
+
+-- The consumable column, top to bottom. Sign and rope appear while carried (they had no touch control before).
+local CONSUMABLES: { Consumable } = {
+	{
+		name = "Medical",
+		icon = "med",
+		hint = "H",
+		optional = false,
+		count = function(have)
+			return (have["med.cloth_dressing"] or 0) + (have["med.bandage"] or 0) + (have["med.splint"] or 0)
+		end,
+		act = useMedical,
+	},
+	{
+		name = "Cell",
+		icon = "cell",
+		hint = "R",
+		optional = false,
+		count = itemCount("power.cell"),
+		act = function()
+			ctx.send("light.swap")
+		end,
+	},
+	{ name = "Flare", icon = "flare", hint = "N", optional = false, count = itemCount("tool.flare"), act = placeFlare },
+	{
+		name = "Chalk",
+		icon = "chalk",
+		hint = "G",
+		optional = false,
+		count = itemCount("nav.chalk"),
+		act = function()
+			placeMarker("chalk")
+		end,
+	},
+	{
+		name = "Sign",
+		icon = "sign",
+		hint = "T",
+		optional = true,
+		count = itemCount("nav.sign"),
+		act = function()
+			placeMarker("sign")
+		end,
+	},
+	{
+		name = "Rope",
+		icon = "rope",
+		hint = "Y",
+		optional = true,
+		count = itemCount("nav.rope"),
+		act = function()
+			placeMarker("rope")
+		end,
+	},
+}
+
+local function buildConsumables()
+	local frame = UI.frame(ctx.gui, { Name = "Consumables", BackgroundTransparency = 1 })
+	local grid = Instance.new("UIGridLayout")
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.FillDirection = Enum.FillDirection.Vertical
+	grid.Parent = frame
+	for i, c in CONSUMABLES do
+		local b = slotButton(frame, c.name, i)
+		c.button = b
+		c.iconFrame = Icons.draw(b, c.icon, 0.14)
+		c.countLabel = countBadge(b)
+		c.hintLabel = cornerLabel(b, 10, UI.Colors.dim, Vector2.new(0, 0))
+		c.extraLabel = cornerLabel(b, 10, UI.Colors.amber, Vector2.new(1, 0))
+		pressable(b, function()
+			c.act()
+		end)
+	end
+	UI.onLayout(frame, function(l)
+		UI.place(frame, l.column)
+		grid.CellSize = UDim2.fromOffset(l.columnCell, l.columnCell)
+		grid.CellPadding = UDim2.fromOffset(UIRules.SLOT_GAP, UIRules.SLOT_GAP)
+		grid.FillDirectionMaxCells = l.columnRows
+		for _, c in CONSUMABLES do
+			local h = c.hintLabel
+			if h then
+				h.Text = if l.touch then "" else c.hint
 			end
 		end
 	end)
-	frame.Visible = UserInputService.TouchEnabled
-	place()
-	UserInputService.LastInputTypeChanged:Connect(function(t)
-		frame.Visible = t == Enum.UserInputType.Touch
-			or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
-		place()
+end
+
+type Action =
+	{ name: string, label: string, icon: string, button: TextButton?, iconFrame: Frame?, labelText: TextLabel? }
+
+-- The touch action row, left to right; Sprint and Use end next to the jump button, nearest the right thumb.
+local ACTIONS: { Action } = {
+	{ name = "Menu", label = "Menu", icon = "menu" },
+	{ name = "Ping", label = "Ping", icon = "ping" },
+	{ name = "Help", label = "Help", icon = "help" },
+	{ name = "Shield", label = "Shield", icon = "lantern" },
+	{ name = "Throw", label = "Throw", icon = "stone" },
+	{ name = "Use", label = "Use", icon = "bar" },
+	{ name = "Sprint", label = "Sprint", icon = "sprint" },
+}
+local actionByName: { [string]: Action } = {}
+
+local function buildActionRow()
+	local frame = UI.frame(ctx.gui, { Name = "TouchActions", BackgroundTransparency = 1 })
+	local list = UI.list(frame, UIRules.SLOT_GAP, true)
+	list.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	local handlers: { [string]: { down: (InputObject) -> (), up: (() -> ())? } } = {
+		Menu = {
+			down = function()
+				ctx.panels.toggle("menu")
+			end,
+		},
+		Ping = {
+			down = function()
+				ctx.send("party.ping")
+			end,
+		},
+		Help = { down = rescueAction },
+		Shield = { down = shieldLantern },
+		Throw = {
+			down = function()
+				ctx.send("throw")
+			end,
+		},
+		Use = { down = useTool },
+		Sprint = {
+			down = function(io)
+				if ctx.settings.get("sprintToggle") then
+					sprintToggled = not sprintToggled
+				else
+					sprintHeld = true
+					sprintTouch = io
+				end
+				sendIntents()
+			end,
+			up = function()
+				if sprintHeld then
+					releaseTouchSprint()
+				end
+			end,
+		},
+	}
+	for i, a in ACTIONS do
+		local b = slotButton(frame, a.name, i)
+		local area = UI.frame(b, {
+			Size = UDim2.new(1, 0, 1, -12),
+			BackgroundTransparency = 1,
+		})
+		a.button = b
+		a.iconFrame = Icons.draw(area, a.icon, 0.1)
+		local t = cornerLabel(b, 10, UI.Colors.bone, Vector2.new(0.5, 1))
+		t.Position = UDim2.new(0.5, 0, 1, -2)
+		t.TextXAlignment = Enum.TextXAlignment.Center
+		t.Text = a.label
+		a.labelText = t
+		actionByName[a.name] = a
+		local h = handlers[a.name]
+		pressable(b, h.down, h.up)
+	end
+	UI.onLayout(frame, function(l)
+		local bar = l.bar
+		frame.Visible = bar ~= nil
+		if bar then
+			UI.place(frame, bar)
+			for _, a in ACTIONS do
+				local b = a.button
+				if b then
+					b.Size = UDim2.fromOffset(l.barCell, l.barCell)
+				end
+			end
+		end
 	end)
-	ctx.gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+end
+
+-- Crouch and Light: very small (owner request, D108): a 30 px button inside a 40 px touch area, on the right.
+local crouchVisual: Frame
+local crouchIcon: Frame
+local lightIcon: Frame
+
+local function buildSmallButtons()
+	local frame = UI.frame(ctx.gui, { Name = "SmallActions", BackgroundTransparency = 1 })
+	UI.list(frame, UIRules.SMALL_GAP, true)
+	local function small(name: string, icon: string, order: number, onDown: () -> ()): (Frame, Frame)
+		local hit = Instance.new("TextButton")
+		hit.Name = name
+		hit.LayoutOrder = order
+		hit.Text = ""
+		hit.BackgroundTransparency = 1
+		hit.Size = UDim2.fromOffset(UIRules.SMALL_HIT, UIRules.SMALL_HIT)
+		hit.Parent = frame
+		local visual = UI.frame(hit, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(UIRules.SMALL_ICON, UIRules.SMALL_ICON),
+			BackgroundColor3 = UI.Colors.charcoal,
+			BackgroundTransparency = 0.3,
+		})
+		UI.corner(visual, UIRules.SMALL_ICON // 2)
+		local ic = Icons.draw(visual, icon, 0.16)
+		pressable(hit, onDown)
+		return visual, ic
+	end
+	crouchVisual, crouchIcon = small("Crouch", "crouch", 1, function()
+		setCrouch(not crouch)
+	end)
+	local _
+	_, lightIcon = small("Light", "light_off", 2, function()
+		ctx.send("light.toggle")
+	end)
+	UI.onLayout(frame, function(l)
+		local r = l.small
+		frame.Visible = r ~= nil
+		if r then
+			UI.place(frame, r)
+		end
+	end)
+end
+
+-- Counts, dimmed empties, the selected tool, the shutters and the toggles, from the latest inventory and vitals.
+local function refresh()
+	local have = inv()
+	local v = ctx.state.vitals
+	local shown = 0
+	for _, c in CONSUMABLES do
+		local n = c.count(have)
+		local b, ic = c.button, c.iconFrame
+		if b and ic then
+			b.Visible = not c.optional or n > 0
+			if b.Visible then
+				shown += 1
+			end
+			Icons.setDim(ic, n <= 0)
+		end
+		if c.countLabel then
+			c.countLabel.Text = tostring(n)
+			c.countLabel.TextColor3 = if n > 0 then UI.Colors.bone else UI.Colors.dim
+		end
+		if c.extraLabel then
+			local lit = if c.icon == "flare" and v then (v.flaresLit or 0) else 0
+			c.extraLabel.Text = if lit > 0 then string.format("%d lit", lit) else ""
+		end
+		local active = b and b:FindFirstChild("Active") :: UIStroke?
+		if c.icon == "rope" and active then
+			active.Enabled = ropeStart ~= nil
+		end
+	end
+	UI.setConsumableCount(shown)
+	local use = actionByName.Use
+	if use and use.iconFrame then
+		local tool = if (have[selectedTool] or 0) > 0 then selectedTool else nil
+		if not tool then
+			for _, id in WEAPONS do
+				if (have[id] or 0) > 0 then
+					tool = id
+					break
+				end
+			end
+		end
+		Icons.set(use.iconFrame, if tool == "tool.stun_device" then "stun" else "bar")
+		Icons.setDim(use.iconFrame, tool == nil)
+	end
+	local shield = actionByName.Shield
+	if shield and shield.iconFrame and shield.labelText then
+		local lantern = v ~= nil and v.isLantern == true
+		local shut = lantern and v.shielded == true
+		Icons.set(shield.iconFrame, if shut then "lantern_shut" else "lantern")
+		Icons.setDim(shield.iconFrame, not lantern)
+		shield.labelText.Text = if shut then "Open" else "Shield"
+	end
+	local sprint = actionByName.Sprint
+	local sprintActive = sprint and sprint.button and sprint.button:FindFirstChild("Active") :: UIStroke?
+	if sprintActive then
+		sprintActive.Enabled = if ctx.settings.get("sprintToggle") then sprintToggled else sprintHeld
+	end
+	if crouchVisual then
+		crouchVisual.BackgroundColor3 = if crouch then UI.Colors.amber else UI.Colors.charcoal
+		crouchVisual.BackgroundTransparency = if crouch then 0.1 else 0.3
+		Icons.set(crouchIcon, if crouch then "crouch_on" else "crouch")
+		local lightOn = v ~= nil and v.lightName ~= nil and v.lightOn == true
+		Icons.set(lightIcon, if lightOn then "light" else "light_off")
+	end
+end
+
+local function buildControls()
+	buildConsumables()
+	buildActionRow()
+	buildSmallButtons()
+	refreshControls = refresh
+	refresh()
+	ctx.on("inventory", refresh)
+	ctx.on("vitals", refresh)
+	local function setMode(t: Enum.UserInputType?)
+		UI.setTouchMode(
+			if t == nil
+				then UserInputService.TouchEnabled
+				else t == Enum.UserInputType.Touch
+					or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
+		)
+	end
+	setMode(nil)
+	UserInputService.LastInputTypeChanged:Connect(setMode)
 end
 
 function Input.init(c)
@@ -478,6 +724,7 @@ function Input.init(c)
 		local f = KEYMAP[io.KeyCode]
 		if f then
 			f()
+			refreshControls()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(io)
@@ -492,10 +739,11 @@ function Input.init(c)
 			releaseTouchSprint()
 		end
 	end)
-	buildTouch()
+	buildControls()
 	player.CharacterAdded:Connect(function()
 		setCrouch(false)
 		ropeStart = nil
+		refreshControls()
 	end)
 	-- Camera comfort settings
 	local function applyCamera()

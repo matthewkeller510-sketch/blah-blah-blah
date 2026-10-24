@@ -46,7 +46,7 @@ local function direction(pos: Vector3?): string
 	return string.format(" (%s, %s)", dir, range)
 end
 
--- Captions draw above every screen and the touch grid (box and labels both, so it holds under Sibling and Global
+-- Captions draw above every screen and HUD button (box and labels both, so it holds under Sibling and Global
 -- ZIndexBehavior): an essential cue stays readable with a panel open, sound muted and Reduce flashes on.
 local CAPTION_Z = 50
 
@@ -81,8 +81,8 @@ local function caption(text: string, essential: boolean)
 	end
 end
 
--- Repeating cues (a mimic's rhythm, wing flutter, glass rattle) must not flood the caption box or pulse the screen
--- edge over and over. An identical caption is shown again only after a short quiet window.
+-- Repeating cues (a mimic's rhythm, wing flutter, glass rattle) must not flood the caption box. An identical
+-- caption is shown again only after a short quiet window.
 local REPEAT_WINDOW_ESSENTIAL = 2
 local REPEAT_WINDOW_OTHER = 4
 local lastShown: { [string]: number } = {}
@@ -116,25 +116,9 @@ function Cues.cue(d: any)
 		return
 	end
 	lastShown[text] = now
+	-- The caption is the visual alternative. The coloured pulse around the screen edge that used to go with
+	-- essential cues was removed at the owner's request (D110); captions show even with subtitles off.
 	caption(text .. direction(d.position), def.essential)
-	-- visual alternative for essential cues: a brief edge pulse (not a flash; respects reduceFlashes)
-	if def.essential and not ctx.settings.get("reduceFlashes") then
-		local edge = UI.frame(ctx.gui, {
-			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 1,
-			ZIndex = 0,
-		})
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = UI.Colors.warn
-		stroke.Thickness = 6
-		stroke.Transparency = 0.4
-		stroke.Parent = edge
-		TweenService:Create(stroke, TweenInfo.new(0.8), { Transparency = 1 }):Play()
-		task.delay(0.9, function()
-			edge:Destroy()
-		end)
-	end
 end
 
 local function ensureNearLight()
@@ -165,6 +149,7 @@ end
 
 function Cues.init(c)
 	ctx = c
+	-- Bottom centre, above the touch action row and between the side columns.
 	captionBox = UI.frame(ctx.gui, {
 		Name = "Captions",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -176,7 +161,7 @@ function Cues.init(c)
 	})
 	local l = UI.list(captionBox, 2)
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	UI.keepClearOfTouch(captionBox, ctx.gui, 0.6)
+	UI.keepInBand(captionBox, "low", 0.6, nil, 0)
 	local t = 0
 	RunService.RenderStepped:Connect(function(dt)
 		t += dt
