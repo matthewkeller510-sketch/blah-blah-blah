@@ -31,6 +31,9 @@ gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets -- respect safe areas and 
 -- ZIndex orders siblings only: an icon's shapes (Controllers/Icons) layer inside their button and never above a
 -- screen, and a screen draws over the HUD (UI.panel).
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+-- The HUD's party list replaces Roblox's leaderboard, which would cover the top-right corner (party, save status,
+-- build label) and take the Tab key the notebook uses (D113).
+game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
 gui.Parent = player:WaitForChild("PlayerGui")
 UI.attach(gui) -- the HUD layout (UIRules.hudLayout) every controller places its elements from
 

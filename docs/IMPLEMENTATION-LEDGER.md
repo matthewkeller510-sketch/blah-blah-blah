@@ -6,7 +6,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 
 | Label | Meaning |
 | --- | --- |
-| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 349 tests in `tests/specs`). |
+| `LOGIC-TESTED` | The rule lives in a Roblox-independent module and passes unit tests (`lune run tests/run`; 350 tests in `tests/specs`). |
 | `CODED` | Roblox code exists, compiles, passes the strict type check against the Roblox API definitions and lints clean, but **has not been run in Studio or on a device**. |
 | `PARTIAL` | Part of the requirement is coded; the gap is stated. |
 | `PLANNED` | Specified, not built. |
@@ -70,7 +70,7 @@ Spec section 23: "Never mark a milestone complete based only on code generation,
 | 14 Parties | CODED | Shelter occupants regroup when parties change. |
 | 15 Death, logout, recovery | CODED / LOGIC-TESTED | Pocket-aware anchors; health saved across sessions. |
 | 16 Navigation persistence | CODED / LOGIC-TESTED | Pocket versions and migration; preset route ids only. |
-| 17 UI, accessibility, audio | PARTIAL | Dialogue, mission and puzzle screens; captions above panels; Reduce flashes respected by every new effect. HUD redesigned at the owner's request (D108–D111): no status panel, icons drawn from shapes, no screen-edge pulse, Crouch and Light below the 48 px minimum by request. Still no audio or image assets. |
+| 17 UI, accessibility, audio | PARTIAL | Dialogue, mission and puzzle screens; captions above panels; Reduce flashes respected by every new effect. HUD redesigned at the owner's request (D108–D114): no status panel, no first-join briefing screen, icons drawn from shapes, no screen-edge pulse, Crouch and Light below the 48 px minimum by request. Still no audio or image assets. |
 | 18 Visual production | PLANNED | Greybox only. |
 | 19 Performance / client–server | PARTIAL | No device profiling. |
 | 20 Save model | CODED | Schema 3 (`docs/SAVE-SCHEMA.md`): field experience, pocket-versioned records, saved health. |

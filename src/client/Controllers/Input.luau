@@ -289,21 +289,65 @@ local function releaseTouchSprint()
 	refreshControls()
 end
 
--- A HUD button that acts the moment it is touched or clicked (no wait for release), like the default jump button.
+-- A HUD button that acts the moment it is touched or clicked (no wait for release), like the default jump button:
+-- for actions that must be instant (Sprint, Use, Throw, Crouch, Light). Only a touch that begins on the button
+-- counts. Roblox also hands a button the InputBegan of a finger that started elsewhere (a camera drag, the
+-- thumbstick) once it slides over, in state Change, which is ignored here as the default TouchJump does. Release
+-- answers only the touch that pressed.
 local function pressable(b: GuiButton, onDown: (InputObject) -> (), onUp: (() -> ())?)
+	local pressing: InputObject? = nil
 	b.InputBegan:Connect(function(io)
-		if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
-			onDown(io)
-			refreshControls()
+		local t = io.UserInputType
+		if t == Enum.UserInputType.Touch then
+			if io.UserInputState ~= Enum.UserInputState.Begin then
+				return
+			end
+		elseif t ~= Enum.UserInputType.MouseButton1 then
+			return
 		end
+		pressing = io
+		onDown(io)
+		refreshControls()
 	end)
-	if onUp then
-		b.InputEnded:Connect(function(io)
-			if io.UserInputType == Enum.UserInputType.Touch or io.UserInputType == Enum.UserInputType.MouseButton1 then
+	b.InputEnded:Connect(function(io)
+		if pressing ~= nil and io == pressing then
+			pressing = nil
+			if onUp then
 				onUp()
 				refreshControls()
 			end
-		end)
+		end
+	end)
+end
+
+-- A HUD button that acts when it is released over the button (GuiButton.Activated): for consumables and screens.
+-- A thumb that lands on it while reaching for the thumbstick and slides away uses nothing, and a finger sliding
+-- across it never fires it.
+local function tappable(b: GuiButton, onTap: () -> ())
+	b.Activated:Connect(function()
+		onTap()
+		refreshControls()
+	end)
+end
+
+-- Control labels follow the text size setting (Settings → Text size), as the old touch grid did.
+type Scaled = { label: TextLabel, base: number, badge: boolean, area: Frame? }
+local scaledLabels: { Scaled } = {}
+
+local function applyTextScale(scale: number)
+	for _, e in scaledLabels do
+		local px = math.floor(e.base * scale)
+		e.label.TextSize = px
+		if e.badge then
+			e.label.Size = UDim2.fromOffset(0, px + 3)
+		else
+			local sz = e.label.Size
+			e.label.Size = UDim2.new(sz.X.Scale, sz.X.Offset, 0, px + 2)
+		end
+		local area = e.area
+		if area then -- an action slot's icon area makes room for its label
+			area.Size = UDim2.new(1, 0, 1, -(px + 2))
+		end
 	end
 end
 
@@ -339,6 +383,7 @@ local function cornerLabel(parent: Instance, size: number, color: Color3, anchor
 	t.TextStrokeTransparency = 0.3
 	t.TextStrokeColor3 = UI.Colors.charcoal
 	t.ZIndex = 2
+	table.insert(scaledLabels, { label = t, base = size, badge = false })
 	return t
 end
 
@@ -358,6 +403,7 @@ local function countBadge(parent: Instance): TextLabel
 	local p = Instance.new("UIPadding")
 	p.PaddingLeft, p.PaddingRight = UDim.new(0, 3), UDim.new(0, 3)
 	p.Parent = t
+	table.insert(scaledLabels, { label = t, base = 12, badge = true })
 	return t
 end
 
@@ -449,9 +495,7 @@ local function buildConsumables()
 		c.countLabel = countBadge(b)
 		c.hintLabel = cornerLabel(b, 10, UI.Colors.dim, Vector2.new(0, 0))
 		c.extraLabel = cornerLabel(b, 10, UI.Colors.amber, Vector2.new(1, 0))
-		pressable(b, function()
-			c.act()
-		end)
+		tappable(b, c.act)
 	end
 	UI.onLayout(frame, function(l)
 		UI.place(frame, l.column)
@@ -486,19 +530,18 @@ local function buildActionRow()
 	local frame = UI.frame(ctx.gui, { Name = "TouchActions", BackgroundTransparency = 1 })
 	local list = UI.list(frame, UIRules.SLOT_GAP, true)
 	list.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	-- Screens and deliberate actions fire on release (tappable); instant ones on touch (pressable).
+	local taps: { [string]: () -> () } = {
+		Menu = function()
+			ctx.panels.toggle("menu")
+		end,
+		Ping = function()
+			ctx.send("party.ping")
+		end,
+		Help = rescueAction,
+		Shield = shieldLantern,
+	}
 	local handlers: { [string]: { down: (InputObject) -> (), up: (() -> ())? } } = {
-		Menu = {
-			down = function()
-				ctx.panels.toggle("menu")
-			end,
-		},
-		Ping = {
-			down = function()
-				ctx.send("party.ping")
-			end,
-		},
-		Help = { down = rescueAction },
-		Shield = { down = shieldLantern },
 		Throw = {
 			down = function()
 				ctx.send("throw")
@@ -534,10 +577,16 @@ local function buildActionRow()
 		t.Position = UDim2.new(0.5, 0, 1, -2)
 		t.TextXAlignment = Enum.TextXAlignment.Center
 		t.Text = a.label
+		scaledLabels[#scaledLabels].area = area
 		a.labelText = t
 		actionByName[a.name] = a
-		local h = handlers[a.name]
-		pressable(b, h.down, h.up)
+		local tap = taps[a.name]
+		if tap then
+			tappable(b, tap)
+		else
+			local h = handlers[a.name]
+			pressable(b, h.down, h.up)
+		end
 	end
 	UI.onLayout(frame, function(l)
 		local bar = l.bar
@@ -671,6 +720,12 @@ local function buildControls()
 	refresh()
 	ctx.on("inventory", refresh)
 	ctx.on("vitals", refresh)
+	applyTextScale(ctx.settings.get("textScale") or 1)
+	ctx.settings.onChanged(function(k, v)
+		if k == "textScale" then
+			applyTextScale(v)
+		end
+	end)
 	local function setMode(t: Enum.UserInputType?)
 		UI.setTouchMode(
 			if t == nil

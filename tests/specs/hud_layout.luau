@@ -234,6 +234,38 @@ return function(T)
 		eq(UIRules.bandWidth(s.w, l.topBand, 0.5, 460), 460, "objective capped")
 	end)
 
+	test("on touch screens every screen (UI.panel) ends above the action row and still fits its contents", function()
+		for _, s in TOUCH_SCREENS do
+			local l = layout(s, true)
+			local bar = l.bar :: Rect
+			local x, y, w, h = UIRules.panelRectAbove(s.w, s.h, bar.y - UIRules.LOW_GAP)
+			local panel = rect(x, y, w, h)
+			assert(not overlaps(panel, bar), s.name .. ": clear of the action row")
+			assert(y >= UIRules.TOP - 1e-6 and onScreen(panel, s), s.name .. ": on screen")
+			local close = rect(
+				x + w - UIRules.PANEL_PAD - UIRules.PANEL_CLOSE_W,
+				y + UIRules.PANEL_PAD,
+				UIRules.PANEL_CLOSE_W,
+				UIRules.TOUCH
+			)
+			assert(onScreen(close, s), s.name .. ": Close on screen")
+			local bodyH = h - 2 * UIRules.PANEL_PAD - UIRules.PANEL_BODY_TOP
+			assert(bodyH >= 2 * UIRules.TOUCH, s.name .. ": body shows at least two rows, " .. bodyH)
+			-- where the centred panel already fits (tablets) it is unchanged
+			local cx, cy, _, ch = UIRules.panelRect(s.w, s.h)
+			if cy + ch <= bar.y - UIRules.LOW_GAP then
+				eq(x, cx, s.name)
+				eq(y, cy, s.name)
+				eq(h, ch, s.name)
+			end
+		end
+		-- a 390-px phone: the centred panel would cut the slots, so it is lifted and shortened
+		local phone = Screens.PHONES_390[1]
+		local bar = layout(phone, true).bar :: Rect
+		local _, cy, _, ch = UIRules.panelRect(phone.w, phone.h)
+		assert(cy + ch > bar.y, "the centred panel would reach the row")
+	end)
+
 	-- Icons ------------------------------------------------------------------------------------------------
 	local USED = {
 		"med",

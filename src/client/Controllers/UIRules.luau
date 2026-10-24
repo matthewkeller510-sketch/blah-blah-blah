@@ -215,6 +215,17 @@ function UIRules.panelRect(guiW: number, guiH: number): (number, number, number,
 	return (guiW - w) / 2, (guiH - h) / 2, w, h
 end
 
+-- The panel's rectangle when its bottom may not pass `bottomLimit` (the top of the touch action row less LOW_GAP):
+-- centred as usual when it fits; otherwise it ends at the limit and keeps its top at TOP, shrinking if it must.
+function UIRules.panelRectAbove(guiW: number, guiH: number, bottomLimit: number): (number, number, number, number)
+	local x, y, w, h = UIRules.panelRect(guiW, guiH)
+	if y + h <= bottomLimit then
+		return x, y, w, h
+	end
+	local nh = math.min(h, bottomLimit - UIRules.TOP)
+	return x, bottomLimit - nh, w, nh
+end
+
 -- Dialogue strip: its button column (Next, Close, Auto at 52 px with 8 px gaps) sets the minimum height; a line
 -- longer than the space left in 60% of the screen height (PROPOSED / TUNE) is split into pages, never clipped.
 UIRules.DIALOGUE_BUTTONS = 3 * 52 + 2 * 8

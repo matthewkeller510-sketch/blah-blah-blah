@@ -334,6 +334,29 @@ renderers.character = function()
 		C.dim
 	)
 	UI.label(b, "Automatic recovery still stops at half of your (raised) maximum health.", 13, C.dim)
+	-- The free first choice of class (D22, D112), offered here until it is made.
+	local ob = cache.onboarding
+	if ob then
+		UI.label(b, "Starting class — choose once, free", 17)
+		UI.label(b, "Every class can do everything; each starts with a small edge.", 13, C.dim)
+		local names = {}
+		if type(ob.classes) == "table" then
+			for name in ob.classes do
+				if type(name) == "string" then
+					table.insert(names, name)
+				end
+			end
+		end
+		if #names == 0 then
+			names = { "Explorer", "Medic", "Runner", "Technician" }
+		end
+		table.sort(names)
+		for _, name in names do
+			button(b, name .. " — " .. (CLASS_TEXT[name] or "A small head start."), function()
+				ctx.send("onboard.choose", { className = name })
+			end, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
+		end
+	end
 end
 
 renderers.notebook = function()
@@ -623,48 +646,24 @@ function Panels.story(d)
 	refreshIf("notebook")
 end
 
--- First join: choose a starting class (free once; later changes cost earned coins at a shelter).
+-- First join: the free starting-class choice (D22) waits in Menu → Character instead of a briefing screen over the
+-- game (owner request, D112). Until a choice is made the player is the default class; later changes cost earned
+-- coins at a shelter (F22). One short notice says where the choice is.
+local onboardingNoticeShown = false
 function Panels.onboarding(d)
 	if d.done then
+		cache.onboarding = nil
 		if current == "onboarding" then
 			close()
 		end
+		refreshIf("character")
 		return
 	end
 	cache.onboarding = d
-	local b = open("onboarding", "Before you descend")
-	UI.label(b, "You are joining the search for a survey team that vanished below the recorded quarries.", 15)
-	UI.label(b, "• Light and medical supplies keep you alive. Running low makes things bolder.", 14, C.dim)
-	UI.label(
-		b,
-		"• Loot you pick up is EXPEDITION loot until you reach a shelter. Die or log out first and it stays behind in a bag.",
-		14,
-		C.dim
-	)
-	UI.label(b, "• Chalk, signs and rope are PROTECTED: you always keep unused ones.", 14, C.dim)
-	UI.label(
-		b,
-		"• Run, hide in niches, or throw a stone to draw attention away. Not everything can be fought.",
-		14,
-		C.dim
-	)
-	UI.label(b, "Choose a starting class. Every class can do everything; each starts with a small edge.", 15)
-	local names = {}
-	if type(d.classes) == "table" then
-		for name in d.classes do
-			if type(name) == "string" then
-				table.insert(names, name)
-			end
-		end
-	end
-	if #names == 0 then
-		names = { "Explorer", "Medic", "Runner", "Technician" }
-	end
-	table.sort(names)
-	for _, name in names do
-		button(b, name .. " — " .. (CLASS_TEXT[name] or "A small head start."), function()
-			ctx.send("onboard.choose", { className = name })
-		end, { Size = UDim2.new(1, 0, 0, UI.TOUCH) })
+	refreshIf("character")
+	if not onboardingNoticeShown then
+		onboardingNoticeShown = true
+		ctx.hud.notice("Pick a starting class any time: Menu → Character (free once).", "info")
 	end
 end
 

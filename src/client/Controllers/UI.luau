@@ -210,6 +210,22 @@ function UI.panel(parent: Instance, title: string, onClose: () -> ()): (Frame, S
 	local cons = Instance.new("UISizeConstraint")
 	cons.MaxSize = Vector2.new(UIRules.PANEL_MAX_W, UIRules.PANEL_MAX_H)
 	cons.Parent = root
+	-- On touch screens the panel ends above the action row, so its edge never cuts across the slots.
+	UI.onLayout(root, function(l)
+		local bar = l.bar
+		local gui = layoutGui
+		if bar and gui then
+			local s = gui.AbsoluteSize
+			local x, y, w, h = UIRules.panelRectAbove(s.X, s.Y, bar.y - UIRules.LOW_GAP)
+			root.AnchorPoint = Vector2.zero
+			root.Position = UDim2.fromOffset(x, y)
+			root.Size = UDim2.fromOffset(w, h)
+		else
+			root.AnchorPoint = Vector2.new(0.5, 0.5)
+			root.Position = UDim2.fromScale(0.5, 0.5)
+			root.Size = UDim2.new(UIRules.PANEL_SCALE_W, 0, UIRules.PANEL_SCALE_H, 0)
+		end
+	end)
 	UI.corner(root, 10)
 	UI.pad(root, UIRules.PANEL_PAD)
 	local closeW = UIRules.PANEL_CLOSE_W
