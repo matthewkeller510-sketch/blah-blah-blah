@@ -207,6 +207,12 @@ function Hud.init(c)
 	pressureText = outlined(UI.label(topRight, "", 11, C.dim))
 	pressureText.LayoutOrder = 4
 	pressureText.TextXAlignment = Enum.TextXAlignment.Right
+	local buildText = outlined(UI.label(topRight, UI.BUILD, 11, C.dim))
+	buildText.LayoutOrder = 5
+	buildText.TextXAlignment = Enum.TextXAlignment.Right
+	task.delay(60, function()
+		buildText.Visible = false
+	end)
 
 	holdBack, holdFill = UI.bar(gui, "Hold", C.amber)
 	holdBack.AnchorPoint = Vector2.new(0.5, 0.5)

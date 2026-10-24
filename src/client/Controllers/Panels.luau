@@ -160,6 +160,7 @@ renderers.menu = function()
 			ctx.send("shelter.panel")
 		end, { Size = UDim2.new(1, 0, 0, UI.TOUCH), BackgroundColor3 = C.teal })
 	end
+	UI.label(b, UI.BUILD, 12, C.dim)
 end
 
 renderers.inventory = function()

@@ -18,6 +18,8 @@ UI.Colors = {
 }
 
 UI.TextScale = 1 -- adjustable text size (settings)
+-- Shown for the first minute of play and at the bottom of the Menu, so a tester can tell which build is running.
+UI.BUILD = "Build: HUD 2 (Oct 24)"
 UI.TOUCH = UIRules.TOUCH -- logical px touch target (48-56 per section 17)
 
 function UI.font(): Enum.Font
